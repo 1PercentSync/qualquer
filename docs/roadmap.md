@@ -29,7 +29,15 @@
 
 ### Phase 划分
 
-待定。
+| Phase | 目标 |
+|-------|------|
+| 1 | 基础设施 + 窗口（core/vulkan，swapchain，ImGui，空白画面） |
+| 2 | OptiX 基础（Context/Pipeline/SBT，raygen 输出纯色） |
+| 3 | 场景加载 + AS（glTF，BLAS/TLAS，primary ray） |
+| 4 | 材质 + 纹理（PBR，纹理加载，bindless） |
+| 5 | PT 着色（BRDF，多 bounce，采样） |
+| 6 | 光源（IBL，emissive NEE，MIS） |
+| 7 | 降噪 + 累积（OptiX Denoiser，accumulation）|
 
 ---
 
