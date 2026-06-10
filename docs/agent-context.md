@@ -9,11 +9,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：Phase 0 — 项目骨架搭建与前期讨论
-- **进度**：CLAUDE.md 和文档结构已创建
+- **进度**：架构层次和命名空间已确定，M1 范围已明确
 
 ### 下一个任务
 
-继续前期讨论和规划。
+M1 Phase 划分和 Phase 1 任务清单。
 
 ---
 

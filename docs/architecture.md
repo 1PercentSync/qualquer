@@ -7,22 +7,122 @@
 
 ## 项目定位
 
+Qualquer 是基于 CUDA + OptiX 的 Path Tracer，Vulkan 仅用于 swapchain 呈现。
+
+- **性质**：个人长期学习和练习项目
+- **渲染方式**：Path Tracing（glTF mesh）
+- **开发方式**：AI 辅助开发
+
 ---
 
 ## 硬件目标
+
+- **目标平台**：支持 OptiX 的 NVIDIA GPU（Turing 及以上）
+- **性能理念**：追求技术和画面的最佳性价比
 
 ---
 
 ## 设计原则
 
+### 排除过于复杂而收益不高的技术
+
+复杂度和收益必须成正比。实现成本远高于视觉或性能收益的技术，排除。
+
+### 渐进式实现
+
+先能用，再好用，再优秀。每个模块可分阶段实现，阶段间的演进应尽量自然。
+
+### 业界已验证的技术
+
+采用有成熟实现和资料的技术，不做实验性方案。
+
+### 性能性价比
+
+同等画面质量选性能更优的方案；同等性能选画面更好的方案。
+
 ---
 
 ## 架构层次
+
+```
+        app
+         ↓
+      renderer
+       ↓   ↓
+   optix   vulkan
+       ↓   ↓
+        core
+```
+
+四层，严格单向依赖（上层依赖下层，下层不知道上层的存在）。
+
+### core（基础设施层）
+
+CUDA 和 Vulkan 两侧共用的基础设施。
+
+包含：数学库封装、日志、工具函数。
+
+### optix（OptiX 封装层）
+
+封装 OptiX 和 CUDA API，向上层提供简洁的 RT 接口。
+
+包含：Context 管理、Module/Pipeline/SBT 创建、加速结构（BLAS/TLAS）、Denoiser、CUDA 内存管理。
+
+**设计原则**：不包含任何渲染逻辑。
+
+### vulkan（Vulkan 呈现层）
+
+仅负责 swapchain 呈现和 CUDA-Vulkan interop。
+
+包含：Instance/Device/Queue 管理、Swapchain、CUDA external memory/semaphore interop。
+
+**设计原则**：最小化，只做呈现。
+
+### renderer（渲染逻辑层）
+
+实现 PT 渲染管线和场景管理。
+
+包含：PT 着色逻辑、材质系统、场景数据结构、累积 buffer、降噪调度、帧循环。
+
+**与 Himalaya 的区别**：Himalaya 的 Layer 1（Framework）和 Layer 2（Pass）在这里合并。原因：
+- PT 是单个 OptiX launch，不需要 Render Graph 编排多 Pass
+- CUDA stream 天然顺序执行，不需要复杂的依赖声明
+- "Pass" 就是 PT kernel + denoiser，无需独立抽象
+
+### app（应用层）
+
+场景加载、资产管理、相机控制、用户输入、UI。
 
 ---
 
 ## 核心架构特征
 
+### 无 Render Graph
+
+与 Himalaya 不同，Qualquer 不需要 Render Graph：
+- Himalaya 有多个 Pass 需要声明式编排和 barrier 管理
+- Qualquer 的渲染是 OptiX launch → Denoiser → Vulkan blit 的线性流程
+- CUDA stream 保证顺序执行
+
+### 材质系统
+
+复用 Himalaya 的材质数据结构思路：
+- GPU 材质数据（PBR 参数 + bindless 纹理索引）
+- 统一顶点格式
+- 无条件纹理采样（bindless + default 纹理）
+
+### 场景表示
+
+渲染器接收 mesh 实例列表和相机参数。环境照明来自 IBL，面光源来自 emissive 材质三角形。
+
 ---
 
 ## 架构约束
+
+| 约束 | 保护的架构属性 |
+|------|---------------|
+| 上层不接触 CUDA/OptiX/Vulkan 原始类型 | 封装层实现自由度 |
+| renderer 不直接调用 Vulkan API | optix/vulkan 职责分离 |
+| core 不依赖任何 GPU API | 基础设施可复用性 |
+
+---
