@@ -8,12 +8,12 @@
 
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
-- **Phase**：Phase 0 — 项目骨架搭建与前期讨论
-- **进度**：架构层次、命名空间、M1 Phase 划分已确定
+- **Phase**：M1 Phase 1 — Vulkan 基础设施 + ImGui + 黑色背景
+- **进度**：Phase 1 任务清单已制定
 
 ### 下一个任务
 
-Phase 1 任务清单。
+Step 1：窗口（GLFW 初始化、窗口创建、事件循环）
 
 ---
 

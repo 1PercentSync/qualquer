@@ -50,17 +50,11 @@ Qualquer 是基于 CUDA + OptiX 的 Path Tracer，Vulkan 仅用于 swapchain 呈
       renderer
        ↓   ↓
    optix   vulkan
-       ↓   ↓
-        core
 ```
 
-四层，严格单向依赖（上层依赖下层，下层不知道上层的存在）。
+严格单向依赖（上层依赖下层，下层不知道上层的存在）。
 
-### core（基础设施层）
-
-CUDA 和 Vulkan 两侧共用的基础设施。
-
-包含：数学库封装、日志、工具函数。
+基础设施（数学、日志、工具函数）不单独成层，放到实际使用的层中。
 
 ### optix（OptiX 封装层）
 
@@ -123,6 +117,5 @@ CUDA 和 Vulkan 两侧共用的基础设施。
 |------|---------------|
 | 上层不接触 CUDA/OptiX/Vulkan 原始类型 | 封装层实现自由度 |
 | renderer 不直接调用 Vulkan API | optix/vulkan 职责分离 |
-| core 不依赖任何 GPU API | 基础设施可复用性 |
 
 ---
