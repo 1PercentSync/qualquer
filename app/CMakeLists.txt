@@ -7,5 +7,5 @@ target_include_directories(qualquer_app
 )
 
 target_link_libraries(qualquer_app
-    PRIVATE qualquer_vulkan
+    PRIVATE qualquer_renderer
 )
