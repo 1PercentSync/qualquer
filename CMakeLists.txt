@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 4.2)
-project(qualquer)
+project(qualquer LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-add_executable(qualquer main.cpp)
+add_subdirectory(vulkan)
+add_subdirectory(app)
