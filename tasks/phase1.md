@@ -9,15 +9,14 @@
 
 ## Step 1：项目骨架
 
-- [ ] 更新顶层 `CMakeLists.txt`（Vulkan find_package、spdlog/glfw3/imgui/VMA 链接）
-- [ ] 更新 `vcpkg.json`（确认 imgui features 包含 vulkan-binding、glfw-binding）
-- [ ] 创建 `vulkan/CMakeLists.txt`（qualquer_vulkan static lib、include 路径、依赖链接）
-- [ ] 创建 `app/CMakeLists.txt`（qualquer_app exe、链接 qualquer_vulkan）
-- [ ] 创建 `app/src/main.cpp`（spdlog 初始化、空 main 函数）
+- [x] 创建 `vcpkg.json`（glfw3、spdlog、imgui[vulkan-binding, glfw-binding]、vulkan-memory-allocator）
+- [ ] 更新 `app/CMakeLists.txt`（链接 spdlog）
+- [ ] 更新 `app/src/main.cpp`（spdlog 初始化）
 - [ ] 请求用户在 CLion 中编译验证
 
 ## Step 2：窗口
 
+- [ ] 更新 `app/CMakeLists.txt`（链接 glfw3）
 - [ ] 创建 `app/include/qualquer/app/window.h`（Window 类声明）
 - [ ] 创建 `app/src/window.cpp`（GLFW 初始化、窗口创建、事件轮询、销毁）
 - [ ] `main.cpp` 中创建 Window 实例并运行主循环
@@ -25,9 +24,10 @@
 
 ## Step 3：Vulkan Instance
 
+- [ ] 更新 `vulkan/CMakeLists.txt`（find_package Vulkan、链接 Vulkan::Vulkan、spdlog）
 - [ ] 创建 `vulkan/include/qualquer/vulkan/context.h`（Context 类声明）
 - [ ] 创建 `vulkan/src/context.cpp`
-- [ ] Instance 创建（应用信息、Vulkan 1.3、启用 validation layer）
+- [ ] Instance 创建（应用信息、Vulkan 1.4、启用 validation layer）
 - [ ] Debug Messenger 回调（validation 错误输出到 spdlog）
 - [ ] `destroy()` 方法（按反序销毁）
 - [ ] `main.cpp` 中调用 Context 初始化和销毁
@@ -35,10 +35,11 @@
 
 ## Step 4：Vulkan Device
 
+- [ ] 更新 `vulkan/CMakeLists.txt`（链接 VMA）
 - [ ] Surface 创建（通过 GLFW）
 - [ ] 物理设备枚举与选择（优先 discrete GPU、检查 queue family 支持）
 - [ ] Queue family 查询（graphics + present）
-- [ ] 逻辑设备创建（启用 VK_KHR_swapchain、synchronization2、dynamic_rendering）
+- [ ] 逻辑设备创建（启用 VK_KHR_swapchain、Vulkan 1.4 核心特性）
 - [ ] Queue 获取
 - [ ] VMA Allocator 初始化
 - [ ] 更新 `destroy()` 方法
@@ -74,6 +75,7 @@
 
 ## Step 8：ImGui 集成
 
+- [ ] 更新 `app/CMakeLists.txt`（链接 imgui）
 - [ ] 创建 ImGui 专用 Descriptor Pool
 - [ ] ImGui Vulkan backend 初始化（适配 Dynamic Rendering）
 - [ ] ImGui GLFW backend 初始化
