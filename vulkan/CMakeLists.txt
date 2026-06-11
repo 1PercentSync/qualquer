@@ -7,3 +7,9 @@ target_sources(qualquer_vulkan PRIVATE
 target_include_directories(qualquer_vulkan
     PUBLIC include
 )
+
+find_package(spdlog CONFIG REQUIRED)
+
+target_link_libraries(qualquer_vulkan
+    PUBLIC spdlog::spdlog
+)
