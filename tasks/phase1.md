@@ -1,51 +1,87 @@
 # Phase 1 任务清单
 
----
-
-## Step 1：窗口
-
-- [ ] GLFW 初始化
-- [ ] 窗口创建
-- [ ] 事件循环
+> 目标：Vulkan 基础设施 + ImGui + 黑色背景
+> 详细设计见 `docs/current-phase.md`，技术决策见 `docs/technical-decisions.md`。
+>
+> 每完成一个复选框暂停等待审查。一个 Step 结束时应请求用户在 CLion 中编译验证。
 
 ---
 
-## Step 2：Vulkan Instance
+## Step 1：项目骨架
 
-- [ ] Instance 创建
-- [ ] Validation layer 配置
-- [ ] Debug messenger
+- [ ] 更新顶层 `CMakeLists.txt`（Vulkan find_package、spdlog/glfw3/imgui/VMA 链接）
+- [ ] 更新 `vcpkg.json`（确认 imgui features 包含 vulkan-binding、glfw-binding）
+- [ ] 创建 `vulkan/CMakeLists.txt`（qualquer_vulkan static lib、include 路径、依赖链接）
+- [ ] 创建 `app/CMakeLists.txt`（qualquer_app exe、链接 qualquer_vulkan）
+- [ ] 创建 `app/src/main.cpp`（spdlog 初始化、空 main 函数）
+- [ ] 请求用户在 CLion 中编译验证
 
----
+## Step 2：窗口
 
-## Step 3：Vulkan Device
+- [ ] 创建 `app/include/qualquer/app/window.h`（Window 类声明）
+- [ ] 创建 `app/src/window.cpp`（GLFW 初始化、窗口创建、事件轮询、销毁）
+- [ ] `main.cpp` 中创建 Window 实例并运行主循环
+- [ ] 请求用户在 CLion 中编译验证（出现可关闭的窗口）
 
-- [ ] 物理设备枚举与选择
-- [ ] Queue family 查询
-- [ ] 逻辑设备创建
+## Step 3：Vulkan Instance
 
----
+- [ ] 创建 `vulkan/include/qualquer/vulkan/context.h`（Context 类声明）
+- [ ] 创建 `vulkan/src/context.cpp`
+- [ ] Instance 创建（应用信息、Vulkan 1.3、启用 validation layer）
+- [ ] Debug Messenger 回调（validation 错误输出到 spdlog）
+- [ ] `destroy()` 方法（按反序销毁）
+- [ ] `main.cpp` 中调用 Context 初始化和销毁
+- [ ] 请求用户在 CLion 中编译验证（控制台无 validation 报错）
 
-## Step 4：Swapchain
+## Step 4：Vulkan Device
 
-- [ ] Surface 创建
-- [ ] Swapchain 创建（format、present mode、extent）
+- [ ] Surface 创建（通过 GLFW）
+- [ ] 物理设备枚举与选择（优先 discrete GPU、检查 queue family 支持）
+- [ ] Queue family 查询（graphics + present）
+- [ ] 逻辑设备创建（启用 VK_KHR_swapchain、synchronization2、dynamic_rendering）
+- [ ] Queue 获取
+- [ ] VMA Allocator 初始化
+- [ ] 更新 `destroy()` 方法
+- [ ] 请求用户在 CLion 中编译验证（控制台输出 GPU 名称）
+
+## Step 5：Swapchain
+
+- [ ] 创建 `vulkan/include/qualquer/vulkan/swapchain.h`（Swapchain 类声明）
+- [ ] 创建 `vulkan/src/swapchain.cpp`
+- [ ] Swapchain 创建（format B8G8R8A8_SRGB、present mode 选择、extent）
 - [ ] Image View 获取
+- [ ] `destroy()` 方法
+- [ ] 请求用户在 CLion 中编译验证
 
----
+## Step 6：帧同步与命令录制
 
-## Step 5：帧循环
+- [ ] Context 中添加 FrameData 结构（command pool、command buffer、fence、semaphore × frames in flight）
+- [ ] Command pool / buffer 创建（per-frame）
+- [ ] Fence / Semaphore 创建（per-frame）
+- [ ] 帧索引轮换逻辑
+- [ ] 创建 `vulkan/include/qualquer/vulkan/commands.h`（CommandBuffer wrapper）
+- [ ] 创建 `vulkan/src/commands.cpp`（begin/end、pipeline_barrier）
+- [ ] 请求用户在 CLion 中编译验证
 
-- [ ] 同步原语（fence、semaphore）
-- [ ] acquire / present 循环
-- [ ] clear 命令录制
-- [ ] Swapchain 重建（resize）
+## Step 7：帧循环与呈现
 
----
+- [ ] 主循环框架（wait fence → acquire image → begin cmd → end cmd → submit → present）
+- [ ] Swapchain image layout transition（undefined → color attachment → present）
+- [ ] Clear 命令录制（begin_rendering + clear color + end_rendering）
+- [ ] Swapchain 重建（窗口 resize 处理）
+- [ ] 窗口最小化处理（extent 为 0 时暂停渲染）
+- [ ] 请求用户在 CLion 中编译验证（窗口显示黑色背景，resize 不崩溃）
 
-## Step 6：ImGui
+## Step 8：ImGui 集成
 
-- [ ] ImGui 初始化
-- [ ] Vulkan 后端集成
-- [ ] 每帧渲染
-- [ ] 示例面板
+- [ ] 创建 ImGui 专用 Descriptor Pool
+- [ ] ImGui Vulkan backend 初始化（适配 Dynamic Rendering）
+- [ ] ImGui GLFW backend 初始化
+- [ ] 每帧 ImGui 渲染集成（NewFrame → demo window → Render → 录制到 command buffer）
+- [ ] 请求用户在 CLion 中编译验证（ImGui demo window 正常显示）
+
+## Step 9：调试面板
+
+- [ ] 替换 demo window 为自定义面板
+- [ ] 面板内容：FPS、GPU 名称、窗口分辨率
+- [ ] 请求用户在 CLion 中编译验证
