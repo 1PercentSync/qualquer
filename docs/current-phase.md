@@ -18,7 +18,7 @@ Step 1 → Step 2 → Step 3 → Step 4 → Step 5 → Step 6 → Step 7 → Ste
 | Step | 主题 | 验证标准 |
 |------|------|----------|
 | 1 | 项目骨架 | CMake 构建通过 |
-| 2 | 窗口 | GLFW 窗口显示，可关闭 |
+| 2 | Application 框架 + 窗口 | GLFW 窗口显示，可关闭 |
 | 3 | Vulkan Instance | validation layer 正常输出 |
 | 4 | Vulkan Device | 物理设备信息打印 |
 | 5 | Swapchain | 无报错创建 |

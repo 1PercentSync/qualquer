@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 2：窗口（glfw3 链接、Window 类、主循环）
+Step 2：Application 框架 + 窗口（glfw3 链接、Application 类、spdlog 迁移、主循环）
 
 ---
 

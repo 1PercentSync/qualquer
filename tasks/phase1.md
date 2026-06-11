@@ -14,12 +14,13 @@
 - [x] 更新 `app/src/main.cpp`（spdlog 初始化）
 - [x] 请求用户在 CLion 中编译验证
 
-## Step 2：窗口
+## Step 2：Application 框架 + 窗口
 
-- [ ] 更新 `vulkan/CMakeLists.txt`（PUBLIC 链接 glfw3，用于 surface 创建，上层自动继承）
-- [ ] 创建 `app/include/qualquer/app/window.h`（Window 类声明）
-- [ ] 创建 `app/src/window.cpp`（GLFW 初始化、窗口创建、事件轮询、销毁）
-- [ ] `main.cpp` 中创建 Window 实例并运行主循环
+- [ ] 将 spdlog 初始化从 `main.cpp` 移至 `Application::init()`（修正 Step 1）
+- [ ] 更新 `vulkan/CMakeLists.txt`（PUBLIC 链接 glfw3）
+- [ ] 创建 `app/include/qualquer/app/application.h`（Application 类声明：init/run/destroy）
+- [ ] 创建 `app/src/application.cpp`（GLFW 初始化、窗口创建/销毁、主循环框架）
+- [ ] 更新 `main.cpp`（创建 Application → init → run → destroy）
 - [ ] 请求用户在 CLion 中编译验证（出现可关闭的窗口）
 
 ## Step 3：Vulkan Instance
@@ -30,13 +31,13 @@
 - [ ] Instance 创建（应用信息、Vulkan 1.4、启用 validation layer）
 - [ ] Debug Messenger 回调（validation 错误输出到 spdlog）
 - [ ] `destroy()` 方法（按反序销毁）
-- [ ] `main.cpp` 中调用 Context 初始化和销毁
+- [ ] Application 中持有 Context，init/destroy 中调用
 - [ ] 请求用户在 CLion 中编译验证（控制台无 validation 报错）
 
 ## Step 4：Vulkan Device
 
 - [ ] 更新 `vulkan/CMakeLists.txt`（PUBLIC 链接 VMA）
-- [ ] Surface 创建（通过 GLFW）
+- [ ] Context 中添加 Surface 创建（通过 GLFW）
 - [ ] 物理设备枚举与选择（优先 discrete GPU、检查 queue family 支持）
 - [ ] Queue family 查询（graphics + present）
 - [ ] 逻辑设备创建（启用 VK_KHR_swapchain、Vulkan 1.4 核心特性）
