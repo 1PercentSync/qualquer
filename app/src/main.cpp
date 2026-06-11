@@ -3,15 +3,12 @@
  * @brief Application entry point.
  */
 
-#include <spdlog/spdlog.h>
-
-namespace {
-
-constexpr auto kLogLevel = spdlog::level::info;
-
-}  // namespace
+#include <qualquer/app/application.h>
 
 int main() {
-    spdlog::set_level(kLogLevel);
+    qualquer::app::Application app;
+    app.init();
+    app.run();
+    app.destroy();
     return 0;
 }

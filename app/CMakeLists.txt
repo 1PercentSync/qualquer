@@ -1,5 +1,6 @@
 add_executable(qualquer_app
     src/main.cpp
+    src/application.cpp
 )
 
 target_include_directories(qualquer_app
