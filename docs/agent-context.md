@@ -9,11 +9,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 1 — Vulkan 基础设施 + ImGui + 黑色背景
-- **进度**：Step 1 进行中（vcpkg.json 已完成，CMakeLists 待完善）
+- **进度**：Step 1 完成，Step 2 待开始
 
 ### 下一个任务
 
-Step 1 剩余项：更新 main.cpp 添加 spdlog 初始化
+Step 2：窗口（glfw3 链接、Window 类、主循环）
 
 ---
 
