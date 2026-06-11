@@ -10,13 +10,13 @@
 ## Step 1：项目骨架
 
 - [x] 创建 `vcpkg.json`（glfw3、spdlog、imgui[vulkan-binding, glfw-binding]、vulkan-memory-allocator）
-- [ ] 更新 `app/CMakeLists.txt`（链接 spdlog）
+- [ ] 更新 `vulkan/CMakeLists.txt`（PUBLIC 链接 spdlog，上层自动继承）
 - [ ] 更新 `app/src/main.cpp`（spdlog 初始化）
 - [ ] 请求用户在 CLion 中编译验证
 
 ## Step 2：窗口
 
-- [ ] 更新 `app/CMakeLists.txt`（链接 glfw3）
+- [ ] 更新 `vulkan/CMakeLists.txt`（PUBLIC 链接 glfw3，用于 surface 创建，上层自动继承）
 - [ ] 创建 `app/include/qualquer/app/window.h`（Window 类声明）
 - [ ] 创建 `app/src/window.cpp`（GLFW 初始化、窗口创建、事件轮询、销毁）
 - [ ] `main.cpp` 中创建 Window 实例并运行主循环
@@ -24,7 +24,7 @@
 
 ## Step 3：Vulkan Instance
 
-- [ ] 更新 `vulkan/CMakeLists.txt`（find_package Vulkan、链接 Vulkan::Vulkan、spdlog）
+- [ ] 更新 `vulkan/CMakeLists.txt`（find_package Vulkan、PUBLIC 链接 Vulkan::Vulkan）
 - [ ] 创建 `vulkan/include/qualquer/vulkan/context.h`（Context 类声明）
 - [ ] 创建 `vulkan/src/context.cpp`
 - [ ] Instance 创建（应用信息、Vulkan 1.4、启用 validation layer）
@@ -35,7 +35,7 @@
 
 ## Step 4：Vulkan Device
 
-- [ ] 更新 `vulkan/CMakeLists.txt`（链接 VMA）
+- [ ] 更新 `vulkan/CMakeLists.txt`（PUBLIC 链接 VMA）
 - [ ] Surface 创建（通过 GLFW）
 - [ ] 物理设备枚举与选择（优先 discrete GPU、检查 queue family 支持）
 - [ ] Queue family 查询（graphics + present）
