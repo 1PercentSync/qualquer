@@ -16,11 +16,14 @@
 
 ## Step 2：Application 框架 + 窗口
 
-- [ ] 将 spdlog 初始化从 `main.cpp` 移至 `Application::init()`（修正 Step 1）
-- [ ] 更新 `vulkan/CMakeLists.txt`（PUBLIC 链接 glfw3）
 - [ ] 创建 `app/include/qualquer/app/application.h`（Application 类声明：init/run/destroy）
-- [ ] 创建 `app/src/application.cpp`（GLFW 初始化、窗口创建/销毁、主循环框架）
+- [ ] 创建 `app/src/application.cpp`（空的 init/run/destroy 骨架）
+- [ ] 将 spdlog 初始化从 `main.cpp` 移至 `Application::init()`（修正 Step 1）
 - [ ] 更新 `main.cpp`（创建 Application → init → run → destroy）
+- [ ] 更新 `vulkan/CMakeLists.txt`（PUBLIC 链接 glfw3）
+- [ ] `Application::init()` 中添加 GLFW 初始化和窗口创建
+- [ ] `Application::run()` 中添加主循环（事件轮询、最小化处理）
+- [ ] `Application::destroy()` 中添加窗口和 GLFW 销毁
 - [ ] 请求用户在 CLion 中编译验证（出现可关闭的窗口）
 
 ## Step 3：Vulkan Instance
