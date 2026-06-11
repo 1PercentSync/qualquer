@@ -86,6 +86,20 @@ T_呈现 = T_acquire + T_blit + T_ImGui + T_present
 - 帧循环 + fence 保证 signal/wait 严格配对
 - Timeline 的灵活性用不上
 
+### CUDA 每帧工作
+
+**参数传输**：`cudaMemcpyAsync`
+
+每帧更新的参数（相机矩阵、帧计数等）使用异步传输。同步版本会隐式等待 GPU 空闲，强制串行化。
+
+**Kernel 启动**：每帧 launch
+
+不使用 persistent kernel。launch 开销（~5-10 微秒）相比累积时间（~1ms）可忽略，不值得增加复杂度。
+
+**隐藏条件**：
+
+只要 T_CPU工作 < T_累积（CPU 的 memcpy 排队 + launch + Vulkan 录制在累积时间内完成），CPU 工作被完全隐藏。
+
 ### 后续改进方向
 
 1. **单帧多 sample 累积**：每帧累积多个 sample 以提高收敛速度
