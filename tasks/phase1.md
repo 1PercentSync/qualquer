@@ -10,7 +10,7 @@
 ## Step 1：项目骨架
 
 - [x] 创建 `vcpkg.json`（glfw3、spdlog、imgui[vulkan-binding, glfw-binding]、vulkan-memory-allocator）
-- [ ] 更新 `vulkan/CMakeLists.txt`（PUBLIC 链接 spdlog，上层自动继承）
+- [x] 更新 `vulkan/CMakeLists.txt`（PUBLIC 链接 spdlog，上层自动继承）
 - [ ] 更新 `app/src/main.cpp`（spdlog 初始化）
 - [ ] 请求用户在 CLion 中编译验证
 

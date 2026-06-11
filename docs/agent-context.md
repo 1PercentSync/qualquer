@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 1 剩余项：更新 vulkan/CMakeLists.txt PUBLIC 链接 spdlog，更新 main.cpp 添加 spdlog 初始化
+Step 1 剩余项：更新 main.cpp 添加 spdlog 初始化
 
 ---
 
