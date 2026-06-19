@@ -26,6 +26,8 @@ void Application::init() {
     glfwInit();
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     window_ = glfwCreateWindow(kInitialWidth, kInitialHeight, kWindowTitle, nullptr, nullptr);
+
+    context_.init(window_);
 }
 
 void Application::run() {
@@ -43,6 +45,8 @@ void Application::run() {
 }
 
 void Application::destroy() {
+    context_.destroy();
+
     glfwDestroyWindow(window_);
     glfwTerminate();
 }

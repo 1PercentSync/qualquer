@@ -5,6 +5,8 @@
  * @brief Main application class: window management, frame loop, init/destroy sequence.
  */
 
+#include <qualquer/vulkan/context.h>
+
 struct GLFWwindow;
 
 namespace qualquer::app {
@@ -28,6 +30,9 @@ public:
 private:
     /** @brief GLFW window handle. */
     GLFWwindow* window_ = nullptr;
+
+    /** @brief Vulkan context (instance, debug messenger). */
+    vulkan::Context context_;
 };
 
 }  // namespace qualquer::app
