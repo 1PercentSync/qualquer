@@ -5,6 +5,8 @@
  * @brief Vulkan context module and VK_CHECK macro.
  */
 
+#include <string>
+
 #include <vulkan/vulkan.h>
 #include <spdlog/spdlog.h>
 
@@ -33,7 +35,7 @@ struct GLFWwindow;
 namespace qualquer::vulkan {
 
 /**
- * @brief Core Vulkan context owning instance, debug messenger, and surface.
+ * @brief Core Vulkan context owning instance-level Vulkan objects.
  *
  * Lifetime is managed explicitly via init() and destroy().
  * Additional Vulkan objects (device, allocator) will be
@@ -61,12 +63,21 @@ public:
     /** @brief Window surface for swapchain presentation. */
     VkSurfaceKHR surface = VK_NULL_HANDLE;
 
+    /** @brief Selected physical device (GPU). */
+    VkPhysicalDevice physical_device = VK_NULL_HANDLE;
+
+    /** @brief Human-readable GPU name, populated during init. */
+    std::string gpu_name;
+
 private:
     /** @brief Creates VkInstance with validation layers and debug_utils extension. */
     void create_instance();
 
     /** @brief Sets up the debug messenger callback for validation messages. */
     void create_debug_messenger();
+
+    /** @brief Selects a suitable physical device, preferring discrete GPUs. */
+    void pick_physical_device();
 };
 
 }  // namespace qualquer::vulkan
