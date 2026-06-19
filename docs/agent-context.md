@@ -9,11 +9,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 1 — Vulkan 基础设施 + ImGui + 黑色背景
-- **进度**：Step 4 进行中（4/8 完成：VMA 链接、Surface、物理设备选择、Queue family）
+- **进度**：Step 4 进行中（5/8 完成：VMA 链接、Surface、物理设备选择、Queue family、逻辑设备）
 
 ### 下一个任务
 
-Step 4 复选框 5：逻辑设备创建（VK_KHR_swapchain、Vulkan 1.4 核心特性）
+Step 4 复选框 6：Queue 获取（vkGetDeviceQueue）
 
 ---
 
