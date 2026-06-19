@@ -62,10 +62,14 @@ VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback(
 void Context::init(GLFWwindow* window) {
     create_instance();
     create_debug_messenger();
+    VK_CHECK(glfwCreateWindowSurface(instance, window, nullptr, &surface));
+    spdlog::info("Window surface created");
 }
 
 void Context::destroy() {
-    // Reverse of init(): debug messenger before instance
+    // Reverse of init(): surface → debug messenger → instance
+    vkDestroySurfaceKHR(instance, surface, nullptr);
+
     if constexpr (kEnableValidationLayers) {
         const auto func = reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(
             vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT"));

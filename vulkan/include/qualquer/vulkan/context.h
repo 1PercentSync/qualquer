@@ -2,7 +2,7 @@
 
 /**
  * @file context.h
- * @brief Vulkan context: instance, debug messenger, and VK_CHECK macro.
+ * @brief Vulkan context module and VK_CHECK macro.
  */
 
 #include <vulkan/vulkan.h>
@@ -33,17 +33,17 @@ struct GLFWwindow;
 namespace qualquer::vulkan {
 
 /**
- * @brief Core Vulkan context owning instance and debug messenger.
+ * @brief Core Vulkan context owning instance, debug messenger, and surface.
  *
  * Lifetime is managed explicitly via init() and destroy().
- * Additional Vulkan objects (surface, device, allocator) will be
+ * Additional Vulkan objects (device, allocator) will be
  * added in subsequent steps.
  */
 class Context {
 public:
     /**
      * @brief Initializes the Vulkan context.
-     * @param window GLFW window (used for surface creation in a later step).
+     * @param window GLFW window used to create the presentation surface.
      */
     void init(GLFWwindow* window);
 
@@ -57,6 +57,9 @@ public:
 
     /** @brief Debug messenger for validation layer callbacks. */
     VkDebugUtilsMessengerEXT debug_messenger = VK_NULL_HANDLE;
+
+    /** @brief Window surface for swapchain presentation. */
+    VkSurfaceKHR surface = VK_NULL_HANDLE;
 
 private:
     /** @brief Creates VkInstance with validation layers and debug_utils extension. */
