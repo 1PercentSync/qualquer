@@ -9,11 +9,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 1 — Vulkan 基础设施 + ImGui + 黑色背景
-- **进度**：Step 2 进行中（Application 骨架完成，窗口待添加）
+- **进度**：Step 2 完成，Step 3 待开始
 
 ### 下一个任务
 
-Step 2 剩余项：glfw3 链接、窗口创建、主循环
+Step 3：Vulkan Instance（Context 类、Instance 创建、Debug Messenger）
 
 ---
 
