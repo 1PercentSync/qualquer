@@ -129,6 +129,7 @@ void Context::init(GLFWwindow* window) {
     spdlog::info("Window surface created");
     pick_physical_device();
     find_graphics_queue_family();
+    create_device();
 }
 
 void Context::destroy() {
@@ -250,6 +251,39 @@ void Context::find_graphics_queue_family() {
 
     spdlog::error("No queue family supports both graphics and present");
     std::abort();
+}
+
+void Context::create_device() {
+    constexpr float queue_priority = 1.0f;
+    const VkDeviceQueueCreateInfo queue_info{
+        .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+        .queueFamilyIndex = graphics_queue_family,
+        .queueCount = 1,
+        .pQueuePriorities = &queue_priority,
+    };
+
+    VkPhysicalDeviceVulkan13Features features_13{
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
+        .synchronization2 = VK_TRUE,
+        .dynamicRendering = VK_TRUE,
+    };
+
+    const char* const enabled_extensions[] = {
+        VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+    };
+
+    const VkDeviceCreateInfo device_info{
+        .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
+        .pNext = &features_13,
+        .queueCreateInfoCount = 1,
+        .pQueueCreateInfos = &queue_info,
+        .enabledExtensionCount = 1,
+        .ppEnabledExtensionNames = enabled_extensions,
+    };
+
+    VK_CHECK(vkCreateDevice(physical_device, &device_info, nullptr, &device));
+
+    spdlog::info("Logical device created (queue family: {})", graphics_queue_family);
 }
 
 }  // namespace qualquer::vulkan

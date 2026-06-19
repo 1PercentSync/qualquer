@@ -72,6 +72,9 @@ public:
     /** @brief Queue family index supporting both graphics and present. */
     uint32_t graphics_queue_family = 0;
 
+    /** @brief Logical device. */
+    VkDevice device = VK_NULL_HANDLE;
+
 private:
     /** @brief Creates VkInstance with validation layers and debug_utils extension. */
     void create_instance();
@@ -88,6 +91,11 @@ private:
      * Must be called after pick_physical_device(). Aborts if none found.
      */
     void find_graphics_queue_family();
+
+    /**
+     * @brief Creates the logical device with swapchain extension and Vulkan 1.4 core features.
+     */
+    void create_device();
 };
 
 }  // namespace qualquer::vulkan
