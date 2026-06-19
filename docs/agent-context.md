@@ -9,11 +9,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 1 — Vulkan 基础设施 + ImGui + 黑色背景
-- **进度**：Step 4 进行中（1/8 完成：VMA 链接）
+- **进度**：Step 4 进行中（2/8 完成：VMA 链接、Surface）
 
 ### 下一个任务
 
-Step 4 复选框 2：Surface 创建（GLFW）
+Step 4 复选框 3：物理设备枚举与选择
 
 ---
 
