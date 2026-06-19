@@ -29,6 +29,17 @@ void Application::init() {
 }
 
 void Application::run() {
+    while (!glfwWindowShouldClose(window_)) {
+        glfwPollEvents();
+
+        int fb_width = 0;
+        int fb_height = 0;
+        glfwGetFramebufferSize(window_, &fb_width, &fb_height);
+        while ((fb_width == 0 || fb_height == 0) && !glfwWindowShouldClose(window_)) {
+            glfwWaitEvents();
+            glfwGetFramebufferSize(window_, &fb_width, &fb_height);
+        }
+    }
 }
 
 void Application::destroy() {
