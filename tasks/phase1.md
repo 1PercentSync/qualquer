@@ -22,7 +22,7 @@
 - [x] 更新 `main.cpp`（创建 Application → init → run → destroy）
 - [x] 更新 `vulkan/CMakeLists.txt`（PUBLIC 链接 glfw3）
 - [x] `Application::init()` 中添加 GLFW 初始化和窗口创建
-- [ ] `Application::run()` 中添加主循环（事件轮询、最小化处理）
+- [x] `Application::run()` 中添加主循环（事件轮询、最小化处理）
 - [ ] `Application::destroy()` 中添加窗口和 GLFW 销毁
 - [ ] 请求用户在 CLion 中编译验证（出现可关闭的窗口）
 
