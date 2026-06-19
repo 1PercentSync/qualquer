@@ -9,11 +9,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 1 — Vulkan 基础设施 + ImGui + 黑色背景
-- **进度**：Step 4 进行中（6/8 完成：VMA 链接、Surface、物理设备、Queue family、逻辑设备、Queue）
+- **进度**：Step 4 进行中（7/8 完成：VMA 链接、Surface、物理设备、Queue family、逻辑设备、Queue、VMA Allocator）
 
 ### 下一个任务
 
-Step 4 复选框 7：VMA Allocator 初始化
+Step 4 复选框 8：更新 destroy() 方法
 
 ---
 
