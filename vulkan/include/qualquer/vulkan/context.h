@@ -8,6 +8,7 @@
 #include <string>
 
 #include <vulkan/vulkan.h>
+#include <vk_mem_alloc.h>
 #include <spdlog/spdlog.h>
 
 /**
@@ -78,6 +79,9 @@ public:
     /** @brief Graphics queue (also used for presentation). */
     VkQueue graphics_queue = VK_NULL_HANDLE;
 
+    /** @brief VMA allocator for GPU memory management. */
+    VmaAllocator allocator = VK_NULL_HANDLE;
+
 private:
     /** @brief Creates VkInstance with validation layers and debug_utils extension. */
     void create_instance();
@@ -99,6 +103,9 @@ private:
      * @brief Creates the logical device with swapchain extension and Vulkan 1.4 core features.
      */
     void create_device();
+
+    /** @brief Initializes the VMA allocator. */
+    void create_allocator();
 };
 
 }  // namespace qualquer::vulkan

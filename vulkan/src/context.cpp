@@ -130,6 +130,7 @@ void Context::init(GLFWwindow* window) {
     pick_physical_device();
     find_graphics_queue_family();
     create_device();
+    create_allocator();
 }
 
 void Context::destroy() {
@@ -286,6 +287,19 @@ void Context::create_device() {
     vkGetDeviceQueue(device, graphics_queue_family, 0, &graphics_queue);
 
     spdlog::info("Logical device created (queue family: {})", graphics_queue_family);
+}
+
+void Context::create_allocator() {
+    const VmaAllocatorCreateInfo alloc_info{
+        .physicalDevice = physical_device,
+        .device = device,
+        .instance = instance,
+        .vulkanApiVersion = VK_API_VERSION_1_4,
+    };
+
+    VK_CHECK(vmaCreateAllocator(&alloc_info, &allocator));
+
+    spdlog::info("VMA allocator created");
 }
 
 }  // namespace qualquer::vulkan
