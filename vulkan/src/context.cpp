@@ -65,6 +65,16 @@ void Context::init(GLFWwindow* window) {
 }
 
 void Context::destroy() {
+    // Reverse of init(): debug messenger before instance
+    if constexpr (kEnableValidationLayers) {
+        const auto func = reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(
+            vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT"));
+        func(instance, debug_messenger, nullptr);
+    }
+
+    vkDestroyInstance(instance, nullptr);
+
+    spdlog::info("Vulkan context destroyed");
 }
 
 void Context::create_instance() {
