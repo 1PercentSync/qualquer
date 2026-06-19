@@ -41,7 +41,7 @@
 
 - [x] 更新 `vulkan/CMakeLists.txt`（PUBLIC 链接 VMA）
 - [x] Context 中添加 Surface 创建（通过 GLFW）
-- [ ] 物理设备枚举与选择（优先 discrete GPU、检查 queue family 支持）
+- [x] 物理设备枚举与选择（优先 discrete GPU、检查 queue family 支持）
 - [ ] Queue family 查询（graphics + present）
 - [ ] 逻辑设备创建（启用 VK_KHR_swapchain、Vulkan 1.4 核心特性）
 - [ ] Queue 获取
