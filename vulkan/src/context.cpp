@@ -134,7 +134,8 @@ void Context::init(GLFWwindow* window) {
 }
 
 void Context::destroy() {
-    // Reverse of init(): surface → debug messenger → instance
+    vmaDestroyAllocator(allocator);
+    vkDestroyDevice(device, nullptr);
     vkDestroySurfaceKHR(instance, surface, nullptr);
 
     if constexpr (kEnableValidationLayers) {
