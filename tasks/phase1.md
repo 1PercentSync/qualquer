@@ -29,7 +29,7 @@
 ## Step 3：Vulkan Instance
 
 - [x] 更新 `vulkan/CMakeLists.txt`（find_package Vulkan、PUBLIC 链接 Vulkan::Vulkan）
-- [ ] 创建 `vulkan/include/qualquer/vulkan/context.h`（Context 类声明）
+- [x] 创建 `vulkan/include/qualquer/vulkan/context.h`（Context 类声明）
 - [ ] 创建 `vulkan/src/context.cpp`
 - [ ] Instance 创建（应用信息、Vulkan 1.4、启用 validation layer）
 - [ ] Debug Messenger 回调（validation 错误输出到 spdlog）
