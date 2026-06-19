@@ -9,46 +9,42 @@
 #include <spdlog/spdlog.h>
 
 namespace qualquer::app {
+    namespace {
+        constexpr auto kLogLevel = spdlog::level::info;
 
-namespace {
+        constexpr int kInitialWidth = 1920;
+        constexpr int kInitialHeight = 1080;
+        constexpr auto kWindowTitle = "Qualquer";
+    } // namespace
 
-constexpr auto kLogLevel = spdlog::level::info;
+    void Application::init() {
+        spdlog::set_level(kLogLevel);
 
-constexpr int kInitialWidth = 1920;
-constexpr int kInitialHeight = 1080;
-constexpr auto kWindowTitle = "Qualquer";
+        glfwInit();
+        glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+        window_ = glfwCreateWindow(kInitialWidth, kInitialHeight, kWindowTitle, nullptr, nullptr);
 
-}  // namespace
+        context_.init(window_);
+    }
 
-void Application::init() {
-    spdlog::set_level(kLogLevel);
+    void Application::run() const {
+        while (!glfwWindowShouldClose(window_)) {
+            glfwPollEvents();
 
-    glfwInit();
-    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    window_ = glfwCreateWindow(kInitialWidth, kInitialHeight, kWindowTitle, nullptr, nullptr);
-
-    context_.init(window_);
-}
-
-void Application::run() {
-    while (!glfwWindowShouldClose(window_)) {
-        glfwPollEvents();
-
-        int fb_width = 0;
-        int fb_height = 0;
-        glfwGetFramebufferSize(window_, &fb_width, &fb_height);
-        while ((fb_width == 0 || fb_height == 0) && !glfwWindowShouldClose(window_)) {
-            glfwWaitEvents();
+            int fb_width = 0;
+            int fb_height = 0;
             glfwGetFramebufferSize(window_, &fb_width, &fb_height);
+            while ((fb_width == 0 || fb_height == 0) && !glfwWindowShouldClose(window_)) {
+                glfwWaitEvents();
+                glfwGetFramebufferSize(window_, &fb_width, &fb_height);
+            }
         }
     }
-}
 
-void Application::destroy() {
-    context_.destroy();
+    void Application::destroy() {
+        context_.destroy();
 
-    glfwDestroyWindow(window_);
-    glfwTerminate();
-}
-
-}  // namespace qualquer::app
+        glfwDestroyWindow(window_);
+        glfwTerminate();
+    }
+} // namespace qualquer::app

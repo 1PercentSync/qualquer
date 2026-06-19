@@ -34,78 +34,76 @@
 struct GLFWwindow;
 
 namespace qualquer::vulkan {
-
-/**
- * @brief Core Vulkan context owning instance-level Vulkan objects.
- *
- * Lifetime is managed explicitly via init() and destroy().
- * Additional Vulkan objects (device, allocator) will be
- * added in subsequent steps.
- */
-class Context {
-public:
     /**
-     * @brief Initializes the Vulkan context.
-     * @param window GLFW window used to create the presentation surface.
-     */
-    void init(GLFWwindow* window);
-
-    /**
-     * @brief Destroys all Vulkan objects in reverse creation order.
-     */
-    void destroy();
-
-    /** @brief Vulkan instance. */
-    VkInstance instance = VK_NULL_HANDLE;
-
-    /** @brief Debug messenger for validation layer callbacks. */
-    VkDebugUtilsMessengerEXT debug_messenger = VK_NULL_HANDLE;
-
-    /** @brief Window surface for swapchain presentation. */
-    VkSurfaceKHR surface = VK_NULL_HANDLE;
-
-    /** @brief Selected physical device (GPU). */
-    VkPhysicalDevice physical_device = VK_NULL_HANDLE;
-
-    /** @brief Human-readable GPU name, populated during init. */
-    std::string gpu_name;
-
-    /** @brief Queue family index supporting both graphics and present. */
-    uint32_t graphics_queue_family = 0;
-
-    /** @brief Logical device. */
-    VkDevice device = VK_NULL_HANDLE;
-
-    /** @brief Graphics queue (also used for presentation). */
-    VkQueue graphics_queue = VK_NULL_HANDLE;
-
-    /** @brief VMA allocator for GPU memory management. */
-    VmaAllocator allocator = VK_NULL_HANDLE;
-
-private:
-    /** @brief Creates VkInstance with validation layers and debug_utils extension. */
-    void create_instance();
-
-    /** @brief Sets up the debug messenger callback for validation messages. */
-    void create_debug_messenger();
-
-    /** @brief Selects a suitable physical device, preferring discrete GPUs. */
-    void pick_physical_device();
-
-    /**
-     * @brief Finds and records the queue family supporting both graphics and present.
+     * @brief Core Vulkan context owning instance-level Vulkan objects.
      *
-     * Must be called after pick_physical_device(). Aborts if none found.
+     * Lifetime is managed explicitly via init() and destroy().
+     * Additional Vulkan objects (device, allocator) will be
+     * added in subsequent steps.
      */
-    void find_graphics_queue_family();
+    class Context {
+    public:
+        /**
+         * @brief Initializes the Vulkan context.
+         * @param window GLFW window used to create the presentation surface.
+         */
+        void init(GLFWwindow *window);
 
-    /**
-     * @brief Creates the logical device with swapchain extension and Vulkan 1.4 core features.
-     */
-    void create_device();
+        /**
+         * @brief Destroys all Vulkan objects in reverse creation order.
+         */
+        void destroy() const;
 
-    /** @brief Initializes the VMA allocator. */
-    void create_allocator();
-};
+        /** @brief Vulkan instance. */
+        VkInstance instance = VK_NULL_HANDLE;
 
-}  // namespace qualquer::vulkan
+        /** @brief Debug messenger for validation layer callbacks. */
+        VkDebugUtilsMessengerEXT debug_messenger = VK_NULL_HANDLE;
+
+        /** @brief Window surface for swapchain presentation. */
+        VkSurfaceKHR surface = VK_NULL_HANDLE;
+
+        /** @brief Selected physical device (GPU). */
+        VkPhysicalDevice physical_device = VK_NULL_HANDLE;
+
+        /** @brief Human-readable GPU name, populated during init. */
+        std::string gpu_name;
+
+        /** @brief Queue family index supporting both graphics and present. */
+        uint32_t graphics_queue_family = 0;
+
+        /** @brief Logical device. */
+        VkDevice device = VK_NULL_HANDLE;
+
+        /** @brief Graphics queue (also used for presentation). */
+        VkQueue graphics_queue = VK_NULL_HANDLE;
+
+        /** @brief VMA allocator for GPU memory management. */
+        VmaAllocator allocator = VK_NULL_HANDLE;
+
+    private:
+        /** @brief Creates VkInstance with validation layers and debug_utils extension. */
+        void create_instance();
+
+        /** @brief Sets up the debug messenger callback for validation messages. */
+        void create_debug_messenger();
+
+        /** @brief Selects a suitable physical device, preferring discrete GPUs. */
+        void pick_physical_device();
+
+        /**
+         * @brief Finds and records the queue family supporting both graphics and present.
+         *
+         * Must be called after pick_physical_device(). Aborts if none found.
+         */
+        void find_graphics_queue_family();
+
+        /**
+         * @brief Creates the logical device with swapchain extension and Vulkan 1.4 core features.
+         */
+        void create_device();
+
+        /** @brief Initializes the VMA allocator. */
+        void create_allocator();
+    };
+} // namespace qualquer::vulkan

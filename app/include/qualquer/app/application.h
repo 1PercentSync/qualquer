@@ -10,29 +10,27 @@
 struct GLFWwindow;
 
 namespace qualquer::app {
+    /**
+     * @brief Top-level application managing subsystems and frame loop.
+     *
+     * Lifetime is managed via init() and destroy().
+     */
+    class Application {
+    public:
+        /** @brief Initializes all subsystems. */
+        void init();
 
-/**
- * @brief Top-level application managing subsystems and frame loop.
- *
- * Lifetime is managed via init() and destroy().
- */
-class Application {
-public:
-    /** @brief Initializes all subsystems. */
-    void init();
+        /** @brief Runs the main frame loop until the window is closed. */
+        void run() const;
 
-    /** @brief Runs the main frame loop until the window is closed. */
-    void run();
+        /** @brief Destroys all resources in reverse init order. */
+        void destroy();
 
-    /** @brief Destroys all resources in reverse init order. */
-    void destroy();
+    private:
+        /** @brief GLFW window handle. */
+        GLFWwindow *window_ = nullptr;
 
-private:
-    /** @brief GLFW window handle. */
-    GLFWwindow* window_ = nullptr;
-
-    /** @brief Vulkan context (instance, debug messenger). */
-    vulkan::Context context_;
-};
-
-}  // namespace qualquer::app
+        /** @brief Vulkan context (instance, debug messenger). */
+        vulkan::Context context_;
+    };
+} // namespace qualquer::app
