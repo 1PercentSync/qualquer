@@ -43,6 +43,8 @@ void Application::run() {
 }
 
 void Application::destroy() {
+    glfwDestroyWindow(window_);
+    glfwTerminate();
 }
 
 }  // namespace qualquer::app
