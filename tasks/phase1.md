@@ -46,8 +46,8 @@
 - [x] 逻辑设备创建（启用 VK_KHR_swapchain、Vulkan 1.4 核心特性）
 - [x] Queue 获取
 - [x] VMA Allocator 初始化
-- [ ] 更新 `destroy()` 方法
-- [ ] 请求用户在 CLion 中编译验证（控制台输出 GPU 名称）
+- [x] 更新 `destroy()` 方法
+- [x] 请求用户在 CLion 中编译验证（控制台输出 GPU 名称）
 
 ## Step 5：Swapchain
 
