@@ -5,6 +5,8 @@
  * @brief Main application class: window management, frame loop, init/destroy sequence.
  */
 
+struct GLFWwindow;
+
 namespace qualquer::app {
 
 /**
@@ -22,6 +24,10 @@ public:
 
     /** @brief Destroys all resources in reverse init order. */
     void destroy();
+
+private:
+    /** @brief GLFW window handle. */
+    GLFWwindow* window_ = nullptr;
 };
 
 }  // namespace qualquer::app
