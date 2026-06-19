@@ -128,6 +128,7 @@ void Context::init(GLFWwindow* window) {
     VK_CHECK(glfwCreateWindowSurface(instance, window, nullptr, &surface));
     spdlog::info("Window surface created");
     pick_physical_device();
+    find_graphics_queue_family();
 }
 
 void Context::destroy() {
@@ -227,6 +228,28 @@ void Context::pick_physical_device() {
     gpu_name = props.deviceName;
 
     spdlog::info("Selected GPU: {} (score: {})", gpu_name, best_score);
+}
+
+void Context::find_graphics_queue_family() {
+    uint32_t family_count = 0;
+    vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &family_count, nullptr);
+    std::vector<VkQueueFamilyProperties> families(family_count);
+    vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &family_count, families.data());
+
+    for (uint32_t i = 0; i < family_count; ++i) {
+        if (!(families[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)) { continue; }
+
+        VkBool32 present_support = VK_FALSE;
+        vkGetPhysicalDeviceSurfaceSupportKHR(physical_device, i, surface, &present_support);
+        if (present_support) {
+            graphics_queue_family = i;
+            spdlog::info("Queue family {} supports graphics + present", graphics_queue_family);
+            return;
+        }
+    }
+
+    spdlog::error("No queue family supports both graphics and present");
+    std::abort();
 }
 
 }  // namespace qualquer::vulkan

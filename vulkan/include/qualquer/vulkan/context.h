@@ -69,6 +69,9 @@ public:
     /** @brief Human-readable GPU name, populated during init. */
     std::string gpu_name;
 
+    /** @brief Queue family index supporting both graphics and present. */
+    uint32_t graphics_queue_family = 0;
+
 private:
     /** @brief Creates VkInstance with validation layers and debug_utils extension. */
     void create_instance();
@@ -78,6 +81,13 @@ private:
 
     /** @brief Selects a suitable physical device, preferring discrete GPUs. */
     void pick_physical_device();
+
+    /**
+     * @brief Finds and records the queue family supporting both graphics and present.
+     *
+     * Must be called after pick_physical_device(). Aborts if none found.
+     */
+    void find_graphics_queue_family();
 };
 
 }  // namespace qualquer::vulkan
