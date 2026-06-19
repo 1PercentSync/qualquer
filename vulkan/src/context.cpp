@@ -283,6 +283,8 @@ void Context::create_device() {
 
     VK_CHECK(vkCreateDevice(physical_device, &device_info, nullptr, &device));
 
+    vkGetDeviceQueue(device, graphics_queue_family, 0, &graphics_queue);
+
     spdlog::info("Logical device created (queue family: {})", graphics_queue_family);
 }
 

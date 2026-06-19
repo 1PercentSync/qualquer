@@ -75,6 +75,9 @@ public:
     /** @brief Logical device. */
     VkDevice device = VK_NULL_HANDLE;
 
+    /** @brief Graphics queue (also used for presentation). */
+    VkQueue graphics_queue = VK_NULL_HANDLE;
+
 private:
     /** @brief Creates VkInstance with validation layers and debug_utils extension. */
     void create_instance();
