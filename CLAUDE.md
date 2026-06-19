@@ -159,7 +159,22 @@ vcpkg 有端口的库通过 `vcpkg.json` 管理。vcpkg 无端口的库放入 `t
 
 ## 关键技术约定
 
-随开发逐步填充。
+### Vulkan 结构体
+
+使用 C++20 designated initializers 初始化 Vulkan 结构体，不使用逐字段赋值：
+
+```cpp
+// 正确
+const VkApplicationInfo app_info{
+    .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
+    .apiVersion = VK_API_VERSION_1_4,
+};
+
+// 错误
+VkApplicationInfo app_info{};
+app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
+app_info.apiVersion = VK_API_VERSION_1_4;
+```
 
 ---
 
