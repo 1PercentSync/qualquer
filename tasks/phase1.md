@@ -33,7 +33,7 @@
 - [x] 创建 `vulkan/src/context.cpp`
 - [x] Instance 创建（应用信息、Vulkan 1.4、启用 validation layer）
 - [x] Debug Messenger 回调（validation 错误输出到 spdlog）
-- [ ] `destroy()` 方法（按反序销毁）
+- [x] `destroy()` 方法（按反序销毁）
 - [ ] Application 中持有 Context，init/destroy 中调用
 - [ ] 请求用户在 CLion 中编译验证（控制台无 validation 报错）
 
