@@ -9,11 +9,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 1 — Vulkan 基础设施 + ImGui + 黑色背景
-- **进度**：Step 2 完成，Step 3 待开始
+- **进度**：Step 3 进行中（CMakeLists.txt 完成）
 
 ### 下一个任务
 
-Step 3：Vulkan Instance（Context 类、Instance 创建、Debug Messenger）
+Step 3：创建 `context.h`（Context 类声明）
 
 ---
 
