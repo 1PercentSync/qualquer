@@ -5,6 +5,7 @@
 
 #include <qualquer/vulkan/context.h>
 
+#include <string>
 #include <vector>
 
 #include <GLFW/glfw3.h>
@@ -21,6 +22,40 @@ constexpr bool kEnableValidationLayers = false;
 /** @brief Validation layers are enabled in debug builds. */
 constexpr bool kEnableValidationLayers = true;
 #endif
+
+/** @brief All severity levels — let the callback do spdlog-level filtering at runtime. */
+constexpr VkDebugUtilsMessageSeverityFlagsEXT kAllSeverityFlags =
+    VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
+    VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT |
+    VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
+    VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+
+// Builds a tag string from the message type bitmask (e.g. "[Validation][Performance]")
+std::string format_message_type(const VkDebugUtilsMessageTypeFlagsEXT type) {
+    std::string tag;
+    if (type & VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT) { tag += "[Validation]"; }
+    if (type & VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT) { tag += "[Performance]"; }
+    return tag;
+}
+
+// Routes validation layer messages to spdlog by severity
+VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback(
+    const VkDebugUtilsMessageSeverityFlagBitsEXT severity,
+    const VkDebugUtilsMessageTypeFlagsEXT type,
+    const VkDebugUtilsMessengerCallbackDataEXT* callback_data,
+    [[maybe_unused]] void* user_data) {
+    const auto tag = format_message_type(type);
+    if (severity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) {
+        spdlog::error("{} {}", tag, callback_data->pMessage);
+    } else if (severity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
+        spdlog::warn("{} {}", tag, callback_data->pMessage);
+    } else if (severity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT) {
+        spdlog::info("{} {}", tag, callback_data->pMessage);
+    } else {
+        spdlog::debug("{} {}", tag, callback_data->pMessage);
+    }
+    return VK_FALSE;
+}
 
 }  // namespace
 
@@ -66,6 +101,22 @@ void Context::create_instance() {
 }
 
 void Context::create_debug_messenger() {
+    if constexpr (!kEnableValidationLayers) { return; }
+
+    const VkDebugUtilsMessengerCreateInfoEXT create_info{
+        .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
+        .messageSeverity = kAllSeverityFlags,
+        .messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
+                       VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT,
+        .pfnUserCallback = debug_callback,
+    };
+
+    // Extension function — must be loaded manually via vkGetInstanceProcAddr
+    const auto func = reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(
+        vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT"));
+    VK_CHECK(func(instance, &create_info, nullptr, &debug_messenger));
+
+    spdlog::info("Debug messenger created");
 }
 
 }  // namespace qualquer::vulkan
