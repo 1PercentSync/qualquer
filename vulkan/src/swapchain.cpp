@@ -18,6 +18,17 @@ namespace qualquer::vulkan {
         create_resources(context, VK_NULL_HANDLE);
     }
 
+    // Reverse creation order: image views first, then the swapchain (which also
+    // releases the swapchain images, so those handles are never destroyed manually).
+    void Swapchain::destroy(const Context &context) const {
+        for (const auto view: image_views) {
+            vkDestroyImageView(context.device, view, nullptr);
+        }
+        vkDestroySwapchainKHR(context.device, swapchain, nullptr);
+
+        spdlog::info("Swapchain destroyed");
+    }
+
     // old_swapchain lets the driver recycle resources across recreate (VK_NULL_HANDLE on first creation).
     // ReSharper disable once CppParameterMayBeConst
     void Swapchain::create_resources(const Context &context, VkSwapchainKHR old_swapchain) {
