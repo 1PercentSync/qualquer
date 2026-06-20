@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 8 第 1 项：更新 `app/CMakeLists.txt`（链接 imgui）
+Step 8 第 1 项：更新 `renderer/CMakeLists.txt`（find_package imgui，链接 imgui::imgui，移除 placeholder）
 
 ---
 

@@ -62,6 +62,9 @@ Step 1 → Step 2 → Step 3 → Step 4 → Step 5 → Step 6 → Step 7 → Ste
 
 - 使用 Dynamic Rendering（无 render pass）
 - 直接渲染到 swapchain image
+- 封装类归 renderer 层（架构上"ImGui 录制"属渲染内容录制，归 renderer；当前 Application 临时调用，Step 14 renderer 接管 render_frame 内容时已就位）
+- Descriptor Pool 由 ImGui backend 自建自销（`DescriptorPoolSize > 0`），不手动管理
+- 版本 1.92.6 的 Vulkan backend API 与 Himalaya 参考的 1.91.9 不同：渲染管线信息在 `PipelineInfoMain.PipelineRenderingCreateInfo` 下、`Init` 返回 bool 需检查、需设 `ApiVersion`
 
 ### CUDA-Vulkan Interop
 

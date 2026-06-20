@@ -73,11 +73,10 @@
 
 ## Step 8：ImGui 集成
 
-- [ ] 更新 `app/CMakeLists.txt`（链接 imgui）
-- [ ] 创建 ImGui 专用 Descriptor Pool
-- [ ] ImGui Vulkan backend 初始化（适配 Dynamic Rendering）
-- [ ] ImGui GLFW backend 初始化
-- [ ] 每帧 ImGui 渲染集成（NewFrame → demo window → Render → 录制到 command buffer）
+- [ ] 更新 `renderer/CMakeLists.txt`（find_package imgui，链接 imgui::imgui，移除 placeholder）
+- [ ] 创建 `renderer/include/qualquer/renderer/imgui_backend.h`（ImGuiBackend 类：init/destroy/begin_frame/render）
+- [ ] 创建 `renderer/src/imgui_backend.cpp`（Context + GLFW backend + Vulkan backend 初始化）
+- [ ] 帧循环集成（Application 持有 ImGuiBackend；begin_frame 后 begin_frame；render_frame 中 loadOp 改 LOAD，begin/end rendering 间 render(cmd)；destroy 中销毁）
 - [ ] 请求用户在 CLion 中编译验证（ImGui demo window 正常显示）
 
 ## Step 9：调试面板
