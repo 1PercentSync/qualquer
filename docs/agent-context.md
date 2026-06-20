@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 6 编译验证：请求用户在 CLion 中编译
+Step 6 第 2 项：将 render_finished_semaphore 从 FrameData（per-frame）移至 Swapchain（per-swapchain-image）
 
 ---
 

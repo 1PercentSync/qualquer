@@ -146,6 +146,18 @@ CUDA 侧通过 `cudaExternalMemoryGetMappedMipmappedArray` → `cudaArray_t` →
 - Vulkan 侧工作极轻（blit + ImGui），3 帧无额外收益
 - 更少的资源占用和延迟
 
+### 帧同步 Semaphore 归属
+
+**image_available_semaphore**：per-frame-in-flight（2 个），在 FrameData 中。
+
+acquire 时 signal，submit 时 wait。fence 保证同一 slot 重用时上一次的 signal/wait 已完成，配对成立。
+
+**render_finished_semaphore**：per-swapchain-image（跟随 swapchain image 数量），在 Swapchain 中。
+
+submit 时 signal，present 时 wait。`vkQueuePresentKHR` 的 semaphore wait 由 presentation engine 异步消费，不受 render fence 约束。如果用 per-frame（2 个），当 swapchain image 数量 > frames in flight 时，同一 slot 的 fence wait 通过后 presentation engine 可能仍未消费上一次的 semaphore，导致对 signaled 状态的 binary semaphore 再次 signal，违反 spec。Per-swapchain-image 下，同一 image index 在 presentation engine 释放前不会被 acquire 返回，保证 semaphore 已被消费。
+
+与 Himalaya 一致。
+
 ### ImGui 渲染
 
 **决策**：直接渲染到 swapchain image。

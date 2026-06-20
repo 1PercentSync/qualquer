@@ -49,7 +49,8 @@ Step 1 → Step 2 → Step 3 → Step 4 → Step 5 → Step 6 → Step 7 → Ste
 ### 帧同步
 
 - Frames in flight：2
-- 每帧资源：command pool、command buffer、fence、2 semaphore（acquire + present）
+- Per-frame 资源（FrameData）：command pool、command buffer、render fence、image_available semaphore
+- Per-swapchain-image 资源（Swapchain）：render_finished semaphore
 
 ### ImGui
 
