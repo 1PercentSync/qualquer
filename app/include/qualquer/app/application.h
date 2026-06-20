@@ -5,6 +5,7 @@
  * @brief Main application class: window management, frame loop, init/destroy sequence.
  */
 
+#include <qualquer/renderer/imgui_backend.h>
 #include <qualquer/vulkan/context.h>
 #include <qualquer/vulkan/swapchain.h>
 
@@ -25,7 +26,7 @@ namespace qualquer::app {
         void run();
 
         /** @brief Destroys all resources in reverse init order. */
-        void destroy() const;
+        void destroy();
 
     private:
         /**
@@ -67,6 +68,9 @@ namespace qualquer::app {
 
         /** @brief Vulkan swapchain (surface, images, image views). */
         vulkan::Swapchain swapchain_;
+
+        /** @brief ImGui integration (context, backends, UI rendering). */
+        renderer::ImGuiBackend imgui_backend_;
 
         /**
          * @brief Index of the swapchain image acquired for the current frame.

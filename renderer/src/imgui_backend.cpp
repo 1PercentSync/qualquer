@@ -90,6 +90,13 @@ namespace qualquer::renderer {
     }
 
     // ReSharper disable once CppMemberFunctionMayBeStatic
+    void ImGuiBackend::show_panel() { // NOLINT(*-convert-member-functions-to-static)
+        ImGui::SetNextWindowPos({0, 0}, ImGuiCond_Once);
+        ImGui::Begin("Qualquer", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
+        ImGui::End();
+    }
+
+    // ReSharper disable once CppMemberFunctionMayBeStatic
     // ReSharper disable once CppParameterMayBeConst
     void ImGuiBackend::render(VkCommandBuffer cmd) { // NOLINT(*-convert-member-functions-to-static)
         ImGui::Render();

@@ -26,6 +26,7 @@ namespace qualquer::app {
 
         context_.init(window_);
         swapchain_.init(context_);
+        imgui_backend_.init(context_, swapchain_, window_);
     }
 
     void Application::run() {
@@ -43,6 +44,8 @@ namespace qualquer::app {
             if (!begin_frame()) {
                 continue;
             }
+            imgui_backend_.begin_frame();
+            imgui_backend_.show_panel();
             render_frame();
             end_frame();
         }
@@ -150,6 +153,7 @@ namespace qualquer::app {
         };
 
         vkCmdBeginRendering(cmd, &rendering_info);
+        imgui_backend_.render(cmd);
         vkCmdEndRendering(cmd);
 
         const VkImageMemoryBarrier2 to_present{
@@ -251,9 +255,10 @@ namespace qualquer::app {
         swapchain_.recreate(context_);
     }
 
-    void Application::destroy() const {
+    void Application::destroy() {
         vkQueueWaitIdle(context_.graphics_queue);
 
+        imgui_backend_.destroy();
         swapchain_.destroy(context_);
         context_.destroy();
 
