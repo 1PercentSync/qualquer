@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 6 第 1 项：Context 中添加 FrameData 结构（command pool、command buffer、fence、semaphore × frames in flight）
+Step 6 第 1 项：Context 帧资源（FrameData 结构、create_frame_data 创建 pool/buffer/fence/semaphore、destroy 销毁、current_frame/advance_frame 轮换）
 
 ---
 
