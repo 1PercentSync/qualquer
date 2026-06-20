@@ -76,7 +76,7 @@
 - [x] 更新 `renderer/CMakeLists.txt`（find_package imgui，链接 imgui::imgui PRIVATE）
 - [x] 创建 `renderer/include/qualquer/renderer/imgui_backend.h`（ImGuiBackend 类：init/destroy/begin_frame/render）
 - [x] 创建 `renderer/src/imgui_backend.cpp`（Context + GLFW backend + Vulkan backend 初始化，一并移除 placeholder.cpp）
-- [ ] 帧循环集成（Application 持有 ImGuiBackend；begin_frame 后 begin_frame；render_frame 中 begin/end rendering 间 render(cmd)；destroy 中销毁）
+- [x] 帧循环集成（Application 持有 ImGuiBackend；begin_frame 后 begin_frame；render_frame 中 begin/end rendering 间 render(cmd)；destroy 中销毁）
 - [ ] 请求用户在 CLion 中编译验证（ImGui 空面板正常显示）
 
 ## Step 9：调试面板
