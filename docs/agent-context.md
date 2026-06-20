@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 7 第 2 项：Swapchain image layout transition（undefined → color attachment → present，两个手写 vkCmdPipelineBarrier2）
+Step 7 第 2 项：单帧渲染录制（两个 layout barrier + 中间 begin_rendering/clear/end_rendering，让 swapchain image 正确画出一帧黑色）
 
 ---
 
