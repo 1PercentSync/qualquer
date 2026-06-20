@@ -40,13 +40,15 @@ namespace qualquer::app {
                 glfwGetFramebufferSize(window_, &fb_width, &fb_height);
             }
 
-            begin_frame();
+            if (!begin_frame()) {
+                continue;
+            }
             render_frame();
             end_frame();
         }
     }
 
-    void Application::begin_frame() {
+    bool Application::begin_frame() {
         // Fences start signaled (Context::create_frame_data), so the first frame's
         // wait returns immediately.
         const auto &frame = context_.current_frame();
@@ -59,13 +61,14 @@ namespace qualquer::app {
             VK_NULL_HANDLE,
             &image_index_);
 
-        // SUBOPTIMAL succeeds and is handled at present time; OUT_OF_DATE needs
-        // recreation before recording (not yet implemented).
+        // OUT_OF_DATE: surface no longer compatible, recreate and skip this frame.
+        // The fence has not been reset, so the next iteration's wait still guards the
+        // last submit on this slot; recreate itself waits the queue idle first.
         if (acquire_result == VK_ERROR_OUT_OF_DATE_KHR) {
-            spdlog::critical("vkAcquireNextImageKHR: swapchain out of date "
-                "(recreate not yet implemented)");
-            std::abort();
+            recreate_swapchain();
+            return false;
         }
+        // SUBOPTIMAL succeeds; handled at present time.
         if (acquire_result != VK_SUCCESS && acquire_result != VK_SUBOPTIMAL_KHR) {
             spdlog::critical("vkAcquireNextImageKHR returned {}", static_cast<int>(acquire_result));
             std::abort();
@@ -74,6 +77,7 @@ namespace qualquer::app {
         // Reset so the next wait on this slot reflects this frame's submit, not the
         // previous frame's (fences do not auto-clear once signaled).
         VK_CHECK(vkResetFences(context_.device, 1, &frame.render_fence));
+        return true;
     }
 
     void Application::render_frame() {
@@ -221,9 +225,30 @@ namespace qualquer::app {
             .pImageIndices = &image_index_,
         };
 
-        VK_CHECK(vkQueuePresentKHR(context_.graphics_queue, &present_info));
+        // Recreate on driver-reported staleness or when the polled framebuffer size
+        // diverges from the swapchain extent (Windows may not report a size change
+        // via acquire/present in the same frame).
+        if (const VkResult present_result = vkQueuePresentKHR(context_.graphics_queue, &present_info);
+            present_result == VK_ERROR_OUT_OF_DATE_KHR || present_result == VK_SUBOPTIMAL_KHR) {
+            recreate_swapchain();
+        } else if (present_result != VK_SUCCESS) {
+            spdlog::critical("vkQueuePresentKHR returned {}", static_cast<int>(present_result));
+            std::abort();
+        } else {
+            int fb_width = 0;
+            int fb_height = 0;
+            glfwGetFramebufferSize(window_, &fb_width, &fb_height);
+            if (static_cast<uint32_t>(fb_width) != swapchain_.extent.width ||
+                static_cast<uint32_t>(fb_height) != swapchain_.extent.height) {
+                recreate_swapchain();
+            }
+        }
 
         context_.advance_frame();
+    }
+
+    void Application::recreate_swapchain() {
+        swapchain_.recreate(context_);
     }
 
     void Application::destroy() const {

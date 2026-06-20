@@ -18,6 +18,34 @@ namespace qualquer::vulkan {
         create_resources(context, VK_NULL_HANDLE);
     }
 
+    // Fences only track vkQueueSubmit completion, not vkQueuePresentKHR. The
+    // graphics-queue wait covers both submits and presents on this queue without
+    // stalling unrelated queues (vkDeviceWaitIdle would over-serialize).
+    void Swapchain::recreate(const Context &context) {
+        vkQueueWaitIdle(context.graphics_queue);
+
+        // Destroy old resolution-dependent resources; keep the old swapchain
+        // handle so the driver can recycle resources across the swap.
+        for (const auto semaphore : render_finished_semaphores) {
+            vkDestroySemaphore(context.device, semaphore, nullptr);
+        }
+        for (const auto view : image_views) {
+            vkDestroyImageView(context.device, view, nullptr);
+        }
+        render_finished_semaphores.clear();
+        image_views.clear();
+        images.clear();
+
+        // ReSharper disable once CppLocalVariableMayBeConst
+        VkSwapchainKHR old_swapchain = swapchain;
+        swapchain = VK_NULL_HANDLE;
+
+        create_resources(context, old_swapchain);
+
+        // The old swapchain is now retired; destroy it after the new one is in place.
+        vkDestroySwapchainKHR(context.device, old_swapchain, nullptr);
+    }
+
     // Reverse creation order: image views first, then the swapchain (which also
     // releases the swapchain images, so those handles are never destroyed manually).
     void Swapchain::destroy(const Context &context) const {

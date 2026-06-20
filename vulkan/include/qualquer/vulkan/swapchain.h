@@ -47,6 +47,16 @@ namespace qualquer::vulkan {
         void init(const Context &context, PresentMode mode = PresentMode::Mailbox);
 
         /**
+         * @brief Recreates the swapchain after surface size change or driver-reported staleness.
+         *
+         * Waits for the graphics queue to idle (fences do not track present completion),
+         * destroys old image views and per-image semaphores, then rebuilds the swapchain
+         * while passing the old handle to the driver for resource recycling.
+         * @param context Vulkan context providing device, physical device, queue, and surface.
+         */
+        void recreate(const Context &context);
+
+        /**
          * @brief Destroys image views and the swapchain in reverse creation order.
          * @param context Vulkan context providing the owning device.
          */
@@ -112,7 +122,7 @@ namespace qualquer::vulkan {
         [[nodiscard]] VkPresentModeKHR choose_present_mode(PresentMode requested) const;
 
         /**
-         * @brief Core creation logic shared by init() (and later recreate()).
+         * @brief Core creation logic shared by init() and recreate().
          *
          * Queries surface capabilities, selects format/present mode, creates the
          * swapchain, retrieves images, and creates image views. Extent is taken

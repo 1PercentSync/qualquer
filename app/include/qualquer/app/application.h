@@ -32,16 +32,32 @@ namespace qualquer::app {
          * @brief Waits for the current frame slot's fence and acquires a swapchain image.
          *
          * Handles the frame-loop head: vkWaitForFences, vkAcquireNextImageKHR, and
-         * vkResetFences once acquisition succeeds. A stale swapchain (OUT_OF_DATE) is
-         * not yet handled — it aborts until swapchain recreation is implemented.
+         * vkResetFences once acquisition succeeds.
+         * @return true if acquisition succeeded and the frame should proceed;
+         *         false if the swapchain was out of date and has been recreated
+         *         (the caller skips the rest of this frame and retries next iteration).
          */
-        void begin_frame();
+        bool begin_frame();
 
         /** @brief Records this frame's commands into the current frame's command buffer. */
         void render_frame();
 
-        /** @brief Submits the recorded commands and presents the swapchain image. */
+        /**
+         * @brief Submits the recorded commands and presents the swapchain image.
+         *
+         * Triggers swapchain recreation when the driver reports a stale swapchain
+         * (present returning OUT_OF_DATE / SUBOPTIMAL) or when the polled framebuffer
+         * size no longer matches the swapchain extent.
+         */
         void end_frame();
+
+        /**
+         * @brief Recreates the swapchain after a size change or driver-reported staleness.
+         *
+         * Delegates to Swapchain::recreate. Resolution-dependent renderer resources
+         * (display buffer, CUDA re-imports) will hook into here in later steps.
+         */
+        void recreate_swapchain();
 
         /** @brief GLFW window handle. */
         GLFWwindow *window_ = nullptr;
