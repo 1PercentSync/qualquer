@@ -3,7 +3,7 @@ find_package(imgui CONFIG REQUIRED)
 add_library(qualquer_renderer STATIC)
 
 target_sources(qualquer_renderer PRIVATE
-    src/placeholder.cpp
+    src/imgui_backend.cpp
 )
 
 target_include_directories(qualquer_renderer
