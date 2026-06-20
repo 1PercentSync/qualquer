@@ -175,6 +175,41 @@ Qualquer 不需要：
 - wrapper 方法（如 `pipeline_barrier`）的参数仍是 Vulkan 类型（`VkDependencyInfo`），没有隐藏细节
 - ImGui backend 需要原始 `VkCommandBuffer`，wrapper 的 `handle()` 是多余的间接
 
+### Swapchain 重建触发
+
+**决策**：recreate 由两类信号源 OR 触发——主动尺寸比较（轮询）OR 驱动返回值（acquire/present）。
+
+```
+acquire 返回 OUT_OF_DATE                              → recreate，跳过本帧
+present 返回 ∈ {OUT_OF_DATE, SUBOPTIMAL}              → present 后 recreate
+或 本帧轮询发现 fb != swapchain.extent                → present 后 recreate
+```
+
+**理由**：
+- 两类信号源覆盖不同失败场景，互补，缺一不可：
+  - 主动尺寸比较能抓"窗口刚 resize，驱动还没报错"这一帧（否则画面拉伸/黑边）
+  - 驱动返回值能抓"尺寸没变但 swapchain 因别的原因失效"（surface lost 等）
+- 只靠驱动返回值不可靠：Windows 上 surface 尺寸变化不一定让当帧 acquire/present 立即报错
+- 只靠尺寸比较会漏掉非尺寸原因的失效
+
+### 尺寸变化检测机制：轮询 vs 回调
+
+**决策**：轮询 `glfwGetFramebufferSize` 比对 `swapchain.extent`，不用 GLFW 回调设标志。
+
+**理由**：
+- 最小化检测**必须轮询**尺寸（`while fb==0 glfwWaitEvents`），这条路径每帧已查询 framebuffer size
+- resize 检测顺手在同一次查询里比对即可，无需引入额外机制
+- 回调+标志与轮询是同一信息源的两种实现，二选一；最小化已逼出轮询，回调就被吸收
+
+### 窗口最小化处理
+
+**决策**：整循环阻塞（poll events 后、begin_frame 前，`while fb==0 glfwWaitEvents` 阻塞）。最小化期间完全不进帧循环。
+
+**理由**：
+- `glfwWaitEvents` 是可中断睡眠，任何事件（含恢复窗口）都唤醒，不卡死
+- 最小化时 GPU 不空转渲染、CPU 不忙循环轮询，省资源
+- Qualquer 无"最小化时仍需每帧执行的非渲染逻辑"，非阻塞跳帧（轮询但跳过渲染）的灵活性用不上
+
 ### 错误处理
 
 **决策**：VK_CHECK 宏，失败时打印错误并立即 abort。

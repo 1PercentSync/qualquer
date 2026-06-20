@@ -65,7 +65,7 @@
 
 ## Step 7：帧循环与呈现
 
-- [ ] 主循环框架（wait fence → acquire image → begin cmd → end cmd → submit → present）
+- [ ] 主循环框架（wait fence → acquire → reset fence → begin cmd → end cmd → submit → present）
 - [ ] Swapchain image layout transition（undefined → color attachment → present）
 - [ ] Clear 命令录制（begin_rendering + clear color + end_rendering）
 - [ ] Swapchain 重建（窗口 resize 处理）

@@ -52,6 +52,12 @@ Step 1 → Step 2 → Step 3 → Step 4 → Step 5 → Step 6 → Step 7 → Ste
 - Per-frame 资源（FrameData）：command pool、command buffer、render fence、image_available semaphore
 - Per-swapchain-image 资源（Swapchain）：render_finished semaphore
 
+### 帧循环（归属 app 层）
+
+- 流程：`wait fence → acquire → reset fence → begin cmd → [录制] → end cmd → submit2 → present`
+- Clear 用 dynamic rendering：`vkCmdBeginRendering` + attachment `loadOp=CLEAR`（黑色）→ `vkCmdEndRendering`。不选 `vkCmdClearColorImage`，因为 Step 8 ImGui 必须画在 rendering pass 内，用 `begin_rendering`/`end_rendering` 形态到 Step 8 零返工（只需把 `loadOp=CLEAR` 改 `loadOp=LOAD` 并在 begin/end 间插 ImGui 录制）
+- swapchain image 的 layout 流转：`UNDEFINED → COLOR_ATTACHMENT_OPTIMAL → PRESENT_SRC_KHR`，两个手写 `vkCmdPipelineBarrier2`（dynamic rendering 不自动管 layout）
+
 ### ImGui
 
 - 使用 Dynamic Rendering（无 render pass）
