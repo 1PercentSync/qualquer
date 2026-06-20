@@ -68,8 +68,8 @@
 - [x] 主循环框架（wait fence → acquire → reset fence → begin cmd → end cmd → submit → present）
 - [x] 单帧渲染录制（barrier undefined→color attachment + begin_rendering/clear 黑/end_rendering + barrier color attachment→present）
 - [x] Swapchain 重建（acquire/present 返回值 + resize 轮询触发 recreate）
-- [ ] 窗口最小化处理（extent 为 0 时暂停渲染）
-- [ ] 请求用户在 CLion 中编译验证（窗口显示黑色背景，resize 不崩溃）
+- [x] 窗口最小化处理（extent 为 0 时暂停渲染）
+- [x] 请求用户在 CLion 中编译验证（窗口显示黑色背景，resize 不崩溃）
 
 ## Step 8：ImGui 集成
 
