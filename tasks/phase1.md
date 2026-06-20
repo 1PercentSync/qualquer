@@ -60,7 +60,6 @@
 ## Step 6：帧同步与命令录制
 
 - [x] Context 帧资源（FrameData 结构、create_frame_data 创建 pool/buffer/fence/semaphore、destroy 销毁、current_frame/advance_frame 轮换）
-- [ ] CommandBuffer wrapper（commands.h + commands.cpp：begin/end/pipeline_barrier/handle）
 - [ ] 请求用户在 CLion 中编译验证
 
 ## Step 7：帧循环与呈现

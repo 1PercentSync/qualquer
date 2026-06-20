@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 6 第 2 项：CommandBuffer wrapper（commands.h + commands.cpp：begin/end/pipeline_barrier/handle）
+Step 6 编译验证：请求用户在 CLion 中编译
 
 ---
 
