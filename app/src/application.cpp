@@ -252,6 +252,8 @@ namespace qualquer::app {
     }
 
     void Application::destroy() const {
+        vkQueueWaitIdle(context_.graphics_queue);
+
         swapchain_.destroy(context_);
         context_.destroy();
 
