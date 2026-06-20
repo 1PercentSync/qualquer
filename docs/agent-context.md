@@ -9,11 +9,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 1 — Vulkan 基础设施 + ImGui + 黑色背景
-- **进度**：Step 5 完成，Step 6 待开始
+- **进度**：Step 6 完成，Step 7 待开始
 
 ### 下一个任务
 
-Step 6 第 2 项：将 render_finished_semaphore 从 FrameData（per-frame）移至 Swapchain（per-swapchain-image）
+Step 7 第 1 项：主循环框架（wait fence → acquire image → begin cmd → end cmd → submit → present）
 
 ---
 
