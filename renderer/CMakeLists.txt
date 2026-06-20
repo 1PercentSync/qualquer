@@ -1,3 +1,5 @@
+find_package(imgui CONFIG REQUIRED)
+
 add_library(qualquer_renderer STATIC)
 
 target_sources(qualquer_renderer PRIVATE
@@ -10,4 +12,5 @@ target_include_directories(qualquer_renderer
 
 target_link_libraries(qualquer_renderer
     PUBLIC qualquer_vulkan
+    PRIVATE imgui::imgui
 )
