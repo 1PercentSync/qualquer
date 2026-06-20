@@ -9,11 +9,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 1 — Vulkan 基础设施 + ImGui + 黑色背景
-- **进度**：Step 7 全部完成（帧循环与呈现），Step 8 进行中（第 4 项完成）
+- **进度**：Step 8 全部完成（ImGui 集成）
 
 ### 下一个任务
 
-Step 8 第 5 项：请求用户在 CLion 中编译验证（ImGui 空面板正常显示）
+Step 9 第 1 项：替换 demo window 为自定义面板
 
 ---
 
