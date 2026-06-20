@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 8 第 4 项：帧循环集成（Application 持有 ImGuiBackend；begin_frame 后 begin_frame；render_frame 中 loadOp 改 LOAD，begin/end rendering 间 render(cmd)；destroy 中销毁）
+Step 8 第 4 项：帧循环集成（Application 持有 ImGuiBackend；begin_frame 后 begin_frame；render_frame 中 begin/end rendering 间 render(cmd)；destroy 中销毁）
 
 ---
 
