@@ -55,9 +55,6 @@ namespace qualquer::vulkan {
 
         /** @brief Signaled when a swapchain image has been acquired for this frame. */
         VkSemaphore image_available_semaphore = VK_NULL_HANDLE;
-
-        /** @brief Signaled by queue submit, waited by present to ensure rendering is complete. */
-        VkSemaphore render_finished_semaphore = VK_NULL_HANDLE;
     };
 
     /**

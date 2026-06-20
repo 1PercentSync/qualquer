@@ -5,7 +5,6 @@
  * @brief Vulkan swapchain: presentation surface, images, and image views.
  */
 
-#include <cstdint>
 #include <vector>
 
 #include <vulkan/vulkan.h>
@@ -80,6 +79,16 @@ namespace qualquer::vulkan {
         /** @brief One image view per swapchain image. */
         std::vector<VkImageView> image_views;
 
+        /**
+         * @brief One render-finished semaphore per swapchain image.
+         *
+         * Indexed by the acquired image index (not the frame index).
+         * The presentation engine holds the semaphore until the image is
+         * actually displayed, so per-frame semaphores are insufficient
+         * when the swapchain has more images than frames in flight.
+         */
+        std::vector<VkSemaphore> render_finished_semaphores;
+
     private:
         /**
          * @brief Requires the B8G8R8A8_SRGB + SRGB_NONLINEAR surface format.
@@ -117,5 +126,8 @@ namespace qualquer::vulkan {
 
         /** @brief Creates a VkImageView for each swapchain image. */
         void create_image_views(VkDevice device);
+
+        /** @brief Creates one render-finished semaphore per swapchain image. */
+        void create_render_finished_semaphores(VkDevice device);
     };
 } // namespace qualquer::vulkan

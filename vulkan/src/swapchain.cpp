@@ -21,7 +21,10 @@ namespace qualquer::vulkan {
     // Reverse creation order: image views first, then the swapchain (which also
     // releases the swapchain images, so those handles are never destroyed manually).
     void Swapchain::destroy(const Context &context) const {
-        for (const auto view: image_views) {
+        for (const auto semaphore : render_finished_semaphores) {
+            vkDestroySemaphore(context.device, semaphore, nullptr);
+        }
+        for (const auto view : image_views) {
             vkDestroyImageView(context.device, view, nullptr);
         }
         vkDestroySwapchainKHR(context.device, swapchain, nullptr);
@@ -93,6 +96,7 @@ namespace qualquer::vulkan {
         vkGetSwapchainImagesKHR(context.device, swapchain, &image_count, images.data());
 
         create_image_views(context.device);
+        create_render_finished_semaphores(context.device);
 
         spdlog::info("Swapchain created ({}x{}, {} images)",
                      extent.width,
@@ -168,6 +172,22 @@ namespace qualquer::vulkan {
             };
 
             VK_CHECK(vkCreateImageView(device, &view_info, nullptr, &image_views[i]));
+        }
+    }
+    // Creates one render-finished semaphore per swapchain image.
+    // Per-swapchain-image (not per-frame) because vkQueuePresentKHR's semaphore
+    // wait is consumed asynchronously by the presentation engine, and the render
+    // fence does not guarantee that consumption has completed.
+    // ReSharper disable once CppParameterMayBeConst
+    void Swapchain::create_render_finished_semaphores(VkDevice device) {
+        render_finished_semaphores.resize(images.size());
+
+        constexpr VkSemaphoreCreateInfo semaphore_info{
+            .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+        };
+
+        for (auto &semaphore : render_finished_semaphores) {
+            VK_CHECK(vkCreateSemaphore(device, &semaphore_info, nullptr, &semaphore));
         }
     }
 } // namespace qualquer::vulkan
