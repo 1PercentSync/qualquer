@@ -151,9 +151,17 @@ namespace qualquer::vulkan {
         find_graphics_queue_family();
         create_device();
         create_allocator();
+        create_frame_data();
     }
 
     void Context::destroy() const {
+        for (const auto &frame: frames) {
+            vkDestroyCommandPool(device, frame.command_pool, nullptr);
+            vkDestroyFence(device, frame.render_fence, nullptr);
+            vkDestroySemaphore(device, frame.image_available_semaphore, nullptr);
+            vkDestroySemaphore(device, frame.render_finished_semaphore, nullptr);
+        }
+
         vmaDestroyAllocator(allocator);
         vkDestroyDevice(device, nullptr);
         vkDestroySurfaceKHR(instance, surface, nullptr);
@@ -332,5 +340,44 @@ namespace qualquer::vulkan {
         VK_CHECK(vmaCreateAllocator(&alloc_info, &allocator));
 
         spdlog::info("VMA allocator created");
+    }
+
+    // Creates per-frame command pools, command buffers, fences (signaled), and semaphores.
+    // Fences start signaled so the first frame's wait_fence succeeds immediately.
+    void Context::create_frame_data() {
+        for (auto &frame: frames) {
+            const VkCommandPoolCreateInfo pool_info{
+                .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+                .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+                .queueFamilyIndex = graphics_queue_family,
+            };
+
+            VK_CHECK(vkCreateCommandPool(device, &pool_info, nullptr, &frame.command_pool));
+
+            const VkCommandBufferAllocateInfo alloc_info{
+                .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+                .commandPool = frame.command_pool,
+                .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+                .commandBufferCount = 1,
+            };
+
+            VK_CHECK(vkAllocateCommandBuffers(device, &alloc_info, &frame.command_buffer));
+
+            constexpr VkFenceCreateInfo fence_info{
+                .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+                .flags = VK_FENCE_CREATE_SIGNALED_BIT,
+            };
+
+            VK_CHECK(vkCreateFence(device, &fence_info, nullptr, &frame.render_fence));
+
+            constexpr VkSemaphoreCreateInfo semaphore_info{
+                .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+            };
+
+            VK_CHECK(vkCreateSemaphore(device, &semaphore_info, nullptr, &frame.image_available_semaphore));
+            VK_CHECK(vkCreateSemaphore(device, &semaphore_info, nullptr, &frame.render_finished_semaphore));
+        }
+
+        spdlog::info("Frame data created ({} frames in flight)", kMaxFramesInFlight);
     }
 } // namespace qualquer::vulkan
