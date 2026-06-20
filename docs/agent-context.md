@@ -9,11 +9,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 1 — Vulkan 基础设施 + ImGui + 黑色背景
-- **进度**：Step 7 第 2 项完成（单帧渲染录制），第 3 项待开始
+- **进度**：Step 7 第 3 项完成（Swapchain 重建），第 4 项待开始
 
 ### 下一个任务
 
-Step 7 第 3 项：Swapchain 重建（acquire 的 OUT_OF_DATE → recreate+跳过；present 返回值 + resize 轮询触发 recreate）
+Step 7 第 4 项：窗口最小化处理（extent 为 0 时暂停渲染）——现有 `run()` 中的 `glfwWaitEvents` 阻塞循环已实现，需确认与 recreate 配合正确
 
 ---
 
