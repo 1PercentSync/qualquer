@@ -1,6 +1,6 @@
 # Phase 1 任务清单
 
-> 目标：Vulkan 基础设施 + ImGui + 黑色背景
+> 目标：Vulkan 基础设施 + CUDA-Vulkan Interop + ImGui + 测试图案
 > 详细设计见 `docs/current-phase.md`，技术决策见 `docs/technical-decisions.md`。
 >
 > 每完成一个复选框暂停等待审查。一个 Step 结束时应请求用户在 CLion 中编译验证。
@@ -90,3 +90,42 @@
 - [ ] 替换 demo window 为自定义面板
 - [ ] 面板内容：FPS、GPU 名称、窗口分辨率
 - [ ] 请求用户在 CLion 中编译验证
+
+## Step 10：optix 层骨架 + CUDA Context
+
+- [ ] 创建 `optix/CMakeLists.txt`（启用 CUDA 语言，static library，链接 CUDA::cudart）
+- [ ] 更新顶层 `CMakeLists.txt`（add_subdirectory(optix)，更新 renderer 依赖链）
+- [ ] 创建 `optix/include/qualquer/optix/cuda_context.h`（CudaContext 类声明：init/destroy，设备 UUID 查询）
+- [ ] 创建 `optix/src/cuda_context.cpp`（设备枚举、compute capability 检查、最佳设备选择、UUID 获取）
+- [ ] 请求用户在 CLion 中编译验证（控制台输出 CUDA 设备名称和 compute capability）
+
+## Step 11：初始化顺序重构
+
+- [ ] `Context::init()` 和 `pick_physical_device()` 接受 device UUID 参数，按 UUID 匹配物理设备
+- [ ] `Context::create_device()` 启用 `VK_KHR_external_memory_win32`、`VK_KHR_external_semaphore_win32` 扩展
+- [ ] `Application::init()` 调整为先 CudaContext::init() 后 vulkan::Context::init()（传入 CUDA 设备 UUID）
+- [ ] 请求用户在 CLion 中编译验证（CUDA 和 Vulkan 选择同一 GPU，无 validation 报错）
+
+## Step 12：Vulkan Interop 资源
+
+- [ ] 创建 `vulkan/include/qualquer/vulkan/interop.h`（InteropImage、InteropSemaphore 类声明）
+- [ ] 实现 InteropImage（B8G8R8A8_UNORM VkImage + OPTIMAL tiling + 手动 vkAllocateMemory with VkExportMemoryAllocateInfo + Win32 HANDLE 导出 + destroy）
+- [ ] 实现 InteropSemaphore（VkSemaphore with external + Win32 HANDLE 导出 + destroy）
+- [ ] Application 中创建 display buffer InteropImage（跟随 swapchain extent）和 2 个 per-frame InteropSemaphore
+- [ ] 请求用户在 CLion 中编译验证
+
+## Step 13：CUDA 导入 + 测试 Kernel
+
+- [ ] CudaContext 添加 external memory 导入（HANDLE → cudaExternalMemory → cudaMipmappedArray → cudaArray → cudaSurfaceObject）
+- [ ] CudaContext 添加 external semaphore 导入（HANDLE → cudaExternalSemaphore）
+- [ ] 创建 `optix/src/test_kernel.cu`（UV 渐变 + 帧号驱动动画，surf2Dwrite 写入 B8G8R8A8）
+- [ ] Application 初始化中从 Vulkan InteropImage/InteropSemaphore 取 HANDLE → 传给 CudaContext 导入
+- [ ] 请求用户在 CLion 中编译验证
+
+## Step 14：帧循环集成（CUDA blit）
+
+- [ ] 帧循环中集成 CUDA test kernel launch + cudaSignalExternalSemaphoresAsync
+- [ ] Vulkan submit 中添加 external semaphore wait
+- [ ] 命令录制中添加 display buffer → swapchain image 的 vkCmdBlitImage（含 layout transition）
+- [ ] Swapchain 重建时同步重建 display buffer（Vulkan InteropImage destroy/recreate + CUDA 侧 reimport）
+- [ ] 请求用户在 CLion 中编译验证（窗口显示渐变色 + ImGui 面板，resize 不崩溃）

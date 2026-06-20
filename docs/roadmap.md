@@ -45,8 +45,8 @@ Himalaya 是 Vulkan + Vulkan RT + OIDN 的 PT 实现，作为 M1 的参考和学
 
 | Phase | 目标 |
 |-------|------|
-| 1 | 基础设施 + 窗口（core/vulkan，swapchain，ImGui，空白画面） |
-| 2 | OptiX 基础（Context/Pipeline/SBT，raygen 输出纯色） |
+| 1 | 基础设施 + 窗口 + CUDA Interop（vulkan/optix，swapchain，ImGui，CUDA 测试图案） |
+| 2 | OptiX 基础（Pipeline/SBT，raygen 输出纯色，替换测试 kernel） |
 | 3 | 场景加载 + AS（glTF，BLAS/TLAS，primary ray） |
 | 4 | 材质 + 纹理（PBR，纹理加载，bindless） |
 | 5 | PT 着色（BRDF，多 bounce，采样） |

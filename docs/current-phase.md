@@ -1,6 +1,6 @@
 # 当前阶段
 
-> 目标：Vulkan 基础设施 + ImGui + 黑色背景
+> 目标：Vulkan 基础设施 + CUDA-Vulkan Interop + ImGui + 测试图案
 > 任务清单见 `tasks/phase1.md`。
 
 ---
@@ -10,7 +10,7 @@
 ### 依赖关系
 
 ```
-Step 1 → Step 2 → Step 3 → Step 4 → Step 5 → Step 6 → Step 7 → Step 8 → Step 9
+Step 1 → Step 2 → Step 3 → Step 4 → Step 5 → Step 6 → Step 7 → Step 8 → Step 9 → Step 10 → Step 11 → Step 12 → Step 13 → Step 14
 ```
 
 ### 总览
@@ -26,6 +26,11 @@ Step 1 → Step 2 → Step 3 → Step 4 → Step 5 → Step 6 → Step 7 → Ste
 | 7 | 帧循环与呈现 | 黑色背景显示，resize 不崩溃 |
 | 8 | ImGui 集成 | demo window 显示 |
 | 9 | 调试面板 | 自定义面板显示 FPS |
+| 10 | optix 层 + CUDA Context | 编译通过，CUDA 设备信息打印 |
+| 11 | 初始化顺序重构 | CUDA 和 Vulkan 选择同一 GPU |
+| 12 | Vulkan Interop 资源 | 编译通过 |
+| 13 | CUDA 导入 + 测试 Kernel | 编译通过 |
+| 14 | 帧循环集成（CUDA blit） | 窗口显示渐变色 + ImGui，resize 不崩溃 |
 
 ---
 
@@ -51,11 +56,22 @@ Step 1 → Step 2 → Step 3 → Step 4 → Step 5 → Step 6 → Step 7 → Ste
 - 使用 Dynamic Rendering（无 render pass）
 - 直接渲染到 swapchain image
 
+### CUDA-Vulkan Interop
+
+- CUDA 初始化在 Vulkan 之前，Vulkan 通过 UUID 匹配 CUDA 设备
+- 设备扩展：`VK_KHR_external_memory_win32`、`VK_KHR_external_semaphore_win32`
+- 显示 buffer：`B8G8R8A8_UNORM`、OPTIMAL tiling、手动 `vkAllocateMemory`（不走 VMA）
+- CUDA 侧通过 `cudaSurfaceObject_t` 写入显示 buffer
+- 同步：per-frame binary external semaphore × 2，CUDA signal → Vulkan wait
+- Blit：`vkCmdBlitImage`（显示 buffer → swapchain image，线性→sRGB 自动编码）
+- 测试 kernel：UV 渐变 + 帧号驱动动画
+
 ---
 
 ## 完成标准
 
-- 窗口显示黑色背景
+- 窗口显示 CUDA 渲染的渐变测试图案
 - ImGui 面板可交互
-- 窗口可调整大小（swapchain 重建）
+- 窗口可调整大小（swapchain + 显示 buffer 重建）
 - 关闭窗口正常退出
+- CUDA-Vulkan 同步正确（无 validation 报错）
