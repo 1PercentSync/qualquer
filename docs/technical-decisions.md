@@ -152,6 +152,17 @@ CUDA 侧通过 `cudaExternalMemoryGetMappedMipmappedArray` → `cudaArray_t` →
 
 ImGui 作为 UI overlay，在 blit 之后绘制。
 
+### 命令录制
+
+**决策**：不使用 CommandBuffer wrapper，直接使用裸 VkCommandBuffer。
+
+Himalaya 有 CommandBuffer wrapper，因为上层（Render Graph、Pass）通过它录制几十种命令，wrapper 是架构边界。
+
+Qualquer 不需要：
+- Vulkan 层只做 blit + ImGui，录制命令的就是 vulkan 层自己，无跨层边界
+- wrapper 方法（如 `pipeline_barrier`）的参数仍是 Vulkan 类型（`VkDependencyInfo`），没有隐藏细节
+- ImGui backend 需要原始 `VkCommandBuffer`，wrapper 的 `handle()` 是多余的间接
+
 ### 错误处理
 
 **决策**：VK_CHECK 宏，失败时打印错误并立即 abort。
