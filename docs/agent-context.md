@@ -9,11 +9,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 1 — Vulkan 基础设施 + ImGui + 黑色背景
-- **进度**：Step 7 全部完成（帧循环与呈现），Step 8 待开始
+- **进度**：Step 7 全部完成（帧循环与呈现），Step 8 进行中（第 1 项完成）
 
 ### 下一个任务
 
-Step 8 第 1 项：更新 `renderer/CMakeLists.txt`（find_package imgui，链接 imgui::imgui，移除 placeholder）
+Step 8 第 2 项：创建 `renderer/include/qualquer/renderer/imgui_backend.h`（ImGuiBackend 类：init/destroy/begin_frame/render）
 
 ---
 
