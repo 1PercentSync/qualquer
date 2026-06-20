@@ -25,6 +25,7 @@ namespace qualquer::app {
         window_ = glfwCreateWindow(kInitialWidth, kInitialHeight, kWindowTitle, nullptr, nullptr);
 
         context_.init(window_);
+        swapchain_.init(context_);
     }
 
     void Application::run() const {
@@ -42,6 +43,7 @@ namespace qualquer::app {
     }
 
     void Application::destroy() {
+        swapchain_.destroy(context_);
         context_.destroy();
 
         glfwDestroyWindow(window_);

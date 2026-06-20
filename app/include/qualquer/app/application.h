@@ -6,6 +6,7 @@
  */
 
 #include <qualquer/vulkan/context.h>
+#include <qualquer/vulkan/swapchain.h>
 
 struct GLFWwindow;
 
@@ -32,5 +33,8 @@ namespace qualquer::app {
 
         /** @brief Vulkan context (instance, debug messenger). */
         vulkan::Context context_;
+
+        /** @brief Vulkan swapchain (surface, images, image views). */
+        vulkan::Swapchain swapchain_;
     };
 } // namespace qualquer::app
