@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 6 第 1 项：Context 帧资源（FrameData 结构、create_frame_data 创建 pool/buffer/fence/semaphore、destroy 销毁、current_frame/advance_frame 轮换）
+Step 6 第 2 项：CommandBuffer wrapper（commands.h + commands.cpp：begin/end/pipeline_barrier/handle）
 
 ---
 
