@@ -2,6 +2,7 @@ add_library(qualquer_vulkan STATIC)
 
 target_sources(qualquer_vulkan PRIVATE
     src/context.cpp
+    src/swapchain.cpp
     src/vma_impl.cpp
 )
 

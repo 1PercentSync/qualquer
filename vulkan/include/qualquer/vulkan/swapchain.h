@@ -10,8 +10,6 @@
 
 #include <vulkan/vulkan.h>
 
-struct GLFWwindow;
-
 namespace qualquer::vulkan {
     class Context;
 
@@ -45,10 +43,9 @@ namespace qualquer::vulkan {
         /**
          * @brief Creates the swapchain and its image views.
          * @param context Vulkan context providing device, physical device, and surface.
-         * @param window  GLFW window used to query framebuffer size for extent.
          * @param mode    Requested present mode (default Mailbox).
          */
-        void init(const Context &context, GLFWwindow *window, PresentMode mode = PresentMode::Mailbox);
+        void init(const Context &context, PresentMode mode = PresentMode::Mailbox);
 
         /**
          * @brief Destroys image views and the swapchain in reverse creation order.
@@ -62,9 +59,9 @@ namespace qualquer::vulkan {
         /**
          * @brief Present modes supported by the (physical_device, surface) pair.
          *
-         * Queried once during init() and cached for the surface lifetime: present-mode
-         * support is a property of the surface and does not change on swapchain recreate.
-         * Single source for both present-mode selection and UI queries.
+         * Populated in create_resources() and exposed for UI queries. Re-queried on
+         * every creation (init / recreate), but present-mode support is a property of
+         * the surface, so the value is stable for a given surface.
          */
         std::vector<VkPresentModeKHR> supported_modes;
 
@@ -85,45 +82,38 @@ namespace qualquer::vulkan {
 
     private:
         /**
-         * @brief Selects the best surface format.
+         * @brief Requires the B8G8R8A8_SRGB + SRGB_NONLINEAR surface format.
          *
-         * Prefers B8G8R8A8_SRGB with SRGB_NONLINEAR color space.
-         * Falls back to the first available format with a warning.
+         * No fallback: aborts if the surface does not offer the preferred format,
+         * since a mismatch would force downstream code to track the actual format.
          */
         static VkSurfaceFormatKHR choose_surface_format(VkPhysicalDevice physical_device, VkSurfaceKHR surface);
 
         /**
          * @brief Selects the Vulkan present mode from a requested PresentMode.
          *
-         * Reads the cached supported_modes. Returns the requested mode if supported,
-         * otherwise falls back to FIFO (always available). FIFO is returned as-is.
+         * Reads the member supported_modes (populated in create_resources). Returns
+         * the requested mode if supported, otherwise falls back to FIFO (always
+         * available). FIFO is returned as-is.
          *
          * @param requested Requested present mode (input — never mutated by this call).
          *
-         * Non-static: depends on the instance's cached support list.
+         * Non-static: depends on the instance's supported_modes member.
          */
-        VkPresentModeKHR choose_present_mode(PresentMode requested) const;
-
-        /**
-         * @brief Determines the swapchain extent from surface capabilities.
-         *
-         * Uses the surface's currentExtent if defined, otherwise queries
-         * the GLFW framebuffer size and clamps to the supported range.
-         */
-        static VkExtent2D choose_extent(const VkSurfaceCapabilitiesKHR &capabilities, GLFWwindow *window);
+        [[nodiscard]] VkPresentModeKHR choose_present_mode(PresentMode requested) const;
 
         /**
          * @brief Core creation logic shared by init() (and later recreate()).
          *
-         * Queries surface capabilities, selects format/present mode/extent,
-         * creates the swapchain, retrieves images, and creates image views.
+         * Queries surface capabilities, selects format/present mode, creates the
+         * swapchain, retrieves images, and creates image views. Extent is taken
+         * directly from currentExtent (Win32 guarantees it equals the window size).
          *
          * @param context       Vulkan context providing device, physical device, and surface.
-         * @param window        GLFW window used to query framebuffer size for extent.
          * @param old_swapchain Previous swapchain handle for driver recycling,
          *                      or VK_NULL_HANDLE for first creation.
          */
-        void create_resources(const Context &context, GLFWwindow *window, VkSwapchainKHR old_swapchain);
+        void create_resources(const Context &context, VkSwapchainKHR old_swapchain);
 
         /** @brief Creates a VkImageView for each swapchain image. */
         void create_image_views(VkDevice device);
