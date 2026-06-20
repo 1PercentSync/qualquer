@@ -9,11 +9,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 1 — Vulkan 基础设施 + ImGui + 黑色背景
-- **进度**：Step 5 进行中（destroy 完成）
+- **进度**：Step 5 完成，Step 6 待开始
 
 ### 下一个任务
 
-Step 5 第 4 项：Application 持有 Swapchain，init/destroy 中按序调用
+Step 6 第 1 项：Context 中添加 FrameData 结构（command pool、command buffer、fence、semaphore × frames in flight）
 
 ---
 

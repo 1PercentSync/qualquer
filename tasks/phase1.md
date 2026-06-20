@@ -54,8 +54,8 @@
 - [x] 创建 `vulkan/include/qualquer/vulkan/swapchain.h`（Swapchain 类声明：init/destroy、PresentMode 枚举、成员字段）
 - [x] 创建 `vulkan/src/swapchain.cpp` 并实现创建链路（init、format/present mode/extent 选择、create_resources 建 swapchain 取 images、create_image_views）
 - [x] 实现 `destroy(const Context&)`（按反序销毁 image views 与 swapchain）
-- [ ] Application 持有 Swapchain，init/destroy 中按序调用
-- [ ] 请求用户在 CLion 中编译验证
+- [x] Application 持有 Swapchain，init/destroy 中按序调用
+- [x] 请求用户在 CLion 中编译验证（MAILBOX / 1920x1080 / 3 images，无 validation 报错）
 
 ## Step 6：帧同步与命令录制
 
