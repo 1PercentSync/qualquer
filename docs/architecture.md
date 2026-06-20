@@ -74,9 +74,11 @@ Qualquer 是基于 CUDA + OptiX 的 Path Tracer，Vulkan 仅用于 swapchain 呈
 
 ### renderer（渲染逻辑层）
 
-实现 PT 渲染管线和场景管理。
+实现 PT 渲染管线和场景管理，负责**单帧渲染内容的录制**：拿到命令缓冲和帧输入，录制一帧要画什么（PT kernel 调度、tone map、blit、ImGui 录制）。
 
-包含：PT 着色逻辑、材质系统、场景数据结构、累积 buffer、降噪调度、帧循环。
+包含：PT 着色逻辑、材质系统、场景数据结构、累积 buffer、降噪调度。
+
+**不持有帧循环**：acquire/submit/present、fence/semaphore 同步、swapchain 重建都在 app 层。renderer 只暴露 `render(cmd, input)`，由 app 编排好时序后调用。理由：一帧的渲染内容横跨 optix（CUDA 着色）和 vulkan（blit/呈现），有内部数据依赖和时序编排，只有同时依赖两者的 renderer 能承载；但帧循环骨架（编排+同步）属于"驱动时序"，与"画什么"正交，归 app。这条切法来自 Himalaya 的实证——其 Renderer 是 Application 帧循环膨胀后抽出的"渲染内容"，编排+同步始终留在 Application。
 
 **与 Himalaya 的区别**：Himalaya 的 Layer 1（Framework）和 Layer 2（Pass）在这里合并。原因：
 - PT 是单个 OptiX launch，不需要 Render Graph 编排多 Pass
@@ -85,7 +87,9 @@ Qualquer 是基于 CUDA + OptiX 的 Path Tracer，Vulkan 仅用于 swapchain 呈
 
 ### app（应用层）
 
-场景加载、资产管理、相机控制、用户输入、UI。
+场景加载、资产管理、相机控制、用户输入、UI，以及**帧循环的编排与同步**。
+
+帧循环（wait fence → acquire image → renderer 录制 → submit → present → resize 重建）在 app 层。app 同时驱动 optix 和 vulkan 做时序编排。
 
 ---
 
