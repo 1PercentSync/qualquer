@@ -24,7 +24,7 @@ Step 1 → Step 2 → Step 3 → Step 4 → Step 5 → Step 6 → Step 7 → Ste
 | 5 | Swapchain | 无报错创建 |
 | 6 | 帧同步与命令录制 | 编译通过 |
 | 7 | 帧循环与呈现 | 黑色背景显示，resize 不崩溃 |
-| 8 | ImGui 集成 | demo window 显示 |
+| 8 | ImGui 集成 | 空面板显示 |
 | 9 | 调试面板 | 自定义面板显示 FPS |
 | 10 | optix 层 + CUDA Context | 编译通过，CUDA 设备信息打印 |
 | 11 | 初始化顺序重构 | CUDA 和 Vulkan 选择同一 GPU |
