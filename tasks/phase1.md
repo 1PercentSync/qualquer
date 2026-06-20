@@ -109,7 +109,7 @@
 ## Step 12：Vulkan Interop 资源
 
 - [ ] 创建 `vulkan/include/qualquer/vulkan/interop.h`（InteropImage、InteropSemaphore 类声明）
-- [ ] 实现 InteropImage（B8G8R8A8_UNORM VkImage + OPTIMAL tiling + 手动 vkAllocateMemory with VkExportMemoryAllocateInfo + Win32 HANDLE 导出 + destroy）
+- [ ] 实现 InteropImage（R8G8B8A8_UNORM VkImage + OPTIMAL tiling + 手动 vkAllocateMemory with VkExportMemoryAllocateInfo + Win32 HANDLE 导出 + destroy）
 - [ ] 实现 InteropSemaphore（VkSemaphore with external + Win32 HANDLE 导出 + destroy）
 - [ ] Application 中创建 display buffer InteropImage（跟随 swapchain extent）和 2 个 per-frame InteropSemaphore
 - [ ] 请求用户在 CLion 中编译验证
@@ -118,7 +118,7 @@
 
 - [ ] CudaContext 添加 external memory 导入（HANDLE → cudaExternalMemory → cudaMipmappedArray → cudaArray → cudaSurfaceObject）
 - [ ] CudaContext 添加 external semaphore 导入（HANDLE → cudaExternalSemaphore）
-- [ ] 创建 `optix/src/test_kernel.cu`（UV 渐变 + 帧号驱动动画，surf2Dwrite 写入 B8G8R8A8）
+- [ ] 创建 `optix/src/test_kernel.cu`（UV 渐变 + 帧号驱动动画，surf2Dwrite 写入 R8G8B8A8）
 - [ ] Application 初始化中从 Vulkan InteropImage/InteropSemaphore 取 HANDLE → 传给 CudaContext 导入
 - [ ] 请求用户在 CLion 中编译验证
 

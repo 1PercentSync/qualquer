@@ -60,7 +60,7 @@ Step 1 → Step 2 → Step 3 → Step 4 → Step 5 → Step 6 → Step 7 → Ste
 
 - CUDA 初始化在 Vulkan 之前，Vulkan 通过 UUID 匹配 CUDA 设备
 - 设备扩展：`VK_KHR_external_memory_win32`、`VK_KHR_external_semaphore_win32`
-- 显示 buffer：`B8G8R8A8_UNORM`、OPTIMAL tiling、手动 `vkAllocateMemory`（不走 VMA）
+- 显示 buffer：`R8G8B8A8_UNORM`、OPTIMAL tiling、手动 `vkAllocateMemory`（不走 VMA）
 - CUDA 侧通过 `cudaSurfaceObject_t` 写入显示 buffer
 - 同步：per-frame binary external semaphore × 2，CUDA signal → Vulkan wait
 - Blit：`vkCmdBlitImage`（显示 buffer → swapchain image，线性→sRGB 自动编码）
