@@ -52,7 +52,7 @@
 ## Step 5：Swapchain
 
 - [x] 创建 `vulkan/include/qualquer/vulkan/swapchain.h`（Swapchain 类声明：init/destroy、PresentMode 枚举、成员字段）
-- [ ] 创建 `vulkan/src/swapchain.cpp` 并实现创建链路（init、format/present mode/extent 选择、create_resources 建 swapchain 取 images、create_image_views）
+- [x] 创建 `vulkan/src/swapchain.cpp` 并实现创建链路（init、format/present mode/extent 选择、create_resources 建 swapchain 取 images、create_image_views）
 - [ ] 实现 `destroy(const Context&)`（按反序销毁 image views 与 swapchain）
 - [ ] Application 持有 Swapchain，init/destroy 中按序调用
 - [ ] 请求用户在 CLion 中编译验证

@@ -9,11 +9,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 1 — Vulkan 基础设施 + ImGui + 黑色背景
-- **进度**：Step 5 进行中（swapchain.h 完成）
+- **进度**：Step 5 进行中（创建链路完成）
 
 ### 下一个任务
 
-Step 5 第 2 项：创建 `vulkan/src/swapchain.cpp` 并实现创建逻辑（surface format / present mode / extent / image count / image usage）
+Step 5 第 3 项：实现 `destroy(const Context&)`（按反序销毁 image views 与 swapchain）
 
 ---
 
