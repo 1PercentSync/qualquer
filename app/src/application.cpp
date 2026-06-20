@@ -47,7 +47,6 @@ namespace qualquer::app {
     }
 
     void Application::begin_frame() {
-        // Block until the GPU has finished using this frame slot's resources.
         // Fences start signaled (Context::create_frame_data), so the first frame's
         // wait returns immediately.
         const auto &frame = context_.current_frame();
@@ -60,9 +59,8 @@ namespace qualquer::app {
             VK_NULL_HANDLE,
             &image_index_);
 
-        // SUBOPTIMAL is acceptable: acquisition succeeded, present-side handling
-        // will trigger recreation later. OUT_OF_DATE requires recreation before any
-        // work is recorded — not yet implemented, so it is unrecoverable here.
+        // SUBOPTIMAL succeeds and is handled at present time; OUT_OF_DATE needs
+        // recreation before recording (not yet implemented).
         if (acquire_result == VK_ERROR_OUT_OF_DATE_KHR) {
             spdlog::critical("vkAcquireNextImageKHR: swapchain out of date "
                 "(recreate not yet implemented)");
@@ -73,8 +71,8 @@ namespace qualquer::app {
             std::abort();
         }
 
-        // The fence is reused by this frame's submit; reset it so the next wait on
-        // this slot reflects this frame's completion rather than the previous one.
+        // Reset so the next wait on this slot reflects this frame's submit, not the
+        // previous frame's (fences do not auto-clear once signaled).
         VK_CHECK(vkResetFences(context_.device, 1, &frame.render_fence));
     }
 
@@ -91,8 +89,93 @@ namespace qualquer::app {
         };
         VK_CHECK(vkBeginCommandBuffer(cmd, &begin_info));
 
-        // Recording: empty in this step. Layout transition and clear are added
-        // in the following Step 7 items.
+        VkImage swapchain_image = swapchain_.images[image_index_];
+
+        // No prior GPU work touched the acquired image (acquire hands it over via
+        // the wait semaphore in end_frame), so the src stage is TOP_OF_PIPE.
+        const VkImageMemoryBarrier2 to_attachment{
+            .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+            .srcStageMask = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
+            .srcAccessMask = 0,
+            .dstStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+            .dstAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+            .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+            .newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .image = swapchain_image,
+            .subresourceRange =
+            {
+                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                .baseMipLevel = 0,
+                .levelCount = 1,
+                .baseArrayLayer = 0,
+                .layerCount = 1,
+            },
+        };
+
+        const VkDependencyInfo to_attachment_dep{
+            .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+            .imageMemoryBarrierCount = 1,
+            .pImageMemoryBarriers = &to_attachment,
+        };
+        vkCmdPipelineBarrier2(cmd, &to_attachment_dep);
+
+        const VkRenderingAttachmentInfo color_attachment{
+            .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+            .imageView = swapchain_.image_views[image_index_],
+            .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+            .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+            .clearValue =
+            {
+                .color = {{0.0f, 0.0f, 0.0f, 1.0f}},
+            },
+        };
+
+        const VkRenderingInfo rendering_info{
+            .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
+            .renderArea =
+            {
+                .offset = {0, 0},
+                .extent = swapchain_.extent,
+            },
+            .layerCount = 1,
+            .colorAttachmentCount = 1,
+            .pColorAttachments = &color_attachment,
+        };
+
+        vkCmdBeginRendering(cmd, &rendering_info);
+        vkCmdEndRendering(cmd);
+
+        const VkImageMemoryBarrier2 to_present{
+            .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+            .srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+            .srcAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+            .dstStageMask = VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT,
+            .dstAccessMask = 0,
+            .oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            .newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .image = swapchain_image,
+            .subresourceRange =
+            {
+                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                .baseMipLevel = 0,
+                .levelCount = 1,
+                .baseArrayLayer = 0,
+                .layerCount = 1,
+            },
+        };
+
+        const VkDependencyInfo to_present_dep{
+            .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+            .imageMemoryBarrierCount = 1,
+            .pImageMemoryBarriers = &to_present,
+        };
+        vkCmdPipelineBarrier2(cmd, &to_present_dep);
+
         VK_CHECK(vkEndCommandBuffer(cmd));
     }
 
@@ -104,16 +187,13 @@ namespace qualquer::app {
             .commandBuffer = frame.command_buffer,
         };
 
-        // Wait on image availability before writing to the swapchain image, so
-        // the GPU does not touch the image until acquisition is complete.
         const VkSemaphoreSubmitInfo wait_info{
             .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
             .semaphore = frame.image_available_semaphore,
             .stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
         };
 
-        // Signal per-swapchain-image render-finished semaphore (indexed by the
-        // acquired image, not the frame slot) for presentation.
+        // Per-swapchain-image (not per-frame-slot): see Swapchain::render_finished_semaphores.
         const VkSemaphoreSubmitInfo signal_info{
             .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
             .semaphore = swapchain_.render_finished_semaphores[image_index_],
@@ -141,7 +221,6 @@ namespace qualquer::app {
             .pImageIndices = &image_index_,
         };
 
-        // Present result handling (OUT_OF_DATE/SUBOPTIMAL/resize) is a later Step 7 item.
         VK_CHECK(vkQueuePresentKHR(context_.graphics_queue, &present_info));
 
         context_.advance_frame();
