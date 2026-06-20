@@ -9,11 +9,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 1 — Vulkan 基础设施 + ImGui + 黑色背景
-- **进度**：Step 4 完成，Step 5 待开始
+- **进度**：Step 5 进行中（swapchain.h 完成）
 
 ### 下一个任务
 
-Step 5：Swapchain（format B8G8R8A8_SRGB、present mode 选择、extent）
+Step 5 第 2 项：创建 `vulkan/src/swapchain.cpp` 并实现创建逻辑（surface format / present mode / extent / image count / image usage）
 
 ---
 

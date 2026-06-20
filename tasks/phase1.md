@@ -51,7 +51,7 @@
 
 ## Step 5：Swapchain
 
-- [ ] 创建 `vulkan/include/qualquer/vulkan/swapchain.h`（Swapchain 类声明：init/destroy、PresentMode 枚举、成员字段）
+- [x] 创建 `vulkan/include/qualquer/vulkan/swapchain.h`（Swapchain 类声明：init/destroy、PresentMode 枚举、成员字段）
 - [ ] 创建 `vulkan/src/swapchain.cpp` 并实现创建逻辑（surface format 选择、present mode 选择与回退、extent、image count、image usage 含 TRANSFER_DST）
 - [ ] 实现 Image View 创建（per-image）
 - [ ] 实现 `destroy(const Context&)`（按反序销毁 image views 与 swapchain）
