@@ -115,7 +115,9 @@ Qualquer 是基于 CUDA + OptiX 的 Path Tracer，Vulkan 仅用于 swapchain 呈
 
 | 约束 | 保护的架构属性 |
 |------|---------------|
-| 上层不接触 CUDA/OptiX/Vulkan 原始类型 | 封装层实现自由度 |
-| renderer 不直接调用 Vulkan API | optix/vulkan 职责分离 |
+| 编译期单向依赖：上层依赖下层，下层不依赖上层 | 层级清晰、可独立演进 |
+| 不做无脑 Vulkan wrapper | wrapper 参数仍是 Vulkan 类型，不隐藏细节，徒增间接 |
+
+编译期单向依赖是真正的硬约束（CMake 层级、include 关系强制）。Vulkan 原生类型和 API 调用允许出现在任意层——上层直接使用 Vulkan 句柄、直接调用 `vkCmd*` / `vkQueue*` 是正常的，因为渲染逻辑本就需要这些。只为隔离原始类型而做的 wrapper（参数照搬 `VkXxx` 的薄封装）没有收益，不引入。
 
 ---
