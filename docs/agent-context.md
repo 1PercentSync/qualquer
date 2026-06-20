@@ -9,11 +9,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 1 — Vulkan 基础设施 + ImGui + 黑色背景
-- **进度**：Step 6 完成，Step 7 待开始
+- **进度**：Step 7 第 1 项完成（主循环框架），第 2 项待开始
 
 ### 下一个任务
 
-Step 7 第 1 项：主循环框架（wait fence → acquire image → begin cmd → end cmd → submit → present）
+Step 7 第 2 项：Swapchain image layout transition（undefined → color attachment → present，两个手写 vkCmdPipelineBarrier2）
 
 ---
 
