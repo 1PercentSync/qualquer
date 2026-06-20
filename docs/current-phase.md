@@ -38,8 +38,8 @@ Step 1 → Step 2 → Step 3 → Step 4 → Step 5 → Step 6 → Step 7 → Ste
 
 ### Swapchain
 
-- Format：B8G8R8A8_SRGB + VK_COLOR_SPACE_SRGB_NONLINEAR_KHR
-- Present mode：MAILBOX → IMMEDIATE → FIFO（按优先级回退）
+- Format：B8G8R8A8_SRGB + VK_COLOR_SPACE_SRGB_NONLINEAR_KHR（硬要求，不支持则报错退出，无回退）
+- Present mode：单一回退 FIFO（请求的 mode 不支持则退 FIFO，不级联到 Immediate）
 
 ### 帧同步
 
