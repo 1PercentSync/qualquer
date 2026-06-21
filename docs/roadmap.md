@@ -35,6 +35,7 @@ Himalaya 是 Vulkan + Vulkan RT + OIDN 的 PT 实现，作为 M1 的参考和学
 
 - **场景加载**：glTF mesh、材质、纹理（BC 压缩、mip、bindless 思路复用）
 - **RT 核心**：BLAS/TLAS 构建（OptiX 版）、GeometryInfo、材质访问
+MUSTREAD:5
 - **PT 着色**：Sobol + blue noise 采样、PBR BRDF、ray offset、normal mapping、ray cone LOD
 - **光源**：IBL alias table、emissive 三角形 NEE、MIS
 - **Non-opaque**：alpha mask、stochastic alpha

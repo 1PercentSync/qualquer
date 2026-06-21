@@ -39,6 +39,7 @@ Vulkan 创建 VkImage（启用 external memory 标志），导出 Win32 HANDLE�
 |--------|------|------|--------|------|
 | 累积 buffer | 2 | RGBA32F | CUDA 独占 | HDR 累积，ping-pong 交替读写 |
 | 显示 buffer | 1 | R8G8B8A8_UNORM | Vulkan 分配，CUDA 导入 | LDR 输出，Vulkan blit 到 swapchain |
+MUSTREAD:8
 
 **帧流程**：
 

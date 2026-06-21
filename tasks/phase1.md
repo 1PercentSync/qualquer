@@ -2,6 +2,7 @@
 
 > 目标：Vulkan 基础设施 + CUDA-Vulkan Interop + ImGui + 测试图案
 > 详细设计见 `docs/current-phase.md`，技术决策见 `docs/technical-decisions.md`。
+MUSTREAD:4
 >
 > 每完成一个复选框暂停等待审查。一个 Step 结束时应请求用户在 CLion 中编译验证。
 
@@ -81,8 +82,13 @@
 
 ## Step 9：调试面板
 
-- [ ] 替换 demo window 为自定义面板
-- [ ] 面板内容：FPS、GPU 名称、窗口分辨率
+- [ ] 创建 `renderer/include/qualquer/renderer/debug_ui.h`（DebugUI 类、DebugUIContext、DebugUIActions、FrameStats）
+- [ ] 创建 `renderer/src/debug_ui.cpp`（FrameStats 计算 + draw 面板绘制）
+- [ ] Context 可选启用 `VK_EXT_memory_budget`（检查支持 → `memory_budget_supported` 标志 → `query_vram_usage()`）
+- [ ] Application 持有 DebugUI，构造 DebugUIContext 调用 draw，处理 DebugUIActions
+- [ ] ImGuiBackend 移除 `show_panel()`（职责转移至 DebugUI）
+- [ ] 面板内容：FPS + 1% Low、GPU 名称、分辨率、VRAM、Present Mode 下拉框、Log Level 下拉框、Error Banner
+- [ ] Present Mode 变更触发 swapchain recreate
 - [ ] 请求用户在 CLion 中编译验证
 
 ## Step 10：optix 层骨架 + CUDA Context

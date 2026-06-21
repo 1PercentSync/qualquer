@@ -25,7 +25,7 @@ Step 1 → Step 2 → Step 3 → Step 4 → Step 5 → Step 6 → Step 7 → Ste
 | 6 | 帧同步与命令录制 | 编译通过 |
 | 7 | 帧循环与呈现 | 黑色背景显示，resize 不崩溃 |
 | 8 | ImGui 集成 | 空面板显示 |
-| 9 | 调试面板 | 自定义面板显示 FPS |
+| 9 | 调试面板 | 自定义面板显示 FPS、GPU、分辨率、VRAM、Present Mode / Log Level 下拉框 |
 | 10 | optix 层 + CUDA Context | 编译通过，CUDA 设备信息打印 |
 | 11 | 初始化顺序重构 | CUDA 和 Vulkan 选择同一 GPU |
 | 12 | Vulkan Interop 资源 | 编译通过 |
@@ -50,6 +50,7 @@ Step 1 → Step 2 → Step 3 → Step 4 → Step 5 → Step 6 → Step 7 → Ste
 
 - Frames in flight：2
 - Per-frame 资源（FrameData）：command pool、command buffer、render fence、image_available semaphore
+MUSTREAD:8
 - Per-swapchain-image 资源（Swapchain）：render_finished semaphore
 
 ### 帧循环（归属 app 层）

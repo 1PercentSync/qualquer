@@ -71,6 +71,7 @@ Qualquer 是基于 CUDA + OptiX 的 Path Tracer，Vulkan 仅用于 swapchain 呈
 包含：Instance/Device/Queue 管理、Swapchain、CUDA external memory/semaphore interop。
 
 **设计原则**：最小化，只做呈现。
+MUSTREAD:4
 
 ### renderer（渲染逻辑层）
 
