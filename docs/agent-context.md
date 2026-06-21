@@ -17,7 +17,7 @@
 
 Step 10.5 第 2 项：`optix::Context::init` 签名改为接收候选 UUID 列表，设备选择加 UUID 过滤
 
-> Step 10.5 第 1 项（vulkan::Context 拆 init）已完成。当前 application.cpp 调用点暂未适配（预期编译失败），第 4 项修复。详见 `tasks/phase1.md`。
+> Step 10.5 第 1、3 项已完成（Context 拆 init、UUID 类型裸化）。详见 `tasks/phase1.md`。
 
 ---
 
