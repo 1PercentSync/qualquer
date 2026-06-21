@@ -10,7 +10,7 @@
 ### 依赖关系
 
 ```
-Step 1 → Step 2 → Step 3 → Step 4 → Step 5 → Step 6 → Step 7 → Step 8 → Step 9 → Step 10 → Step 11 → Step 12 → Step 13 → Step 14
+Step 1 → Step 2 → Step 3 → Step 4 → Step 5 → Step 6 → Step 7 → Step 8 → Step 9 → Step 10 → Step 10.5 → Step 10.6 → Step 11 → Step 12 → Step 13 → Step 14
 ```
 
 ### 总览
@@ -27,7 +27,9 @@ Step 1 → Step 2 → Step 3 → Step 4 → Step 5 → Step 6 → Step 7 → Ste
 | 8 | ImGui 集成 | 空面板显示 |
 | 9 | 调试面板 | 自定义面板显示 FPS、GPU、分辨率、VRAM、Present Mode / Log Level 下拉框 |
 | 10 | optix 层 + CUDA Context | 编译通过，CUDA 设备信息打印 |
-| 11 | 初始化顺序重构 | CUDA 和 Vulkan 选择同一 GPU |
+| 10.5 | 三段式初始化重构 | CUDA 与 Vulkan 选同一支持 present 的 GPU |
+| 10.6 | Application 接线与收尾 | 控制台输出 CUDA 设备名称和 compute capability |
+| 11 | External 扩展启用 | 扩展启用无 validation 报错 |
 | 12 | Vulkan Interop 资源 | 编译通过 |
 | 13 | CUDA 导入 + 测试 Kernel | 编译通过 |
 | 14 | 帧循环集成（CUDA blit） | 窗口显示渐变色 + ImGui，resize 不崩溃 |
@@ -69,13 +71,23 @@ MUSTREAD:8
 
 ### CUDA-Vulkan Interop
 
-- CUDA 初始化在 Vulkan 之前，Vulkan 通过 UUID 匹配 CUDA 设备
+- 初始化顺序：三段式（Vulkan pre-init → CUDA → Vulkan 完成）。CUDA→Vulkan 单向初始化下，CUDA 打分可能选中无法 present 的设备（TCC 计算卡等），导致 Vulkan 按 UUID 匹配后无法 present。改为三段式：Vulkan 先查支持 present 的物理设备列表（pre-init），CUDA 在该列表约束内打分选中，再回传 Vulkan 完成初始化。present 约束前置，从根上排除不可呈现设备。CUDA→Vulkan 属软理由（省 CUDA 失败时的 Vulkan 初始化），被此场景推翻即更新——依据"决策可更新性"原则（`docs/architecture.md`）
+- 设备匹配：CUDA 与 Vulkan 通过设备 UUID 对齐到同一物理 GPU。CUDA `cudaDeviceProp.uuid` 与 Vulkan `VkPhysicalDeviceIDProperties.deviceUUID` 字节一致，逐字节比较
+- UUID 类型：跨层用裸 `std::array<uint8_t,16>`（不用 `cudaUUID_t`，使 vulkan 层比对 UUID 时不依赖 CUDA 头；不在任一层定义别名，各层直接用裸类型）
 - 设备扩展：`VK_KHR_external_memory_win32`、`VK_KHR_external_semaphore_win32`
 - 显示 buffer：`R8G8B8A8_UNORM`、OPTIMAL tiling、手动 `vkAllocateMemory`（不走 VMA）
 - CUDA 侧通过 `cudaSurfaceObject_t` 写入显示 buffer
 - 同步：per-frame binary external semaphore × 2，CUDA signal → Vulkan wait
 - Blit：`vkCmdBlitImage`（显示 buffer → swapchain image，线性→sRGB 自动编码）
 - 测试 kernel：UV 渐变 + 帧号驱动动画
+
+### CUDA 设备打分
+
+- 选择主键：compute capability（major 优先，minor 次之，严格 `>`）
+- 同 compute capability 的 tiebreaker：独显（`integrated == 0`）`+1000`，每 GB 显存 `+1`——与 vulkan 层 `rate_device` 同款启发式，保证多层启发式一致
+- 显存查询用 `cudaDeviceProp.totalGlobalMem`。Windows WDDM 下它含 shared system memory（绝对值虚高），但 VidMm 对每个 WDDM adapter 计算 shared memory = System RAM / 2，该部分对所有候选卡是相同常数，相对比较中抵消，剩余决定因素仍是专用 VRAM
+- 资格过滤：跳过 `cudaComputeModeProhibited`（设备被其他进程锁死 / WDDM 无 compute），与 NVIDIA `simpleVulkan` interop 示例一致
+- compute capability 与 compute mode 经 `cudaDeviceGetAttribute`（`cudaDevAttrComputeCapabilityMajor/Minor`、`cudaDevAttrComputeMode`）查询，UUID 与设备名经 `cudaDeviceProp`（无 attribute API 等价物）
 
 ---
 

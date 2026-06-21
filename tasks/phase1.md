@@ -93,16 +93,25 @@ MUSTREAD:4
 - [x] 创建 `optix/CMakeLists.txt`（启用 CUDA 语言，static library，链接 CUDA::cudart）
 - [x] 更新顶层 `CMakeLists.txt`（add_subdirectory(optix)，更新 renderer 依赖链）
 - [x] 创建 `optix/include/qualquer/optix/context.h`（Context 类声明：init/destroy，设备 UUID 查询）
-- [ ] 创建 `optix/src/context.cpp`（设备枚举、compute capability 检查、最佳设备选择、UUID 获取，init 中打印设备名 + compute capability）
-- [ ] Application 接线 optix::Context（持有成员，init 中调用 Context::init()，destroy 反序销毁；init 顺序本步不调整）
+- [x] 创建 `optix/src/context.cpp`（设备枚举、compute capability 检查、最佳设备选择、UUID 获取，init 中打印设备名 + compute capability）
+
+### Step 10.5：三段式初始化重构
+
+- [ ] `vulkan::Context` 拆 `init(window)` 为 `pre_init(window)` + `init(uuid)`（pre_init：instance+surface+枚举支持 present 的物理设备+查 UUID，输出候选 UUID 列表；init：按传入 UUID 重枚举匹配+完成 device/queue/allocator/frame_data）
+- [ ] `optix::Context::init` 签名改为接收候选 UUID 列表（`std::vector<std::array<uint8_t,16>>`），设备选择加"UUID ∈ 候选列表"过滤
+- [ ] UUID 类型统一为裸 `std::array<uint8_t,16>`（删除 `optix::DeviceUuid` 别名与 `kDeviceUuidSize` 常量，各层直接用裸类型）
+- [ ] `Application::init` 编排三段（pre_init → optix init(候选列表) → vulkan init(选中UUID)）
+- [ ] 请求用户在 CLion 中编译验证（三段式初始化流程通过，CUDA 与 Vulkan 选同一支持 present 的 GPU）
+
+### Step 10.6：Application 接线与收尾
+
+- [ ] Application 接线 optix::Context（持有成员，destroy 反序销毁）
 - [ ] 请求用户在 CLion 中编译验证（控制台输出 CUDA 设备名称和 compute capability）
 
-## Step 11：初始化顺序重构
+## Step 11：External 扩展启用
 
-- [ ] `Context::init()` 和 `pick_physical_device()` 接受 device UUID 参数，按 UUID 匹配物理设备
 - [ ] `Context::create_device()` 启用 `VK_KHR_external_memory_win32`、`VK_KHR_external_semaphore_win32` 扩展
-- [ ] `Application::init()` 调整为先 CudaContext::init() 后 vulkan::Context::init()（传入 CUDA 设备 UUID）
-- [ ] 请求用户在 CLion 中编译验证（CUDA 和 Vulkan 选择同一 GPU，无 validation 报错）
+- [ ] 请求用户在 CLion 中编译验证（扩展启用无 validation 报错）
 
 ## Step 12：Vulkan Interop 资源
 
