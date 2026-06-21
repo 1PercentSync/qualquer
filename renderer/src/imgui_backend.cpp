@@ -38,7 +38,7 @@ namespace qualquer::renderer {
         ImGui::GetStyle().ScaleAllSizes(scale_y);
 
         // install_callbacks = true: ImGui chains the app's existing GLFW callbacks
-        // behind its own, so future input handling is preserved.
+        // behind its own, keeping input routing intact.
         ImGui_ImplGlfw_InitForVulkan(window, true);
 
         // Zero-clear first: the backend requires it, and most fields stay default.
@@ -52,7 +52,7 @@ namespace qualquer::renderer {
         init_info.Queue = context.graphics_queue;
 
         // Backend owns the descriptor pool (no VkDescriptorPool in this class).
-        // Font-atlas minimum for now; bump when registering real textures.
+        // Minimum pool size: only the ImGui font atlas needs a descriptor here.
         init_info.DescriptorPoolSize = IMGUI_IMPL_VULKAN_MINIMUM_IMAGE_SAMPLER_POOL_SIZE;
 
         init_info.MinImageCount = 2; // backend-required lower bound
@@ -87,13 +87,6 @@ namespace qualquer::renderer {
         ImGui_ImplVulkan_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
-    }
-
-    // ReSharper disable once CppMemberFunctionMayBeStatic
-    void ImGuiBackend::show_panel() { // NOLINT(*-convert-member-functions-to-static)
-        ImGui::SetNextWindowPos({0, 0}, ImGuiCond_Once);
-        ImGui::Begin("Qualquer", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
-        ImGui::End();
     }
 
     // ReSharper disable once CppMemberFunctionMayBeStatic

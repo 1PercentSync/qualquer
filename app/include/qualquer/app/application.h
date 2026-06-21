@@ -5,6 +5,9 @@
  * @brief Main application class: window management, frame loop, init/destroy sequence.
  */
 
+#include <string>
+
+#include <qualquer/renderer/debug_ui.h>
 #include <qualquer/renderer/imgui_backend.h>
 #include <qualquer/vulkan/context.h>
 #include <qualquer/vulkan/swapchain.h>
@@ -53,10 +56,13 @@ namespace qualquer::app {
         void end_frame();
 
         /**
-         * @brief Recreates the swapchain after a size change or driver-reported staleness.
+         * @brief Recreates the swapchain after a size change, driver-reported
+         *        staleness, or a present-mode change.
          *
-         * Delegates to Swapchain::recreate. Resolution-dependent renderer resources
-         * (display buffer, CUDA re-imports) will hook into here in later steps.
+         * Delegates to Swapchain::recreate with user_present_mode_ (the current
+         * intent — unchanged on resize, already updated by the combo box on a mode
+         * change), then mirrors the effective mode (possibly FIFO fallback) back into
+         * user_present_mode_.
          */
         void recreate_swapchain();
 
@@ -71,6 +77,27 @@ namespace qualquer::app {
 
         /** @brief ImGui integration (context, backends, UI rendering). */
         renderer::ImGuiBackend imgui_backend_;
+
+        /** @brief Debug panel (frame stats, GPU info, present-mode/log-level controls). */
+        renderer::DebugUI debug_ui_;
+
+        /**
+         * @brief User-facing present mode (combo box mirror, see DebugUIContext).
+         *
+         * The initializer only matches Swapchain::present_mode's default; init()
+         * overwrites it with the swapchain's effective mode (which may have fallen
+         * back from Mailbox to FIFO), and every recreate mirrors that effective mode
+         * back so the displayed selection stays honest.
+         */
+        vulkan::PresentMode user_present_mode_ = vulkan::PresentMode::Mailbox;
+
+        /**
+         * @brief Current error message for the debug panel's dismissable banner.
+         *
+         * Empty when there is no error to show. Non-fatal errors that should not
+         * abort the program surface here; fatal ones still abort via VK_CHECK.
+         */
+        std::string error_message_;
 
         /**
          * @brief Index of the swapchain image acquired for the current frame.

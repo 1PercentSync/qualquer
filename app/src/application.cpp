@@ -5,6 +5,7 @@
 
 #include <qualquer/app/application.h>
 
+#include <imgui.h>
 #include <GLFW/glfw3.h>
 #include <spdlog/spdlog.h>
 
@@ -26,6 +27,9 @@ namespace qualquer::app {
 
         context_.init(window_);
         swapchain_.init(context_);
+        // Take the effective mode (may have fallen back from Mailbox to FIFO) so the
+        // combo box's initial selection matches reality.
+        user_present_mode_ = swapchain_.present_mode;
         imgui_backend_.init(context_, swapchain_, window_);
     }
 
@@ -45,7 +49,27 @@ namespace qualquer::app {
                 continue;
             }
             imgui_backend_.begin_frame();
-            imgui_backend_.show_panel();
+
+            // DeltaTime is only valid after begin_frame has advanced ImGui's IO.
+            renderer::DebugUIContext ui_ctx{
+                .delta_time = ImGui::GetIO().DeltaTime,
+                .context = context_,
+                .swapchain = swapchain_,
+                .user_present_mode = user_present_mode_,
+                .error_message = error_message_,
+            };
+            const auto actions = debug_ui_.draw(ui_ctx);
+
+            if (actions.error_dismissed) {
+                error_message_.clear();
+            }
+            if (actions.present_mode_changed) {
+                // user_present_mode_ already holds the new selection (written by the
+                // combo box); recreate_swapchain uses it and mirrors the effective
+                // mode back.
+                recreate_swapchain();
+            }
+
             render_frame();
             end_frame();
         }
@@ -252,7 +276,10 @@ namespace qualquer::app {
     }
 
     void Application::recreate_swapchain() {
-        swapchain_.recreate(context_);
+        swapchain_.recreate(context_, user_present_mode_);
+        // Mirror the effective mode back so the combo box reflects what actually
+        // got created (handles FIFO fallback when the requested mode is unsupported).
+        user_present_mode_ = swapchain_.present_mode;
     }
 
     void Application::destroy() {

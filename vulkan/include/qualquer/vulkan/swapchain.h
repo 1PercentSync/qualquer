@@ -34,8 +34,9 @@ namespace qualquer::vulkan {
      * Context. Device/physical-device/surface are obtained from the Context
      * reference passed to each operation.
      *
-     * Lifetime is managed explicitly via init() and destroy(). Recreation on
-     * resize or present-mode change is handled in a later step.
+     * Lifetime is managed explicitly via init() and destroy(). Recreation after
+     * surface changes, driver-reported staleness, or present-mode changes is done
+     * via recreate().
      */
     class Swapchain {
     public:
@@ -47,14 +48,19 @@ namespace qualquer::vulkan {
         void init(const Context &context, PresentMode mode = PresentMode::Mailbox);
 
         /**
-         * @brief Recreates the swapchain after surface size change or driver-reported staleness.
+         * @brief Recreates the swapchain after surface size change, driver-reported
+         *        staleness, or a present-mode change.
          *
          * Waits for the graphics queue to idle (fences do not track present completion),
          * destroys old image views and per-image semaphores, then rebuilds the swapchain
-         * while passing the old handle to the driver for resource recycling.
+         * while passing the old handle to the driver for resource recycling. The requested
+         * mode drives creation; present_mode is updated to the actually-effective mode
+         * (which may fall back to FIFO when the requested mode is unsupported).
          * @param context Vulkan context providing device, physical device, queue, and surface.
+         * @param mode    Requested present mode (the caller's intent, e.g. user selection
+         *                or the current mode on a resize-driven recreate).
          */
-        void recreate(const Context &context);
+        void recreate(const Context &context, PresentMode mode);
 
         /**
          * @brief Destroys image views and the swapchain in reverse creation order.

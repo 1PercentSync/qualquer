@@ -21,7 +21,7 @@ namespace qualquer::vulkan {
     // Fences only track vkQueueSubmit completion, not vkQueuePresentKHR. The
     // graphics-queue wait covers both submits and presents on this queue without
     // stalling unrelated queues (vkDeviceWaitIdle would over-serialize).
-    void Swapchain::recreate(const Context &context) {
+    void Swapchain::recreate(const Context &context, const PresentMode mode) {
         vkQueueWaitIdle(context.graphics_queue);
 
         // Destroy old resolution-dependent resources; keep the old swapchain
@@ -40,6 +40,9 @@ namespace qualquer::vulkan {
         VkSwapchainKHR old_swapchain = swapchain;
         swapchain = VK_NULL_HANDLE;
 
+        // Set the requested mode before create_resources so choose_present_mode
+        // reads the new intent.
+        present_mode = mode;
         create_resources(context, old_swapchain);
 
         // The old swapchain is now retired; destroy it after the new one is in place.
@@ -98,7 +101,7 @@ namespace qualquer::vulkan {
             image_count = capabilities.maxImageCount;
         }
 
-        // TRANSFER_DST: renderer blits the display buffer in; COLOR_ATTACHMENT: ImGui draws on top.
+        // TRANSFER_DST: target of the display-buffer blit; COLOR_ATTACHMENT: ImGui draws on top.
         const VkSwapchainCreateInfoKHR create_info{
             .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
             .surface = context.surface,

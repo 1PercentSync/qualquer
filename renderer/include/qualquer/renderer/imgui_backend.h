@@ -66,16 +66,6 @@ namespace qualquer::renderer {
         void begin_frame();
 
         /**
-         * @brief Submits an empty "Qualquer" panel.
-         *
-         * Placeholder UI for verifying the ImGui integration. Will be replaced
-         * by a proper debug panel in Step 9.
-         * Must be called between begin_frame() and render(), during the ImGui
-         * widget submission phase.
-         */
-        void show_panel();
-
-        /**
          * @brief Finalizes ImGui and records its draw commands.
          *
          * Calls ImGui::Render() and records the resulting draw data into the given
