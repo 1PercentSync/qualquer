@@ -5,6 +5,8 @@
 
 #include <qualquer/optix/context.h>
 
+#include <algorithm>
+#include <array>
 #include <cuda_runtime.h>
 #include <spdlog/spdlog.h>
 
@@ -59,23 +61,36 @@ namespace qualquer::optix {
          * adapter, so the shared portion is an identical constant across all
          * candidate adapters and cancels out in the relative comparison, leaving
          * dedicated VRAM as the deciding factor.
-         * @param device Device index to score.
+         * @param prop Device properties of the candidate (integrated flag, VRAM).
          * @return Non-negative score; higher is preferred.
          */
-        int rate_device(int device) {
+        int rate_device(const cudaDeviceProp &prop) {
             int score = 1;
-            if (get_device_attribute(cudaDevAttrIntegrated, device) == 0) {
+            if (prop.integrated == 0) {
                 score += 1000;
             }
-            cudaDeviceProp prop{};
-            CUDA_CHECK(cudaGetDeviceProperties(&prop, device));
             constexpr std::size_t kGiga = 1024 * 1024 * 1024;
             score += static_cast<int>(prop.totalGlobalMem / kGiga);
             return score;
         }
+
+        /**
+         * @brief Reads a CUDA device's 16-byte UUID into a raw std::array.
+         *
+         * cudaDeviceProp.uuid (cudaUUID_t, char[16]) is copied into a uint8_t
+         * array so it compares cleanly with the Vulkan device UUID (also
+         * uint8_t[16]) without sign/alias concerns.
+         * @param prop Device properties whose .uuid is read.
+         * @return The device UUID as a raw byte array.
+         */
+        std::array<std::uint8_t, 16> get_device_uuid(const cudaDeviceProp &prop) {
+            std::array<std::uint8_t, 16> uuid{};
+            std::memcpy(uuid.data(), &prop.uuid, uuid.size());
+            return uuid;
+        }
     } // namespace
 
-    void Context::init() {
+    void Context::init(const std::vector<std::array<std::uint8_t, 16> > &presentable_uuids) {
         int device_count = 0;
         CUDA_CHECK(cudaGetDeviceCount(&device_count));
         if (device_count == 0) {
@@ -83,16 +98,17 @@ namespace qualquer::optix {
             std::abort();
         }
 
-        // Select the best device that permits compute. Compute capability is the
-        // primary key (major then minor, both strictly greater); among devices
-        // sharing the same compute capability, rate_device breaks the tie
-        // (discrete + VRAM), mirroring the Vulkan layer's heuristic. Skips
-        // cudaComputeModeProhibited (device locked for CUDA by another process
-        // or WDDM display mode without compute) — matches NVIDIA's simpleVulkan
-        // interop example's eligibility filter. Per-device queries go through
-        // cudaDeviceGetAttribute, the API NVIDIA recommends over reading
-        // cudaDeviceProp fields (cudaDeviceProp has shed several fields in
-        // recent versions, including computeMode).
+        // Select the best device among those the Vulkan layer confirmed
+        // presentable. Restricting to presentable_uuids excludes compute-only
+        // devices (e.g. a TCC GPU) that Vulkan could not match for presentation.
+        // Within that set, compute capability is the primary key (major then
+        // minor, both strictly greater); among devices sharing a compute
+        // capability, rate_device breaks the tie (discrete + VRAM), mirroring
+        // the Vulkan layer's heuristic. Skips cudaComputeModeProhibited (device
+        // locked for CUDA by another process or WDDM display mode without
+        // compute) — matches NVIDIA's simpleVulkan interop example's eligibility
+        // filter. cudaDeviceProp is fetched once per device to serve UUID
+        // filtering and VRAM scoring from a single query.
         int best_device = -1;
         int best_major = 0;
         int best_minor = 0;
@@ -102,11 +118,19 @@ namespace qualquer::optix {
                 cudaComputeModeProhibited) {
                 continue;
             }
+
+            cudaDeviceProp prop{};
+            CUDA_CHECK(cudaGetDeviceProperties(&prop, i));
+            if (const std::array<std::uint8_t, 16> uuid = get_device_uuid(prop);
+                std::ranges::find(presentable_uuids, uuid) == presentable_uuids.end()) {
+                continue;
+            }
+
             const int major = get_device_attribute(cudaDevAttrComputeCapabilityMajor, i);
             const int minor = get_device_attribute(cudaDevAttrComputeCapabilityMinor, i);
             const bool higher_cc = major > best_major || (major == best_major && minor > best_minor);
             const bool same_cc = major == best_major && minor == best_minor;
-            if (const int score = rate_device(i); higher_cc || (same_cc && score > best_score)) {
+            if (const int score = rate_device(prop); higher_cc || (same_cc && score > best_score)) {
                 best_device = i;
                 best_major = major;
                 best_minor = minor;
@@ -114,18 +138,16 @@ namespace qualquer::optix {
             }
         }
         if (best_device < 0) {
-            spdlog::critical("No CUDA device permits compute (all prohibited)");
+            spdlog::critical("No presentable CUDA device found in the candidate list");
             std::abort();
         }
 
         CUDA_CHECK(cudaSetDevice(best_device));
 
-        // UUID has no attribute-API equivalent, so cudaDeviceProp is still
-        // fetched once for the selected device to read .uuid and .name.
         cudaDeviceProp prop{};
         CUDA_CHECK(cudaGetDeviceProperties(&prop, best_device));
         device_id_ = best_device;
-        std::memcpy(device_uuid.data(), &prop.uuid, device_uuid.size());
+        device_uuid = get_device_uuid(prop);
 
         spdlog::info("CUDA device {}: \"{}\" with compute capability {}.{}",
                      best_device, prop.name, best_major, best_minor);
