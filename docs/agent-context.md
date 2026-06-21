@@ -15,9 +15,9 @@
 
 ### 下一个任务
 
-Step 10 第 2 项：更新顶层 `CMakeLists.txt`（add_subdirectory(optix)，更新 renderer 依赖链）
+Step 10 第 3 项：创建 `optix/include/qualquer/optix/context.h`（Context 类声明：init/destroy，设备 UUID 查询）
 
-> Step 10 已重新切分为 6 小项。第 1 项（`optix/CMakeLists.txt`）已完成。详见 `tasks/phase1.md`。
+> Step 10 共 6 小项。第 1、2 项已完成。详见 `tasks/phase1.md`。
 
 ---
 
