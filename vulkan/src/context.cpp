@@ -344,11 +344,16 @@ namespace qualquer::vulkan {
             .dynamicRendering = VK_TRUE,
         };
 
-        // Swapchain is required; VK_EXT_memory_budget is optional (drives VRAM
-        // reporting only). Collected into a vector so the optional one can be
-        // appended conditionally without a second array.
+        // Swapchain and the Win32 external handle extensions are required — the
+        // external ones let Vulkan export memory/semaphore handles to CUDA for
+        // interop, without which the CUDA-Vulkan pipeline cannot function. An
+        // NVIDIA Windows driver supporting OptiX interop exposes them by design,
+        // so they are hard requirements rather than probed optionals.
+        // VK_EXT_memory_budget is optional (drives VRAM reporting only).
         std::vector<const char *> enabled_extensions{
             VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+            VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME,
+            VK_KHR_EXTERNAL_SEMAPHORE_WIN32_EXTENSION_NAME,
         };
         if (memory_budget_supported) {
             enabled_extensions.push_back(VK_EXT_MEMORY_BUDGET_EXTENSION_NAME);
