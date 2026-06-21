@@ -9,4 +9,5 @@ target_include_directories(qualquer_app
 
 target_link_libraries(qualquer_app
     PRIVATE qualquer_renderer
+    PRIVATE qualquer_optix
 )

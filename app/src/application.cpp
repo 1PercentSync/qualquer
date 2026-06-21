@@ -5,6 +5,9 @@
 
 #include <qualquer/app/application.h>
 
+#include <array>
+#include <vector>
+
 #include <imgui.h>
 #include <GLFW/glfw3.h>
 #include <spdlog/spdlog.h>
@@ -25,7 +28,14 @@ namespace qualquer::app {
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
         window_ = glfwCreateWindow(kInitialWidth, kInitialHeight, kWindowTitle, nullptr, nullptr);
 
-        context_.init(window_);
+        // Three-stage init: Vulkan pre-init enumerates presentable devices, CUDA
+        // selects among them (presentability-constrained), Vulkan completes on
+        // the CUDA-selected device. This binds both layers to the same physical
+        // GPU and excludes compute-only devices (e.g. a TCC GPU) up front.
+        const std::vector<std::array<std::uint8_t, 16>> presentable_uuids = context_.pre_init(window_);
+        cuda_context_.init(presentable_uuids);
+        context_.init(cuda_context_.device_uuid);
+
         swapchain_.init(context_, VK_PRESENT_MODE_MAILBOX_KHR);
         imgui_backend_.init(context_, swapchain_, window_);
     }
@@ -285,6 +295,7 @@ namespace qualquer::app {
         imgui_backend_.destroy();
         swapchain_.destroy(context_);
         context_.destroy();
+        cuda_context_.destroy();
 
         glfwDestroyWindow(window_);
         glfwTerminate();

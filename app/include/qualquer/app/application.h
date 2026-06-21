@@ -7,6 +7,7 @@
 
 #include <string>
 
+#include <qualquer/optix/context.h>
 #include <qualquer/renderer/debug_ui.h>
 #include <qualquer/renderer/imgui_backend.h>
 #include <qualquer/vulkan/context.h>
@@ -68,6 +69,14 @@ namespace qualquer::app {
 
         /** @brief GLFW window handle. */
         GLFWwindow *window_ = nullptr;
+
+        /**
+         * @brief OptiX/CUDA context (device selection, UUID).
+         *
+         * Initialized before the Vulkan context: its selected device UUID feeds
+         * vulkan::Context::init so both layers bind the same physical GPU.
+         */
+        optix::Context cuda_context_;
 
         /** @brief Vulkan context (instance, debug messenger). */
         vulkan::Context context_;
