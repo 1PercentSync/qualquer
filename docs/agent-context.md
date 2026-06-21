@@ -15,9 +15,9 @@
 
 ### 下一个任务
 
-Step 10.5 第 2 项：`optix::Context::init` 签名改为接收候选 UUID 列表，设备选择加 UUID 过滤
+Step 10.5 第 4 项：`Application::init` 编排三段（pre_init → optix init(候选列表) → vulkan init(选中UUID)）
 
-> Step 10.5 第 1、3 项已完成（Context 拆 init、UUID 类型裸化）。详见 `tasks/phase1.md`。
+> Step 10.5 第 1/2/3 项已完成。本项是 Step 10.5 的编译通过点。详见 `tasks/phase1.md`。
 
 ---
 
