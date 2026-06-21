@@ -90,7 +90,7 @@ MUSTREAD:4
 
 ## Step 10：optix 层骨架 + CUDA Context
 
-- [ ] 创建 `optix/CMakeLists.txt`（启用 CUDA 语言，static library，链接 CUDA::cudart）
+- [x] 创建 `optix/CMakeLists.txt`（启用 CUDA 语言，static library，链接 CUDA::cudart）
 - [ ] 更新顶层 `CMakeLists.txt`（add_subdirectory(optix)，更新 renderer 依赖链）
 - [ ] 创建 `optix/include/qualquer/optix/context.h`（Context 类声明：init/destroy，设备 UUID 查询）
 - [ ] 创建 `optix/src/context.cpp`（设备枚举、compute capability 检查、最佳设备选择、UUID 获取，init 中打印设备名 + compute capability）
