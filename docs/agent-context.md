@@ -17,6 +17,8 @@
 
 Step 10 第 1 项：创建 `optix/CMakeLists.txt`（启用 CUDA 语言，static library，链接 CUDA::cudart）
 
+> Step 10 已重新切分为 6 小项（原 4 项 + 新增"Application 接线 CudaContext"小项，使验证标准"控制台输出 CUDA 设备信息"可达成）。详见 `tasks/phase1.md`。
+
 ---
 
 ## 必读文档
