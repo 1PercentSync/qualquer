@@ -15,7 +15,7 @@
 
 ### 下一个任务
 
-Step 9 第 4 项：Application 持有 DebugUI，构造 DebugUIContext 调用 draw，处理 DebugUIActions
+Step 9 第 4 项：Application 接线 DebugUI（持有 + 构造 context 调 draw + 处理 actions，含 present_mode recreate + 回写，移除 show_panel）
 
 ---
 
