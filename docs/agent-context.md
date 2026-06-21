@@ -11,13 +11,13 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 1 — Vulkan 基础设施 + ImGui + 调试面板
-- **进度**：Step 10 第 1–4 项完成（optix 层 CMake + context.h/cpp）；下一步进入 Step 10.5 三段式初始化重构
+- **进度**：Step 10.5 代码小项全部完成（三段式初始化重构）；待用户在 CLion 编译验证 Step 10.5 + 10.6
 
 ### 下一个任务
 
-Step 10.5 第 4 项：`Application::init` 编排三段（pre_init → optix init(候选列表) → vulkan init(选中UUID)）
+请求用户在 CLion 中编译验证 Step 10.5（三段式初始化流程通过，CUDA 与 Vulkan 选同一支持 present 的 GPU）+ Step 10.6（控制台输出 CUDA 设备名称和 compute capability）
 
-> Step 10.5 第 1/2/3 项已完成。本项是 Step 10.5 的编译通过点。详见 `tasks/phase1.md`。
+> Step 10.5 第 1-4 项、Step 10.6 第 1 项已完成。两处编译验证项待确认。详见 `tasks/phase1.md`。
 
 ---
 
