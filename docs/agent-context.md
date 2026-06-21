@@ -10,12 +10,12 @@
 
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
-- **Phase**：M1 Phase 1 — Vulkan 基础设施 + ImGui + 黑色背景
-- **进度**：Step 9 进行中（调试面板）— 第 4 项完成（Application 接线 DebugUI）
+- **Phase**：M1 Phase 1 — Vulkan 基础设施 + ImGui + 调试面板
+- **进度**：Step 9 全部完成（调试面板）
 
 ### 下一个任务
 
-Step 9 第 5 项：请求用户在 CLion 中编译验证（调试面板显示 FPS/GPU/分辨率/VRAM/Present Mode/Log Level）
+Step 10 第 1 项：创建 `optix/CMakeLists.txt`（启用 CUDA 语言，static library，链接 CUDA::cudart）
 
 ---
 
