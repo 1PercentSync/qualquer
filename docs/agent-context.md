@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 1 — Vulkan 基础设施 + ImGui + 黑色背景
-- **进度**：Step 8 全部完成（ImGui 集成）
+- **进度**：Step 9 进行中（调试面板）— 第 1 项完成（DebugUI 头文件）
 
 ### 下一个任务
 
-Step 9 第 1 项：替换 demo window 为自定义面板
+Step 9 第 2 项：创建 `debug_ui.cpp`（FrameStats 计算 + draw 面板绘制）
 
 ---
 
