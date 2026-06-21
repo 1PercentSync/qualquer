@@ -84,7 +84,7 @@ MUSTREAD:4
 
 - [x] 创建 `renderer/include/qualquer/renderer/debug_ui.h`（DebugUI 类、DebugUIContext、DebugUIActions、FrameStats）
 - [x] 创建 `renderer/src/debug_ui.cpp`（FrameStats 计算 + draw 面板绘制）
-- [ ] Context 可选启用 `VK_EXT_memory_budget`（检查支持 → `memory_budget_supported` 标志 → `query_vram_usage()`）
+- [x] Context 可选启用 `VK_EXT_memory_budget`（检查支持 → `memory_budget_supported` 标志 → `query_vram_usage()`）
 - [ ] Application 持有 DebugUI，构造 DebugUIContext 调用 draw，处理 DebugUIActions
 - [ ] ImGuiBackend 移除 `show_panel()`（职责转移至 DebugUI）
 - [ ] 面板内容：FPS + 1% Low、GPU 名称、分辨率、VRAM、Present Mode 下拉框、Log Level 下拉框、Error Banner

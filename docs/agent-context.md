@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 1 — Vulkan 基础设施 + ImGui + 黑色背景
-- **进度**：Step 9 进行中（调试面板）— 第 2 项完成（DebugUI 实现）
+- **进度**：Step 9 进行中（调试面板）— 第 3 项完成（Context VRAM 查询）
 
 ### 下一个任务
 
-Step 9 第 3 项：Context 可选启用 `VK_EXT_memory_budget`（检查支持 → `memory_budget_supported` 标志 → `query_vram_usage()`）
+Step 9 第 4 项：Application 持有 DebugUI，构造 DebugUIContext 调用 draw，处理 DebugUIActions
 
 ---
 
