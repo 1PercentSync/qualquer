@@ -15,9 +15,9 @@
 
 ### 下一个任务
 
-Step 10 第 3 项：创建 `optix/include/qualquer/optix/context.h`（Context 类声明：init/destroy，设备 UUID 查询）
+Step 10 第 4 项：创建 `optix/src/context.cpp`（设备枚举、compute capability 检查、最佳设备选择、UUID 获取，init 中打印设备名 + compute capability）
 
-> Step 10 共 6 小项。第 1、2 项已完成。详见 `tasks/phase1.md`。
+> Step 10 共 6 小项。第 1–3 项已完成。详见 `tasks/phase1.md`。
 
 ---
 
