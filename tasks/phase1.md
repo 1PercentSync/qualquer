@@ -110,8 +110,8 @@ MUSTREAD:4
 
 ## Step 11：External 扩展启用
 
-- [ ] `Context::create_device()` 启用 `VK_KHR_external_memory_win32`、`VK_KHR_external_semaphore_win32` 扩展
-- [ ] 请求用户在 CLion 中编译验证（扩展启用无 validation 报错）
+- [x] `Context::create_device()` 启用 `VK_KHR_external_memory_win32`、`VK_KHR_external_semaphore_win32` 扩展
+- [x] 请求用户在 CLion 中编译验证（扩展启用无 validation 报错）
 
 ## Step 12：Vulkan Interop 资源
 

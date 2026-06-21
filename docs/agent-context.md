@@ -11,13 +11,13 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 1 — Vulkan 基础设施 + ImGui + 调试面板
-- **进度**：Step 10 全部完成（optix 层 + CUDA Context + 三段式初始化，CUDA/Vulkan 绑定同一 GPU 验证通过）
+- **进度**：Step 11 完成（external memory/semaphore win32 扩展启用，为 CUDA interop 导出做准备）
 
 ### 下一个任务
 
-Step 11 第 1 项：`Context::create_device()` 启用 `VK_KHR_external_memory_win32`、`VK_KHR_external_semaphore_win32` 扩展
+Step 12 第 1 项：创建 `vulkan/include/qualquer/vulkan/interop.h`（InteropImage、InteropSemaphore 类声明）
 
-> Step 10（含 10.5/10.6）全部完成并验证通过。详见 `tasks/phase1.md`。
+> Step 11 完成。下一步进入 Vulkan Interop 资源（导出 memory/semaphore 句柄给 CUDA）。详见 `tasks/phase1.md`。
 
 ---
 
