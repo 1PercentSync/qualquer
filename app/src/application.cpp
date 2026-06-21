@@ -59,14 +59,19 @@ namespace qualquer::app {
             if (actions.error_dismissed) {
                 error_message_.clear();
             }
-            if (actions.present_mode_changed) {
-                // The combo already wrote the new selection into swapchain_.present_mode;
-                // recreate consumes it and reflects the effective mode back.
-                recreate_swapchain();
-            }
+            // present_mode_changed is acted on after end_frame (see below): recreating
+            // mid-frame would invalidate the image acquired in begin_frame before it is
+            // presented, so the frame runs to completion on the old swapchain first.
 
             render_frame();
             end_frame();
+
+            if (actions.present_mode_changed) {
+                // The combo wrote the new selection into swapchain_.present_mode during
+                // draw; now that this frame has been presented on the old swapchain,
+                // recreate consumes the new mode and reflects the effective one back.
+                recreate_swapchain();
+            }
         }
     }
 
