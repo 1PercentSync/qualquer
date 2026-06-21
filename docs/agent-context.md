@@ -15,9 +15,9 @@
 
 ### 下一个任务
 
-Step 10.5 第 1 项：`vulkan::Context` 拆 `init(window)` 为 `pre_init(window)` + `init(uuid)`
+Step 10.5 第 2 项：`optix::Context::init` 签名改为接收候选 UUID 列表，设备选择加 UUID 过滤
 
-> Step 10.5 为三段式初始化重构（present 约束前置），背景见 `docs/current-phase.md`「CUDA-Vulkan Interop」。详见 `tasks/phase1.md`。
+> Step 10.5 第 1 项（vulkan::Context 拆 init）已完成。当前 application.cpp 调用点暂未适配（预期编译失败），第 4 项修复。详见 `tasks/phase1.md`。
 
 ---
 

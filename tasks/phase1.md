@@ -97,7 +97,7 @@ MUSTREAD:4
 
 ### Step 10.5：三段式初始化重构
 
-- [ ] `vulkan::Context` 拆 `init(window)` 为 `pre_init(window)` + `init(uuid)`（pre_init：instance+surface+枚举支持 present 的物理设备+查 UUID，输出候选 UUID 列表；init：按传入 UUID 重枚举匹配+完成 device/queue/allocator/frame_data）
+- [x] `vulkan::Context` 拆 `init(window)` 为 `pre_init(window)` + `init(uuid)`（pre_init：instance+surface+枚举支持 present 的物理设备+查 UUID，输出候选 UUID 列表；init：按传入 UUID 重枚举匹配+完成 device/queue/allocator/frame_data）
 - [ ] `optix::Context::init` 签名改为接收候选 UUID 列表（`std::vector<std::array<uint8_t,16>>`），设备选择加"UUID ∈ 候选列表"过滤
 - [ ] UUID 类型统一为裸 `std::array<uint8_t,16>`（删除 `optix::DeviceUuid` 别名与 `kDeviceUuidSize` 常量，各层直接用裸类型）
 - [ ] `Application::init` 编排三段（pre_init → optix init(候选列表) → vulkan init(选中UUID)）
