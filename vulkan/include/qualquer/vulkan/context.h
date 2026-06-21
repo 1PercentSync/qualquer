@@ -8,6 +8,7 @@
 #include <array>
 #include <optional>
 #include <string>
+#include <vector>
 #include <vulkan/vulkan.h>
 #include <vk_mem_alloc.h>
 #include <spdlog/spdlog.h>
@@ -80,10 +81,28 @@ namespace qualquer::vulkan {
     class Context {
     public:
         /**
-         * @brief Initializes the Vulkan context.
+         * @brief Phase 1 of the two-stage init: instance, surface, and candidate enumeration.
+         *
+         * Creates the Vulkan instance, debug messenger, and window surface, then
+         * enumerates every physical device that can present to that surface and
+         * collects its UUID. The returned UUID list constrains CUDA device
+         * selection so a compute-only device that cannot present (e.g. a TCC GPU)
+         * is never chosen by the CUDA side and later mismatched here.
          * @param window GLFW window used to create the presentation surface.
+         * @return UUIDs of all physical devices supporting presentation to the surface.
          */
-        void init(GLFWwindow *window);
+        std::vector<std::array<std::uint8_t, 16>> pre_init(GLFWwindow *window);
+
+        /**
+         * @brief Phase 2 of the two-stage init: complete the device and its resources.
+         *
+         * Re-enumerates physical devices, matches the one whose UUID equals the
+         * CUDA-selected UUID, and creates the logical device, queues, allocator,
+         * and per-frame resources. The UUID must come from the set returned by
+         * pre_init (guaranteed presentable).
+         * @param device_uuid UUID of the CUDA-selected device to bind to.
+         */
+        void init(std::array<std::uint8_t, 16> device_uuid);
 
         /**
          * @brief Destroys all Vulkan objects in reverse creation order.
@@ -157,13 +176,29 @@ namespace qualquer::vulkan {
         /** @brief Sets up the debug messenger callback for validation messages. */
         void create_debug_messenger();
 
-        /** @brief Selects a suitable physical device, preferring discrete GPUs. */
-        void pick_physical_device();
+        /**
+         * @brief Enumerates physical devices that can present to the surface and collects their UUIDs.
+         *
+         * Called during pre_init. A device qualifies when it has a queue family
+         * supporting both graphics and present, exposes the swapchain extension,
+         * and supports Vulkan 1.4. UUIDs are read via VkPhysicalDeviceIDProperties.
+         * @return UUIDs of all qualifying devices, for CUDA-side constrained selection.
+         */
+        [[nodiscard]] std::vector<std::array<std::uint8_t, 16>> enumerate_presentable_devices() const;
+
+        /**
+         * @brief Matches the physical device whose UUID equals the given UUID.
+         *
+         * Called during init, after CUDA has selected a device. Sets physical_device,
+         * gpu_name, and memory_budget_supported. Aborts if no match is found.
+         * @param device_uuid UUID to match (must come from pre_init's candidate set).
+         */
+        void match_physical_device(std::array<std::uint8_t, 16> device_uuid);
 
         /**
          * @brief Finds and records the queue family supporting both graphics and present.
          *
-         * Must be called after pick_physical_device(). Aborts if none found.
+         * Must be called after match_physical_device(). Aborts if none found.
          */
         void find_graphics_queue_family();
 

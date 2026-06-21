@@ -5,7 +5,7 @@
 
 #include <qualquer/vulkan/context.h>
 
-#include <algorithm>
+#include <cstring>
 #include <string>
 #include <vector>
 
@@ -105,49 +105,59 @@ namespace qualquer::vulkan {
         }
 
         /**
-         * Rates a physical device's suitability. Returns 0 if unsuitable.
-         * Scoring: discrete GPU +1000, +1 per GB of device-local VRAM.
+         * @brief Whether a device can serve as the present GPU.
+         *
+         * Qualification mirrors the old rate_device's eligibility gate (graphics
+         * + present queue family, swapchain extension, Vulkan 1.4) but drops the
+         * scoring — device selection now happens on the CUDA side under this
+         * constraint, so Vulkan only filters presentability, it does not rank.
          */
         // ReSharper disable CppParameterMayBeConst
-        int rate_device(VkPhysicalDevice dev, VkSurfaceKHR surface) {
+        bool is_presentable_device(VkPhysicalDevice dev, VkSurfaceKHR surface) {
             // ReSharper restore CppParameterMayBeConst
             if (!has_graphics_present_queue(dev, surface)) {
-                return 0;
+                return false;
             }
             if (!has_device_extension(dev, VK_KHR_SWAPCHAIN_EXTENSION_NAME)) {
-                return 0;
+                return false;
             }
 
             VkPhysicalDeviceProperties props;
             vkGetPhysicalDeviceProperties(dev, &props);
-            if (props.apiVersion < VK_API_VERSION_1_4) {
-                return 0;
-            }
+            return props.apiVersion >= VK_API_VERSION_1_4;
+        }
 
-            int score = 1;
-            if (props.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
-                score += 1000;
-            }
+        /**
+         * @brief Reads a physical device's 16-byte UUID via the ID properties chain.
+         * @param dev Physical device to query.
+         * @return The device UUID, comparable byte-for-byte with a CUDA device UUID.
+         */
+        std::array<std::uint8_t, 16> get_device_uuid(VkPhysicalDevice dev) {
+            VkPhysicalDeviceIDProperties id_props{
+                .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ID_PROPERTIES,
+            };
+            VkPhysicalDeviceProperties2 props2{
+                .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
+                .pNext = &id_props,
+            };
+            vkGetPhysicalDeviceProperties2(dev, &props2);
 
-            VkPhysicalDeviceMemoryProperties mem_props;
-            vkGetPhysicalDeviceMemoryProperties(dev, &mem_props);
-            VkDeviceSize max_heap = 0;
-            for (uint32_t i = 0; i < mem_props.memoryHeapCount; ++i) {
-                if (mem_props.memoryHeaps[i].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT) {
-                    max_heap = std::max(max_heap, mem_props.memoryHeaps[i].size);
-                }
-            }
-            score += static_cast<int>(max_heap / (1024 * 1024 * 1024));
-            return score;
+            std::array<std::uint8_t, 16> uuid{};
+            std::memcpy(uuid.data(), id_props.deviceUUID, VK_UUID_SIZE);
+            return uuid;
         }
     } // namespace
 
-    void Context::init(GLFWwindow *window) {
+    std::vector<std::array<std::uint8_t, 16>> Context::pre_init(GLFWwindow *window) {
         create_instance();
         create_debug_messenger();
         VK_CHECK(glfwCreateWindowSurface(instance, window, nullptr, &surface));
         spdlog::info("Window surface created");
-        pick_physical_device();
+        return enumerate_presentable_devices();
+    }
+
+    void Context::init(std::array<std::uint8_t, 16> device_uuid) {
+        match_physical_device(device_uuid);
         find_graphics_queue_family();
         create_device();
         create_allocator();
@@ -233,7 +243,7 @@ namespace qualquer::vulkan {
         spdlog::info("Debug messenger created");
     }
 
-    void Context::pick_physical_device() {
+    std::vector<std::array<std::uint8_t, 16>> Context::enumerate_presentable_devices() const {
         uint32_t device_count = 0;
         vkEnumeratePhysicalDevices(instance, &device_count, nullptr);
 
@@ -245,17 +255,39 @@ namespace qualquer::vulkan {
         std::vector<VkPhysicalDevice> devices(device_count);
         vkEnumeratePhysicalDevices(instance, &device_count, devices.data());
 
-        int best_score = 0;
+        std::vector<std::array<std::uint8_t, 16>> uuids;
         // ReSharper disable once CppLocalVariableMayBeConst
         for (VkPhysicalDevice dev: devices) {
-            if (const int score = rate_device(dev, surface); score > best_score) {
-                best_score = score;
+            if (is_presentable_device(dev, surface)) {
+                uuids.push_back(get_device_uuid(dev));
+            }
+        }
+
+        if (uuids.empty()) {
+            spdlog::error("No presentable GPU found (need Vulkan 1.4 + swapchain + graphics/present queue)");
+            std::abort();
+        }
+
+        spdlog::info("Found {} presentable device(s)", uuids.size());
+        return uuids;
+    }
+
+    void Context::match_physical_device(std::array<std::uint8_t, 16> device_uuid) {
+        uint32_t device_count = 0;
+        vkEnumeratePhysicalDevices(instance, &device_count, nullptr);
+        std::vector<VkPhysicalDevice> devices(device_count);
+        vkEnumeratePhysicalDevices(instance, &device_count, devices.data());
+
+        // ReSharper disable once CppLocalVariableMayBeConst
+        for (VkPhysicalDevice dev: devices) {
+            if (get_device_uuid(dev) == device_uuid) {
                 physical_device = dev;
+                break;
             }
         }
 
         if (physical_device == VK_NULL_HANDLE) {
-            spdlog::error("No suitable GPU found (need Vulkan 1.4 + swapchain + graphics/present queue)");
+            spdlog::error("No physical device matches the CUDA-selected UUID");
             std::abort();
         }
 
@@ -267,7 +299,7 @@ namespace qualquer::vulkan {
         // non-fatal — query_vram_usage returns nullopt and the UI shows "VRAM: N/A".
         memory_budget_supported = has_device_extension(physical_device, VK_EXT_MEMORY_BUDGET_EXTENSION_NAME);
 
-        spdlog::info("Selected GPU: {} (score: {})", gpu_name, best_score);
+        spdlog::info("Matched GPU: {}", gpu_name);
         spdlog::info("VK_EXT_memory_budget: {}", memory_budget_supported ? "supported" : "not supported");
     }
 
