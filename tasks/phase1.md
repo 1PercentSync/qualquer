@@ -85,7 +85,7 @@ MUSTREAD:4
 - [x] 创建 `renderer/include/qualquer/renderer/debug_ui.h`（DebugUI 类、DebugUIContext、DebugUIActions、FrameStats）
 - [x] 创建 `renderer/src/debug_ui.cpp`（FrameStats 计算 + draw 面板绘制；面板内容：FPS + 1% Low、GPU、分辨率、VRAM、Present Mode、Log Level、Error Banner）
 - [x] Context 可选启用 `VK_EXT_memory_budget`（检查支持 → `memory_budget_supported` 标志 → `query_vram_usage()`）
-- [ ] Application 接线 DebugUI：持有 DebugUI + `user_present_mode_`/`error_message_` 成员，构造 DebugUIContext 调 draw，处理 actions（present_mode_changed → recreate + 回写、error_dismissed → 清错误），同步移除 ImGuiBackend::show_panel
+- [x] Application 接线 DebugUI：持有 DebugUI + `user_present_mode_`/`error_message_` 成员，构造 DebugUIContext 调 draw，处理 actions（present_mode_changed → recreate + 回写、error_dismissed → 清错误），同步移除 ImGuiBackend::show_panel
 - [ ] 请求用户在 CLion 中编译验证
 
 ## Step 10：optix 层骨架 + CUDA Context

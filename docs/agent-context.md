@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 1 — Vulkan 基础设施 + ImGui + 黑色背景
-- **进度**：Step 9 进行中（调试面板）— 第 3 项完成（Context VRAM 查询）
+- **进度**：Step 9 进行中（调试面板）— 第 4 项完成（Application 接线 DebugUI）
 
 ### 下一个任务
 
-Step 9 第 4 项：Application 接线 DebugUI（持有 + 构造 context 调 draw + 处理 actions，含 present_mode recreate + 回写，移除 show_panel）
+Step 9 第 5 项：请求用户在 CLion 中编译验证（调试面板显示 FPS/GPU/分辨率/VRAM/Present Mode/Log Level）
 
 ---
 
