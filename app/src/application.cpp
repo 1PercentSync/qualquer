@@ -26,10 +26,7 @@ namespace qualquer::app {
         window_ = glfwCreateWindow(kInitialWidth, kInitialHeight, kWindowTitle, nullptr, nullptr);
 
         context_.init(window_);
-        swapchain_.init(context_);
-        // Take the effective mode (may have fallen back from Mailbox to FIFO) so the
-        // combo box's initial selection matches reality.
-        user_present_mode_ = swapchain_.present_mode;
+        swapchain_.init(context_, VK_PRESENT_MODE_MAILBOX_KHR);
         imgui_backend_.init(context_, swapchain_, window_);
     }
 
@@ -55,7 +52,6 @@ namespace qualquer::app {
                 .delta_time = ImGui::GetIO().DeltaTime,
                 .context = context_,
                 .swapchain = swapchain_,
-                .user_present_mode = user_present_mode_,
                 .error_message = error_message_,
             };
             const auto actions = debug_ui_.draw(ui_ctx);
@@ -64,9 +60,8 @@ namespace qualquer::app {
                 error_message_.clear();
             }
             if (actions.present_mode_changed) {
-                // user_present_mode_ already holds the new selection (written by the
-                // combo box); recreate_swapchain uses it and mirrors the effective
-                // mode back.
+                // The combo already wrote the new selection into swapchain_.present_mode;
+                // recreate consumes it and reflects the effective mode back.
                 recreate_swapchain();
             }
 
@@ -276,10 +271,7 @@ namespace qualquer::app {
     }
 
     void Application::recreate_swapchain() {
-        swapchain_.recreate(context_, user_present_mode_);
-        // Mirror the effective mode back so the combo box reflects what actually
-        // got created (handles FIFO fallback when the requested mode is unsupported).
-        user_present_mode_ = swapchain_.present_mode;
+        swapchain_.recreate(context_);
     }
 
     void Application::destroy() {

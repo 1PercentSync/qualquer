@@ -17,9 +17,9 @@ namespace qualquer::renderer {
      *
      * DebugUI receives everything it needs through this struct rather than holding
      * references to subsystems, keeping it stateless except for FrameStats
-     * accumulation. Fields split into two kinds:
-     *  - display-only values (const refs / values): GPU name, resolution, errors.
-     *  - mutable refs: interactive controls write back directly (e.g. present mode).
+     * accumulation. context/error_message are read-only; swapchain is mutable because
+     * the present-mode combo writes the user's selection back into swapchain.present_mode
+     * (the single source of truth, which Application then recreates from).
      *
      * Side effects that require Application orchestration (swapchain recreate, log
      * level change) are NOT applied here; they are reported back via DebugUIActions
@@ -32,26 +32,16 @@ namespace qualquer::renderer {
         /** @brief Vulkan context for GPU name and (optional) VRAM queries. */
         const vulkan::Context &context;
 
-        /** @brief Swapchain for resolution display and supported present-mode lookup. */
-        const vulkan::Swapchain &swapchain;
-
         /**
-         * @brief User-facing mirror of the effective present mode.
+         * @brief Swapchain providing resolution, supported present modes, and the
+         *        present-mode field the combo box reads/writes.
          *
-         * The combo box reads it to mark the current selection and writes back when
-         * the user picks another mode. Application reads DebugUIActions::present_mode_changed
-         * and feeds this value into Swapchain::recreate, which reflects the
-         * actually-effective mode into Swapchain::present_mode.
-         *
-         * After every Swapchain::recreate, Application copies Swapchain::present_mode —
-         * the effective value, possibly fallen back to FIFO when the requested mode is
-         * unsupported — back into this field. Without this mirror-back, the combo box
-         * would keep showing the rejected mode while the swapchain runs the fallback,
-         * and every subsequent resize-driven recreate would re-request the rejected
-         * mode. Mirroring keeps the displayed selection honest and makes the next
-         * recreate request the effective mode.
+         * Mutable because the present-mode combo writes the new selection back into
+         * swapchain.present_mode; Application observes present_mode_changed and
+         * recreates the swapchain, which reflects the effective mode (possibly a FIFO
+         * fallback) back into present_mode.
          */
-        vulkan::PresentMode &user_present_mode;
+        vulkan::Swapchain &swapchain;
 
         /** @brief Error message to show in the banner (empty = no error). */
         const std::string &error_message;
@@ -175,12 +165,14 @@ namespace qualquer::renderer {
         /**
          * @brief Renders the present-mode combo box.
          *
-         * Builds the selectable list from ctx.swapchain.supported_modes (FIFO is
-         * always present per the spec). On user selection, writes the chosen mode
-         * back to ctx.user_present_mode and sets actions.present_mode_changed.
-         * Disables the combo when only FIFO is available.
+         * Options are the entries of ctx.swapchain.supported_modes that the renderer
+         * surfaces (FIFO/MAILBOX/IMMEDIATE); labels come from vulkan::to_label. On
+         * user selection, writes the chosen mode back into ctx.swapchain.present_mode
+         * and sets actions.present_mode_changed; Application recreates the swapchain,
+         * which reflects the effective mode back. Disables the combo when only FIFO
+         * is available.
          *
-         * @param ctx    Provides supported_modes and the user_present_mode mirror.
+         * @param ctx    Provides supported_modes and the present_mode field.
          * @param action Receives present_mode_changed on user interaction.
          */
         static void draw_present_mode(const DebugUIContext &ctx, DebugUIActions &action);

@@ -13,16 +13,12 @@ namespace qualquer::vulkan {
     class Context;
 
     /**
-     * @brief Swapchain present mode selection.
+     * @brief Short display label for a Vulkan present mode (e.g. "FIFO", "Mailbox").
      *
-     * Controls how rendered images are delivered to the display.
-     * FIFO is always available; the others fall back to FIFO when unsupported.
+     * Single source for the enum-to-text mapping. Returns "Unknown" for modes the
+     * renderer does not surface (FIFO_RELAXED, shared-present modes).
      */
-    enum class PresentMode : uint8_t {
-        Fifo, ///< VSync — wait for vertical blank (VK_PRESENT_MODE_FIFO_KHR, guaranteed).
-        Mailbox, ///< Triple-buffered, no tearing, low latency (VK_PRESENT_MODE_MAILBOX_KHR).
-        Immediate, ///< No sync, allows tearing, uncapped framerate (VK_PRESENT_MODE_IMMEDIATE_KHR).
-    };
+    const char *to_label(VkPresentModeKHR mode);
 
     /**
      * @brief Manages a Vulkan swapchain and its associated image views.
@@ -43,9 +39,10 @@ namespace qualquer::vulkan {
         /**
          * @brief Creates the swapchain and its image views.
          * @param context Vulkan context providing device, physical device, and surface.
-         * @param mode    Requested present mode (default Mailbox).
+         * @param mode    Requested present mode (caller-supplied; MAILBOX is the
+         *                conventional default the application passes at startup).
          */
-        void init(const Context &context, PresentMode mode = PresentMode::Mailbox);
+        void init(const Context &context, VkPresentModeKHR mode);
 
         /**
          * @brief Recreates the swapchain after surface size change, driver-reported
@@ -53,14 +50,13 @@ namespace qualquer::vulkan {
          *
          * Waits for the graphics queue to idle (fences do not track present completion),
          * destroys old image views and per-image semaphores, then rebuilds the swapchain
-         * while passing the old handle to the driver for resource recycling. The requested
-         * mode drives creation; present_mode is updated to the actually-effective mode
-         * (which may fall back to FIFO when the requested mode is unsupported).
+         * while passing the old handle to the driver for resource recycling. Uses the
+         * current present_mode as the requested mode; present_mode is then updated to the
+         * actually-effective mode (which may fall back to FIFO when unsupported). A mode
+         * change is initiated by writing present_mode before calling this.
          * @param context Vulkan context providing device, physical device, queue, and surface.
-         * @param mode    Requested present mode (the caller's intent, e.g. user selection
-         *                or the current mode on a resize-driven recreate).
          */
-        void recreate(const Context &context, PresentMode mode);
+        void recreate(const Context &context);
 
         /**
          * @brief Destroys image views and the swapchain in reverse creation order.
@@ -68,8 +64,8 @@ namespace qualquer::vulkan {
          */
         void destroy(const Context &context) const;
 
-        /** @brief Current present mode. Reflected back to the requested value after fallback. */
-        PresentMode present_mode = PresentMode::Mailbox;
+        /** @brief Current present mode. Reflected back to the effective value after fallback. */
+        VkPresentModeKHR present_mode = VK_PRESENT_MODE_MAILBOX_KHR;
 
         /**
          * @brief Present modes supported by the (physical_device, surface) pair.
@@ -115,17 +111,16 @@ namespace qualquer::vulkan {
         static VkSurfaceFormatKHR choose_surface_format(VkPhysicalDevice physical_device, VkSurfaceKHR surface);
 
         /**
-         * @brief Selects the Vulkan present mode from a requested PresentMode.
+         * @brief Resolves a requested Vulkan present mode to the effective one.
          *
-         * Reads the member supported_modes (populated in create_resources). Returns
-         * the requested mode if supported, otherwise falls back to FIFO (always
-         * available). FIFO is returned as-is.
+         * Returns the requested mode if it is in supported_modes, otherwise FIFO
+         * (always available).
          *
          * @param requested Requested present mode (input — never mutated by this call).
          *
          * Non-static: depends on the instance's supported_modes member.
          */
-        [[nodiscard]] VkPresentModeKHR choose_present_mode(PresentMode requested) const;
+        [[nodiscard]] VkPresentModeKHR choose_present_mode(VkPresentModeKHR requested) const;
 
         /**
          * @brief Core creation logic shared by init() and recreate().

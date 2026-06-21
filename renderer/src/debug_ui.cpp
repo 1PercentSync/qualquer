@@ -114,38 +114,34 @@ namespace qualquer::renderer {
     }
 
     void DebugUI::draw_present_mode(const DebugUIContext &ctx, DebugUIActions &action) {
-        // The combo works in integer indices; labels[]/values[] are parallel arrays
-        // mapping those indices back to PresentMode. FIFO is guaranteed by the spec
-        // (always listed); Mailbox/Immediate appear only when supported_modes has them.
+        // The combo speaks integer indices; labels[]/values[] are parallel arrays
+        // mapping each index to a (label, VkPresentModeKHR) pair. FIFO is guaranteed by
+        // the spec; Mailbox/Immediate appear only when supported_modes has them.
+        const auto &supported = ctx.swapchain.supported_modes;
         const char *labels[3];
-        vulkan::PresentMode values[3];
+        VkPresentModeKHR values[3];
         int count = 0;
         int current_idx = 0;
 
-        labels[count] = "FIFO";
-        values[count] = vulkan::PresentMode::Fifo;
-        if (ctx.user_present_mode == vulkan::PresentMode::Fifo) {
+        labels[count] = vulkan::to_label(VK_PRESENT_MODE_FIFO_KHR);
+        values[count] = VK_PRESENT_MODE_FIFO_KHR;
+        if (ctx.swapchain.present_mode == VK_PRESENT_MODE_FIFO_KHR) {
             current_idx = count;
         }
         ++count;
 
-        const auto &supported = ctx.swapchain.supported_modes;
-        const bool mailbox_ok = std::ranges::find(supported, VK_PRESENT_MODE_MAILBOX_KHR) != supported.end();
-        const bool immediate_ok =
-                std::ranges::find(supported, VK_PRESENT_MODE_IMMEDIATE_KHR) != supported.end();
-
-        if (mailbox_ok) {
-            labels[count] = "Mailbox";
-            values[count] = vulkan::PresentMode::Mailbox;
-            if (ctx.user_present_mode == vulkan::PresentMode::Mailbox) {
+        if (std::ranges::find(supported, VK_PRESENT_MODE_MAILBOX_KHR) != supported.end()) {
+            labels[count] = vulkan::to_label(VK_PRESENT_MODE_MAILBOX_KHR);
+            values[count] = VK_PRESENT_MODE_MAILBOX_KHR;
+            if (ctx.swapchain.present_mode == VK_PRESENT_MODE_MAILBOX_KHR) {
                 current_idx = count;
             }
             ++count;
         }
-        if (immediate_ok) {
-            labels[count] = "Immediate";
-            values[count] = vulkan::PresentMode::Immediate;
-            if (ctx.user_present_mode == vulkan::PresentMode::Immediate) {
+        if (std::ranges::find(supported, VK_PRESENT_MODE_IMMEDIATE_KHR) != supported.end()) {
+            labels[count] = vulkan::to_label(VK_PRESENT_MODE_IMMEDIATE_KHR);
+            values[count] = VK_PRESENT_MODE_IMMEDIATE_KHR;
+            if (ctx.swapchain.present_mode == VK_PRESENT_MODE_IMMEDIATE_KHR) {
                 current_idx = count;
             }
             ++count;
@@ -158,7 +154,7 @@ namespace qualquer::renderer {
         }
 
         if (ImGui::Combo("Present Mode", &current_idx, labels, count)) {
-            ctx.user_present_mode = values[current_idx];
+            ctx.swapchain.present_mode = values[current_idx];
             action.present_mode_changed = true;
         }
 

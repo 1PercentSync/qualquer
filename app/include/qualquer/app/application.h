@@ -59,10 +59,10 @@ namespace qualquer::app {
          * @brief Recreates the swapchain after a size change, driver-reported
          *        staleness, or a present-mode change.
          *
-         * Delegates to Swapchain::recreate with user_present_mode_ (the current
-         * intent — unchanged on resize, already updated by the combo box on a mode
-         * change), then mirrors the effective mode (possibly FIFO fallback) back into
-         * user_present_mode_.
+         * Delegates to Swapchain::recreate, which consumes the current
+         * swapchain.present_mode (the single source of truth — unchanged on resize,
+         * written by the combo box on a mode change) and reflects the effective mode
+         * back into it.
          */
         void recreate_swapchain();
 
@@ -80,16 +80,6 @@ namespace qualquer::app {
 
         /** @brief Debug panel (frame stats, GPU info, present-mode/log-level controls). */
         renderer::DebugUI debug_ui_;
-
-        /**
-         * @brief User-facing present mode (combo box mirror, see DebugUIContext).
-         *
-         * The initializer only matches Swapchain::present_mode's default; init()
-         * overwrites it with the swapchain's effective mode (which may have fallen
-         * back from Mailbox to FIFO), and every recreate mirrors that effective mode
-         * back so the displayed selection stays honest.
-         */
-        vulkan::PresentMode user_present_mode_ = vulkan::PresentMode::Mailbox;
 
         /**
          * @brief Current error message for the debug panel's dismissable banner.

@@ -13,7 +13,16 @@
 #include <qualquer/vulkan/context.h>
 
 namespace qualquer::vulkan {
-    void Swapchain::init(const Context &context, const PresentMode mode) {
+    const char *to_label(const VkPresentModeKHR mode) {
+        switch (mode) {
+            case VK_PRESENT_MODE_FIFO_KHR: return "FIFO";
+            case VK_PRESENT_MODE_MAILBOX_KHR: return "Mailbox";
+            case VK_PRESENT_MODE_IMMEDIATE_KHR: return "Immediate";
+            default: return "Unknown";
+        }
+    }
+
+    void Swapchain::init(const Context &context, const VkPresentModeKHR mode) {
         present_mode = mode;
         create_resources(context, VK_NULL_HANDLE);
     }
@@ -21,7 +30,7 @@ namespace qualquer::vulkan {
     // Fences only track vkQueueSubmit completion, not vkQueuePresentKHR. The
     // graphics-queue wait covers both submits and presents on this queue without
     // stalling unrelated queues (vkDeviceWaitIdle would over-serialize).
-    void Swapchain::recreate(const Context &context, const PresentMode mode) {
+    void Swapchain::recreate(const Context &context) {
         vkQueueWaitIdle(context.graphics_queue);
 
         // Destroy old resolution-dependent resources; keep the old swapchain
@@ -40,9 +49,9 @@ namespace qualquer::vulkan {
         VkSwapchainKHR old_swapchain = swapchain;
         swapchain = VK_NULL_HANDLE;
 
-        // Set the requested mode before create_resources so choose_present_mode
-        // reads the new intent.
-        present_mode = mode;
+        // present_mode already holds the requested intent (set by the caller on a mode
+        // change, unchanged on a resize); create_resources reflects the effective mode
+        // (possibly FIFO fallback) back into it.
         create_resources(context, old_swapchain);
 
         // The old swapchain is now retired; destroy it after the new one is in place.
@@ -80,16 +89,9 @@ namespace qualquer::vulkan {
         }
 
         const VkSurfaceFormatKHR surface_format = choose_surface_format(context.physical_device, context.surface);
-        const VkPresentModeKHR vk_present_mode = choose_present_mode(present_mode);
-
-        // Record the mode actually set (requested mode may have fallen back to FIFO).
-        if (vk_present_mode == VK_PRESENT_MODE_MAILBOX_KHR) {
-            present_mode = PresentMode::Mailbox;
-        } else if (vk_present_mode == VK_PRESENT_MODE_IMMEDIATE_KHR) {
-            present_mode = PresentMode::Immediate;
-        } else {
-            present_mode = PresentMode::Fifo;
-        }
+        // choose_present_mode resolves the request (with FIFO fallback) and becomes the
+        // effective mode, used directly for swapchain creation.
+        present_mode = choose_present_mode(present_mode);
 
         format = surface_format.format;
         // Win32 guarantees currentExtent equals the window size (no sentinel), so used directly.
@@ -114,7 +116,7 @@ namespace qualquer::vulkan {
             .imageSharingMode = VK_SHARING_MODE_EXCLUSIVE,
             .preTransform = capabilities.currentTransform,
             .compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
-            .presentMode = vk_present_mode,
+            .presentMode = present_mode,
             .clipped = VK_TRUE,
             .oldSwapchain = old_swapchain,
         };
@@ -157,27 +159,15 @@ namespace qualquer::vulkan {
         std::abort();
     }
 
-    // Reads the member supported_modes (populated in create_resources). FIFO is
-    // always available; the others fall back to FIFO when unsupported by the surface.
-    VkPresentModeKHR Swapchain::choose_present_mode(const PresentMode requested) const {
-        if (requested == PresentMode::Fifo) {
-            spdlog::info("Present mode: FIFO (vsync)");
-            return VK_PRESENT_MODE_FIFO_KHR;
-        }
-
-        const VkPresentModeKHR target = (requested == PresentMode::Mailbox)
-                                            ? VK_PRESENT_MODE_MAILBOX_KHR
-                                            : VK_PRESENT_MODE_IMMEDIATE_KHR;
-        const char *const target_name = (requested == PresentMode::Mailbox) ? "MAILBOX" : "IMMEDIATE";
-
+    // Falls back to FIFO when the requested mode is not in supported_modes.
+    VkPresentModeKHR Swapchain::choose_present_mode(const VkPresentModeKHR requested) const {
         for (const auto m: supported_modes) {
-            if (m == target) {
-                spdlog::info("Present mode: {}", target_name);
+            if (m == requested) {
+                spdlog::info("Present mode: {}", to_label(requested));
                 return m;
             }
         }
-
-        spdlog::warn("Present mode: FIFO ({} not available)", target_name);
+        spdlog::warn("Present mode: FIFO ({} not available)", to_label(requested));
         return VK_PRESENT_MODE_FIFO_KHR;
     }
 
