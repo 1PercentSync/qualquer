@@ -6,6 +6,7 @@
  */
 
 #include <array>
+#include <optional>
 #include <string>
 #include <vulkan/vulkan.h>
 #include <vk_mem_alloc.h>
@@ -36,6 +37,20 @@ struct GLFWwindow;
 namespace qualquer::vulkan {
     /** @brief Number of frames that can be in-flight simultaneously. */
     constexpr uint32_t kMaxFramesInFlight = 2;
+
+    /**
+     * @brief Device-local VRAM usage snapshot, aggregated across all device-local heaps.
+     *
+     * Requires VK_EXT_memory_budget, which is enabled as an optional device extension.
+     * When unsupported, Context::query_vram_usage returns std::nullopt instead.
+     */
+    struct VramInfo {
+        /** @brief Bytes currently used by the application on device-local heaps. */
+        uint64_t used = 0;
+
+        /** @brief Bytes available to the application per the driver-reported budget. */
+        uint64_t budget = 0;
+    };
 
     /**
      * @brief Per-frame GPU synchronization and command recording resources.
@@ -90,6 +105,15 @@ namespace qualquer::vulkan {
         /** @brief Human-readable GPU name, populated during init. */
         std::string gpu_name;
 
+        /**
+         * @brief Whether the selected device supports VK_EXT_memory_budget.
+         *
+         * Populated during pick_physical_device() by enumerating device extensions.
+         * Drives optional extension enablement in create_device() and the VMA budget
+         * flag in create_allocator(). query_vram_usage() returns nullopt when false.
+         */
+        bool memory_budget_supported = false;
+
         /** @brief Queue family index supporting both graphics and present. */
         uint32_t graphics_queue_family = 0;
 
@@ -113,6 +137,18 @@ namespace qualquer::vulkan {
 
         /** @brief Advances to the next in-flight frame index. */
         void advance_frame() { frame_index = (frame_index + 1) % kMaxFramesInFlight; }
+
+        /**
+         * @brief Queries aggregated device-local VRAM usage via VMA.
+         *
+         * Sums usage and budget across all device-local heaps. Returns std::nullopt
+         * when VK_EXT_memory_budget is not supported on this device (VMA's budget
+         * figures are only meaningful when the budget flag was set at allocator
+         * creation).
+         *
+         * @return Snapshot of current VRAM usage and budget, or nullopt if unsupported.
+         */
+        [[nodiscard]] std::optional<VramInfo> query_vram_usage() const;
 
     private:
         /** @brief Creates VkInstance with validation layers and debug_utils extension. */

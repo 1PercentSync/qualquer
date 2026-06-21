@@ -49,7 +49,6 @@ namespace qualquer::vulkan {
             const VkDebugUtilsMessageTypeFlagsEXT type,
             const VkDebugUtilsMessengerCallbackDataEXT *callback_data,
             [[maybe_unused]] void *user_data) {
-
             const auto tag = format_message_type(type);
 
             if (severity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) {
@@ -88,16 +87,17 @@ namespace qualquer::vulkan {
             return false;
         }
 
-        // Checks whether the device supports the VK_KHR_swapchain extension
-        // ReSharper disable once CppParameterMayBeConst
-        bool has_swapchain_extension(VkPhysicalDevice dev) {
+        // Checks whether the device exposes the named device extension.
+        // ReSharper disable CppParameterMayBeConst
+        bool has_device_extension(VkPhysicalDevice dev, const char *name) {
+            // ReSharper restore CppParameterMayBeConst
             uint32_t count = 0;
             vkEnumerateDeviceExtensionProperties(dev, nullptr, &count, nullptr);
             std::vector<VkExtensionProperties> extensions(count);
             vkEnumerateDeviceExtensionProperties(dev, nullptr, &count, extensions.data());
 
             for (const auto &ext: extensions) {
-                if (std::strcmp(ext.extensionName, VK_KHR_SWAPCHAIN_EXTENSION_NAME) == 0) {
+                if (std::strcmp(ext.extensionName, name) == 0) {
                     return true;
                 }
             }
@@ -114,7 +114,7 @@ namespace qualquer::vulkan {
             if (!has_graphics_present_queue(dev, surface)) {
                 return 0;
             }
-            if (!has_swapchain_extension(dev)) {
+            if (!has_device_extension(dev, VK_KHR_SWAPCHAIN_EXTENSION_NAME)) {
                 return 0;
             }
 
@@ -263,7 +263,12 @@ namespace qualquer::vulkan {
         vkGetPhysicalDeviceProperties(physical_device, &props);
         gpu_name = props.deviceName;
 
+        // Optional: VK_EXT_memory_budget drives VRAM usage reporting. Absence is
+        // non-fatal — query_vram_usage returns nullopt and the UI shows "VRAM: N/A".
+        memory_budget_supported = has_device_extension(physical_device, VK_EXT_MEMORY_BUDGET_EXTENSION_NAME);
+
         spdlog::info("Selected GPU: {} (score: {})", gpu_name, best_score);
+        spdlog::info("VK_EXT_memory_budget: {}", memory_budget_supported ? "supported" : "not supported");
     }
 
     void Context::find_graphics_queue_family() {
@@ -307,18 +312,23 @@ namespace qualquer::vulkan {
             .dynamicRendering = VK_TRUE,
         };
 
-        // ReSharper disable once CppVariableCanBeMadeConstexpr
-        const char *const enabled_extensions[] = {
+        // Swapchain is required; VK_EXT_memory_budget is optional (drives VRAM
+        // reporting only). Collected into a vector so the optional one can be
+        // appended conditionally without a second array.
+        std::vector<const char *> enabled_extensions{
             VK_KHR_SWAPCHAIN_EXTENSION_NAME,
         };
+        if (memory_budget_supported) {
+            enabled_extensions.push_back(VK_EXT_MEMORY_BUDGET_EXTENSION_NAME);
+        }
 
         const VkDeviceCreateInfo device_info{
             .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
             .pNext = &features_13,
             .queueCreateInfoCount = 1,
             .pQueueCreateInfos = &queue_info,
-            .enabledExtensionCount = 1,
-            .ppEnabledExtensionNames = enabled_extensions,
+            .enabledExtensionCount = static_cast<uint32_t>(enabled_extensions.size()),
+            .ppEnabledExtensionNames = enabled_extensions.data(),
         };
 
         VK_CHECK(vkCreateDevice(physical_device, &device_info, nullptr, &device));
@@ -329,7 +339,13 @@ namespace qualquer::vulkan {
     }
 
     void Context::create_allocator() {
+        // The budget flag must be set only when the device actually supports the
+        // extension; otherwise VMA's budget figures are meaningless and the flag
+        // would require an extension the device lacks.
         const VmaAllocatorCreateInfo alloc_info{
+            .flags = memory_budget_supported
+                         ? VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT
+                         : VmaAllocatorCreateFlags{0},
             .physicalDevice = physical_device,
             .device = device,
             .instance = instance,
@@ -377,5 +393,29 @@ namespace qualquer::vulkan {
         }
 
         spdlog::info("Frame data created ({} frames in flight)", kMaxFramesInFlight);
+    }
+
+    // Aggregates usage and budget across all device-local heaps via VMA.
+    // Returns nullopt when VK_EXT_memory_budget was not enabled — without it the
+    // per-heap budget figures VMA returns are not meaningful.
+    std::optional<VramInfo> Context::query_vram_usage() const {
+        if (!memory_budget_supported) {
+            return std::nullopt;
+        }
+
+        std::array<VmaBudget, VK_MAX_MEMORY_HEAPS> budgets{};
+        vmaGetHeapBudgets(allocator, budgets.data());
+
+        VkPhysicalDeviceMemoryProperties mem_props;
+        vkGetPhysicalDeviceMemoryProperties(physical_device, &mem_props);
+
+        VramInfo info;
+        for (uint32_t i = 0; i < mem_props.memoryHeapCount; ++i) {
+            if (mem_props.memoryHeaps[i].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT) {
+                info.used += budgets[i].usage;
+                info.budget += budgets[i].budget;
+            }
+        }
+        return info;
     }
 } // namespace qualquer::vulkan
