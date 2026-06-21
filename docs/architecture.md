@@ -17,7 +17,7 @@ Qualquer 是基于 CUDA + OptiX 的 Path Tracer，Vulkan 仅用于 swapchain 呈
 
 ## 硬件目标
 
-- **目标平台**：支持 OptiX 的 NVIDIA GPU（Turing 及以上）
+- **目标平台**：支持 OptiX 的 NVIDIA GPU（RTX 40 系 / Ada Lovelace 及以上）
 - **性能理念**：追求技术和画面的最佳性价比
 
 ---

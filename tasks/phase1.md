@@ -92,9 +92,9 @@ MUSTREAD:4
 
 - [ ] 创建 `optix/CMakeLists.txt`（启用 CUDA 语言，static library，链接 CUDA::cudart）
 - [ ] 更新顶层 `CMakeLists.txt`（add_subdirectory(optix)，更新 renderer 依赖链）
-- [ ] 创建 `optix/include/qualquer/optix/cuda_context.h`（CudaContext 类声明：init/destroy，设备 UUID 查询）
-- [ ] 创建 `optix/src/cuda_context.cpp`（设备枚举、compute capability 检查、最佳设备选择、UUID 获取，init 中打印设备名 + compute capability）
-- [ ] Application 接线 CudaContext（持有成员，init 中调用 CudaContext::init()，destroy 反序销毁；init 顺序本步不调整）
+- [ ] 创建 `optix/include/qualquer/optix/context.h`（Context 类声明：init/destroy，设备 UUID 查询）
+- [ ] 创建 `optix/src/context.cpp`（设备枚举、compute capability 检查、最佳设备选择、UUID 获取，init 中打印设备名 + compute capability）
+- [ ] Application 接线 optix::Context（持有成员，init 中调用 Context::init()，destroy 反序销毁；init 顺序本步不调整）
 - [ ] 请求用户在 CLion 中编译验证（控制台输出 CUDA 设备名称和 compute capability）
 
 ## Step 11：初始化顺序重构
