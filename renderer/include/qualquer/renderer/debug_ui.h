@@ -108,7 +108,7 @@ namespace qualquer::renderer {
          * @param ctx Per-frame data needed by the panel.
          * @return Actions triggered by the user this frame.
          */
-        DebugUIActions draw(DebugUIContext &ctx);
+        DebugUIActions draw(const DebugUIContext &ctx);
 
     private:
         /**
@@ -117,6 +117,9 @@ namespace qualquer::renderer {
          * Accumulates per-frame delta times and every kUpdateInterval seconds
          * computes average FPS, average frame time, and 1% Low. Between updates
          * the displayed values stay stable (no flickering on every frame).
+         *
+         * Defined before the section helpers so its name is complete when
+         * draw_frame_stats references it.
          */
         struct FrameStats {
             /** @brief Average FPS over the last window. */
@@ -147,11 +150,62 @@ namespace qualquer::renderer {
             /** @brief Elapsed time within the current window. */
             float elapsed_ = 0.0f;
 
-            /** @brief Recomputes avg/1%-low stats from samples_ and clears the window. */
+            /** @brief Recomputes avg/1%-low stats from samples_ (caller clears the window). */
             void compute();
         };
 
         /** @brief Frame-time statistics accumulator (persists across frames). */
         FrameStats frame_stats_;
+
+        /**
+         * @brief Renders the FPS and 1% Low lines.
+         *
+         * @param stats Current frame-time statistics to display.
+         */
+        static void draw_frame_stats(const FrameStats &stats);
+
+        /**
+         * @brief Renders the GPU name, resolution, and VRAM usage lines.
+         *
+         * VRAM line falls back to "VRAM: N/A" when query_vram_usage() returns
+         * nullopt (VK_EXT_memory_budget unsupported).
+         *
+         * @param ctx Vulkan context (gpu name, VRAM query) and swapchain (extent).
+         */
+        static void draw_gpu_info(const DebugUIContext &ctx);
+
+        /**
+         * @brief Renders the present-mode combo box.
+         *
+         * Builds the selectable list from ctx.swapchain.supported_modes (FIFO is
+         * always present per the spec). On user selection, writes the chosen mode
+         * back to ctx.user_present_mode and sets actions.present_mode_changed.
+         * Disables the combo when only FIFO is available.
+         *
+         * @param ctx    Provides supported_modes and the user_present_mode mirror.
+         * @param action Receives present_mode_changed on user interaction.
+         */
+        static void draw_present_mode(const DebugUIContext &ctx, DebugUIActions &action);
+
+        /**
+         * @brief Renders the dismissable error banner.
+         *
+         * No-op when ctx.error_message is empty. Otherwise shows the message (red)
+         * and an "X" button that sets actions.error_dismissed.
+         *
+         * @param ctx    Provides the error message.
+         * @param action Receives error_dismissed when the user clicks X.
+         */
+        static void draw_error_banner(const DebugUIContext &ctx, DebugUIActions &action);
+
+        /**
+         * @brief Renders the log-level combo box.
+         *
+         * Applies spdlog::set_level immediately on change and sets
+         * actions.log_level_changed / new_log_level.
+         *
+         * @param action Receives log_level_changed and new_log_level on change.
+         */
+        static void draw_log_level(DebugUIActions &action);
     };
 } // namespace qualquer::renderer

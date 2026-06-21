@@ -4,6 +4,7 @@ add_library(qualquer_renderer STATIC)
 
 target_sources(qualquer_renderer PRIVATE
     src/imgui_backend.cpp
+    src/debug_ui.cpp
 )
 
 target_include_directories(qualquer_renderer
