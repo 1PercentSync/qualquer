@@ -5,8 +5,6 @@
  * @brief Debug UI panel module (renderer layer).
  */
 
-#include <cstdint>
-#include <optional>
 #include <string>
 #include <vector>
 
