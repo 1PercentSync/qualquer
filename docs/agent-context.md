@@ -11,13 +11,13 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 1 — Vulkan 基础设施 + ImGui + 调试面板
-- **进度**：Step 10.5 代码小项全部完成（三段式初始化重构）；待用户在 CLion 编译验证 Step 10.5 + 10.6
+- **进度**：Step 10 全部完成（optix 层 + CUDA Context + 三段式初始化，CUDA/Vulkan 绑定同一 GPU 验证通过）
 
 ### 下一个任务
 
-请求用户在 CLion 中编译验证 Step 10.5（三段式初始化流程通过，CUDA 与 Vulkan 选同一支持 present 的 GPU）+ Step 10.6（控制台输出 CUDA 设备名称和 compute capability）
+Step 11 第 1 项：`Context::create_device()` 启用 `VK_KHR_external_memory_win32`、`VK_KHR_external_semaphore_win32` 扩展
 
-> Step 10.5 第 1-4 项、Step 10.6 第 1 项已完成。两处编译验证项待确认。详见 `tasks/phase1.md`。
+> Step 10（含 10.5/10.6）全部完成并验证通过。详见 `tasks/phase1.md`。
 
 ---
 
