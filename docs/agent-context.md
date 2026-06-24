@@ -10,14 +10,14 @@
 
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
-- **Phase**：M1 Phase 1 — Vulkan 基础设施 + ImGui + 调试面板
-- **进度**：Step 14 进行中（帧循环时序重构完成，先 CUDA 后 acquire；待 blit 录制）
+- **Phase**：M1 Phase 2 — OptiX 基础（Pipeline/SBT，raygen 输出纯色，替换测试 kernel）
+- **进度**：Phase 1 完成（CUDA-Vulkan interop + 渐变色测试图案打通，编译运行验证通过）；Phase 切换归档进行中
 
 ### 下一个任务
 
-Step 14 第 7 项：blit 录制 + layout 流转重构（display buffer barrier + swapchain UNDEFINED→TRANSFER_DST→blit→COLOR_ATTACHMENT + ImGui loadOp=LOAD + PRESENT）
+Phase 切换归档：`git mv` 将 `docs/current-phase.md` → `docs/archive/phase1.md`、`tasks/phase1.md` → `tasks/archive/phase1.md`，作为独立 commit；随后创建 `docs/current-phase.md`（Phase 2）与 `tasks/phase2.md`
 
-> 帧循环时序重构完成。submit_cuda 移到 acquire 之前，CUDA 引擎在 acquire 等待期间就在算。接下来加 blit 录制，把 CUDA 写入的 display buffer 呈现到 swapchain——这是最后一项实质改动，完成后窗口显示渐变色。详见 `tasks/phase1.md`。
+> Phase 1 全部完成。窗口显示 CUDA 渐变色 + ImGui 面板，resize 不崩溃，无 validation 报错。接下来按归档规范处理 Phase 切换，然后进入 Phase 2 规划。详见 `docs/roadmap.md`。
 
 ---
 

@@ -139,5 +139,5 @@ MUSTREAD:4
 - [x] CUDA launch + cudaSignalExternalSemaphoresAsync 接入（render_frame.submit_cuda，stream）
 - [x] Vulkan submit 添加 external semaphore wait（end_frame 的 submit_info）
 - [x] 帧循环时序重构：submit_cuda 移到 acquire 之前（先 CUDA 后 acquire，隐藏 acquire 等待）；begin_frame 拆为 wait_frame_slot + acquire_image；Renderer 拆 submit_cuda/record_vulkan 为 public
-- [ ] blit 录制 + layout 流转重构（display buffer barrier + swapchain UNDEFINED→TRANSFER_DST→blit→COLOR_ATTACHMENT + ImGui loadOp=LOAD + PRESENT）
-- [ ] 请求用户在 CLion 中编译验证（窗口显示渐变色 + ImGui 面板，resize 不崩溃）
+- [x] blit 录制 + layout 流转重构（display buffer barrier + swapchain UNDEFINED→TRANSFER_DST→blit→COLOR_ATTACHMENT + ImGui loadOp=LOAD + PRESENT）
+- [x] 请求用户在 CLion 中编译验证（窗口显示渐变色 + ImGui 面板，resize 不崩溃）
