@@ -73,7 +73,7 @@ namespace qualquer::renderer {
          * @param height       Display buffer height in pixels.
          * @param frame_index  Current frame-in-flight slot, indexing external_semaphores.
          */
-        void submit_cuda(optix::Context &cuda_context, uint32_t width, uint32_t height, uint32_t frame_index);
+        void submit_cuda(const optix::Context &cuda_context, uint32_t width, uint32_t height, uint32_t frame_index);
 
         /**
          * @brief Records the Vulkan command sequence (blit, ImGui, layout transitions).

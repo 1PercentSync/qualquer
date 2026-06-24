@@ -20,5 +20,5 @@ namespace qualquer::renderer {
      * @param frame   Monotonic frame counter for animation.
      * @param stream  CUDA stream to launch on.
      */
-    void launch_test_kernel(cudaSurfaceObject_t surface, uint32_t width, uint32_t height, uint32_t frame, cudaStream_t stream);
+    void launch_test_kernel(const cudaSurfaceObject_t surface, const uint32_t width, const uint32_t height, const uint32_t frame, const cudaStream_t stream);
 } // namespace qualquer::renderer

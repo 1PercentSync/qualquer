@@ -18,7 +18,10 @@
 #include <qualquer/vulkan/swapchain.h>
 
 namespace qualquer::renderer {
-    void Renderer::submit_cuda(optix::Context &cuda_context, const uint32_t width, const uint32_t height, const uint32_t frame_index) {
+    void Renderer::submit_cuda(const optix::Context &cuda_context,
+                               const uint32_t width,
+                               const uint32_t height,
+                               const uint32_t frame_index) {
         launch_test_kernel(cuda_context.display_surface,
                            width,
                            height,
@@ -40,16 +43,108 @@ namespace qualquer::renderer {
         VkCommandBuffer cmd = input.cmd;
         // ReSharper disable once CppLocalVariableMayBeConst
         VkImage swapchain_image = input.swapchain.images[input.image_index];
+        const VkExtent2D extent = input.swapchain.extent;
 
-        // No prior GPU work touched the acquired image (acquire hands it over via
-        // the wait semaphore in end_frame), so the src stage is TOP_OF_PIPE.
-        const VkImageMemoryBarrier2 to_attachment{
+        // --- Layout transitions before the blit ---
+        // Display buffer: UNDEFINED -> TRANSFER_SRC_OPTIMAL. CUDA just wrote it; the
+        // external semaphore wait in end_frame made those writes visible, so the src
+        // stage is NONE (no prior Vulkan stage produced this content).
+        const VkImageMemoryBarrier2 display_to_src{
+            .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+            .srcStageMask = VK_PIPELINE_STAGE_2_NONE,
+            .srcAccessMask = 0,
+            .dstStageMask = VK_PIPELINE_STAGE_2_BLIT_BIT,
+            .dstAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT,
+            .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+            .newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .image = input.display_buffer.image,
+            .subresourceRange =
+            {
+                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                .baseMipLevel = 0,
+                .levelCount = 1,
+                .baseArrayLayer = 0,
+                .layerCount = 1,
+            },
+        };
+
+        // Swapchain: UNDEFINED -> TRANSFER_DST_OPTIMAL. No prior GPU work touched the
+        // acquired image (acquire hands it over via the wait semaphore in end_frame),
+        // so the src stage is TOP_OF_PIPE.
+        const VkImageMemoryBarrier2 swapchain_to_dst{
             .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
             .srcStageMask = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
             .srcAccessMask = 0,
-            .dstStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-            .dstAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+            .dstStageMask = VK_PIPELINE_STAGE_2_BLIT_BIT,
+            .dstAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT,
             .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+            .newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .image = swapchain_image,
+            .subresourceRange =
+            {
+                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                .baseMipLevel = 0,
+                .levelCount = 1,
+                .baseArrayLayer = 0,
+                .layerCount = 1,
+            },
+        };
+
+        const VkImageMemoryBarrier2 pre_blit_barriers[2]{display_to_src, swapchain_to_dst};
+        // ReSharper disable once CppVariableCanBeMadeConstexpr
+        const VkDependencyInfo pre_blit_dep{
+            .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+            .imageMemoryBarrierCount = 2,
+            .pImageMemoryBarriers = pre_blit_barriers,
+        };
+        vkCmdPipelineBarrier2(cmd, &pre_blit_dep);
+
+        // --- Blit: display buffer (R8G8B8A8_UNORM) -> swapchain (B8G8R8A8_SRGB) ---
+        // Hardware handles UNORM->float, RGBA->BGRA channel swap, and sRGB encoding.
+        const VkImageBlit2 region{
+            .sType = VK_STRUCTURE_TYPE_IMAGE_BLIT_2,
+            .srcSubresource =
+            {
+                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                .mipLevel = 0,
+                .baseArrayLayer = 0,
+                .layerCount = 1,
+            },
+            .srcOffsets = {{0, 0, 0}, {static_cast<int32_t>(extent.width), static_cast<int32_t>(extent.height), 1}},
+            .dstSubresource =
+            {
+                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                .mipLevel = 0,
+                .baseArrayLayer = 0,
+                .layerCount = 1,
+            },
+            .dstOffsets = {{0, 0, 0}, {static_cast<int32_t>(extent.width), static_cast<int32_t>(extent.height), 1}},
+        };
+
+        const VkBlitImageInfo2 blit_info{
+            .sType = VK_STRUCTURE_TYPE_BLIT_IMAGE_INFO_2,
+            .srcImage = input.display_buffer.image,
+            .srcImageLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            .dstImage = swapchain_image,
+            .dstImageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            .regionCount = 1,
+            .pRegions = &region,
+            .filter = VK_FILTER_LINEAR,
+        };
+        vkCmdBlitImage2(cmd, &blit_info);
+
+        // --- Swapchain: TRANSFER_DST_OPTIMAL -> COLOR_ATTACHMENT_OPTIMAL for ImGui ---
+        const VkImageMemoryBarrier2 to_attachment{
+            .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+            .srcStageMask = VK_PIPELINE_STAGE_2_BLIT_BIT,
+            .srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT,
+            .dstStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+            .dstAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+            .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
             .newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
             .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
             .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
@@ -71,16 +166,13 @@ namespace qualquer::renderer {
         };
         vkCmdPipelineBarrier2(cmd, &to_attachment_dep);
 
+        // --- ImGui overlay on top of the blitted image (loadOp=LOAD keeps it) ---
         const VkRenderingAttachmentInfo color_attachment{
             .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
             .imageView = input.swapchain.image_views[input.image_index],
             .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-            .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+            .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
             .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-            .clearValue =
-            {
-                .color = {{0.0f, 0.0f, 0.0f, 1.0f}},
-            },
         };
 
         const VkRenderingInfo rendering_info{
@@ -88,7 +180,7 @@ namespace qualquer::renderer {
             .renderArea =
             {
                 .offset = {0, 0},
-                .extent = input.swapchain.extent,
+                .extent = extent,
             },
             .layerCount = 1,
             .colorAttachmentCount = 1,
@@ -99,6 +191,7 @@ namespace qualquer::renderer {
         input.imgui.render(cmd);
         vkCmdEndRendering(cmd);
 
+        // --- Swapchain: COLOR_ATTACHMENT_OPTIMAL -> PRESENT_SRC_KHR ---
         const VkImageMemoryBarrier2 to_present{
             .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
             .srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
