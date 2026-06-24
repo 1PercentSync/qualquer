@@ -109,7 +109,18 @@ namespace qualquer::vulkan {
             .handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT_KHR,
         };
 
-        VK_CHECK(vkGetMemoryWin32HandleKHR(context.device, &handle_info, &win32_handle));
+        // vkGetMemoryWin32HandleKHR is a non-WSI device-level extension function:
+        // the Vulkan loader provides trampolines only for core and WSI functions,
+        // so this one must be loaded via vkGetDeviceProcAddr rather than called
+        // directly (unlike WSI functions such as vkCreateSwapchainKHR).
+        const auto get_handle = reinterpret_cast<PFN_vkGetMemoryWin32HandleKHR>(
+            vkGetDeviceProcAddr(context.device, "vkGetMemoryWin32HandleKHR"));
+        if (get_handle == nullptr) {
+            spdlog::critical("vkGetMemoryWin32HandleKHR not available");
+            std::abort();
+        }
+
+        VK_CHECK(get_handle(context.device, &handle_info, &win32_handle));
 
         spdlog::info("Interop image created ({}x{})", extent.width, extent.height);
     }
@@ -150,7 +161,18 @@ namespace qualquer::vulkan {
             .handleType = VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_OPAQUE_WIN32_BIT_KHR,
         };
 
-        VK_CHECK(vkGetSemaphoreWin32HandleKHR(context.device, &handle_info, &win32_handle));
+        // vkGetSemaphoreWin32HandleKHR is a non-WSI device-level extension
+        // function: the Vulkan loader provides trampolines only for core and WSI
+        // functions, so it must be loaded via vkGetDeviceProcAddr rather than
+        // called directly (same reason as vkGetMemoryWin32HandleKHR above).
+        const auto get_handle = reinterpret_cast<PFN_vkGetSemaphoreWin32HandleKHR>(
+            vkGetDeviceProcAddr(context.device, "vkGetSemaphoreWin32HandleKHR"));
+        if (get_handle == nullptr) {
+            spdlog::critical("vkGetSemaphoreWin32HandleKHR not available");
+            std::abort();
+        }
+
+        VK_CHECK(get_handle(context.device, &handle_info, &win32_handle));
 
         spdlog::info("Interop semaphore created");
     }
