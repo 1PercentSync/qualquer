@@ -99,9 +99,9 @@ namespace qualquer::optix {
         /**
          * @brief CUDA stream for kernel launch and external semaphore signaling.
          *
-         * Explicit (not the default stream) so future overlap of accumulation and
-         * tone-mapping across multiple streams is possible. Null before init and
-         * after destroy.
+         * Explicit, not the default stream: the default stream implicitly
+         * synchronizes with all explicit streams, serializing any concurrent work.
+         * Null before init and after destroy.
          */
         cudaStream_t stream = nullptr;
 

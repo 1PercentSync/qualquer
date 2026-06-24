@@ -69,9 +69,9 @@ namespace qualquer::app {
             }
 
             wait_frame_slot();
-            // CUDA submit before acquire so the CUDA engine starts computing while
-            // the CPU waits on acquire (async submit decides when the engine starts;
-            // order decides whether the acquire wait overlaps CUDA compute).
+            // CUDA submit before acquire so the CUDA starts computing while the CPU
+            // waits on acquire — submission order decides when the engine starts, hence
+            // whether the acquire wait overlaps CUDA compute (async submit alone does not).
             renderer_.submit_cuda(cuda_context_,
                                   swapchain_.extent.width,
                                   swapchain_.extent.height,
@@ -82,7 +82,7 @@ namespace qualquer::app {
             }
             imgui_backend_.begin_frame();
 
-            // DeltaTime is only valid after begin_frame has advanced ImGui's IO.
+            // DeltaTime is only valid after imgui begin_frame has advanced ImGui's IO.
             renderer::DebugUIContext ui_ctx{
                 .delta_time = ImGui::GetIO().DeltaTime,
                 .context = context_,

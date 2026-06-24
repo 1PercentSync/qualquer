@@ -23,12 +23,11 @@ namespace qualquer::renderer {
     class ImGuiBackend;
 
     /**
-     * @brief Inputs handed to Renderer::render_frame each frame.
+     * @brief Per-frame handles passed to Renderer::record_vulkan.
      *
-     * Bundles the per-frame handles the renderer needs to submit CUDA work and
-     * record Vulkan commands. Every member is owned elsewhere (Application or
-     * Context); this struct only borrows references for the duration of one
-     * render_frame call, per the ownership principle (no handle caching by users).
+     * Every member is owned elsewhere (Application or Context); this struct only
+     * borrows references for the duration of one record_vulkan call, per the
+     * ownership principle (no handle caching by users).
      */
     struct RenderInput {
         /** @brief Command buffer to record into (already begun by the caller). */
@@ -55,9 +54,9 @@ namespace qualquer::renderer {
      *
      * Encapsulates what one frame draws — the CUDA write into the display buffer,
      * the Vulkan blit to the swapchain image, and the ImGui overlay — so the
-     * Application only keeps the timing skeleton (begin_frame / submit / present).
-     * Owns no handles it does not create; the frame counter driving temporal
-     * animation is the sole owned state.
+     * Application keeps only the frame-loop timing skeleton. Owns no handles it
+     * does not create; the frame counter driving temporal animation is the sole
+     * owned state.
      */
     class Renderer {
     public:
