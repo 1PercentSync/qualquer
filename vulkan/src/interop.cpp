@@ -22,10 +22,9 @@ namespace qualquer::vulkan {
                             const VkFormat format,
                             const VkExtent2D extent,
                             const VkImageUsageFlags usage) {
-        // Flag the image as exportable so its backing memory can be allocated with
-        // export info and mapped by another API (CUDA). The handleType chosen is the
-        // opaque Win32 NT handle — the same type CUDA's cudaExternalMemoryHandleTypeOpaqueWin32
-        // imports, so the two sides agree on the handle representation.
+        // OPAQUE_WIN32 pairs with CUDA's cudaExternalMemoryHandleTypeOpaqueWin32 so the
+        // exported handle is importable by CUDA. The exportable flag lets the backing
+        // memory be allocated for cross-API sharing.
         VkExternalMemoryImageCreateInfo external_info{
             .sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
             .handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT_KHR,
@@ -51,9 +50,8 @@ namespace qualquer::vulkan {
         VkMemoryRequirements mem_reqs;
         vkGetImageMemoryRequirements(context.device, image, &mem_reqs);
 
-        // Pick a device-local memory type among those the driver reports as
-        // compatible with this image. Device-local gives the fastest blit source;
-        // interop images stay GPU-resident since CUDA writes them via a surface object.
+        // Device-local for the fastest blit; the image stays GPU-resident since CUDA
+        // writes it through a surface object.
         VkPhysicalDeviceMemoryProperties mem_props;
         vkGetPhysicalDeviceMemoryProperties(context.physical_device, &mem_props);
 
@@ -72,11 +70,8 @@ namespace qualquer::vulkan {
             std::abort();
         }
 
-        // Dedicated allocation: one memory object bound exclusively to this image.
-        // External/exportable memory cannot go through VMA's suballocation block
-        // path, so the whole requirement is a single vkAllocateMemory, and the
-        // dedicated-allocate-info tells the driver this allocation is tied to one
-        // resource (required for interop export on most drivers).
+        // Exportable memory bypasses VMA's suballocation; a dedicated allocation ties
+        // this one vkAllocateMemory to the image, which interop export requires.
         VkMemoryDedicatedAllocateInfo dedicated{
             .sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO,
             .image = image,
@@ -99,10 +94,9 @@ namespace qualquer::vulkan {
         VK_CHECK(vkAllocateMemory(context.device, &alloc_info, nullptr, &memory));
         VK_CHECK(vkBindImageMemory(context.device, image, memory, 0));
 
-        // Export the NT handle. VkExportMemoryWin32HandleInfoKHR (security attrs /
-        // access mask) is intentionally omitted: same-process CUDA import needs no
-        // custom authorization, and the driver's default descriptor is accessible
-        // within the process.
+        // VkExportMemoryWin32HandleInfoKHR (security attrs / access mask) is omitted:
+        // same-process CUDA import needs no custom authorization — the driver's default
+        // descriptor is accessible within the process.
         const VkMemoryGetWin32HandleInfoKHR handle_info{
             .sType = VK_STRUCTURE_TYPE_MEMORY_GET_WIN32_HANDLE_INFO_KHR,
             .memory = memory,
@@ -125,9 +119,8 @@ namespace qualquer::vulkan {
         spdlog::info("Interop image created ({}x{})", extent.width, extent.height);
     }
 
-    // The NT handle holds a reference to the backing memory, so it must be closed
-    // before the memory is freed, or the driver keeps the storage alive (leak).
-    // The image is destroyed before its memory is freed (creation order reversed).
+    // Close the handle first: it holds a reference to the memory, so freeing memory
+    // before closing leaks it. Image before memory (creation order reversed).
     void InteropImage::destroy(const Context &context) const {
         CloseHandle(win32_handle);
         vkDestroyImage(context.device, image, nullptr);
@@ -135,10 +128,8 @@ namespace qualquer::vulkan {
     }
 
     void InteropSemaphore::init(const Context &context) {
-        // Flag the semaphore as exportable so CUDA can import the handle and
-        // signal it from its side, coordinating display-buffer ownership with
-        // the Vulkan wait in the frame loop. The OPAQUE_WIN32 handle type pairs
-        // with CUDA's cudaExternalSemaphoreHandleTypeOpaqueWin32.
+        // OPAQUE_WIN32 pairs with CUDA's cudaExternalSemaphoreHandleTypeOpaqueWin32 so
+        // the exported handle is importable by CUDA (signal side of the cross-API sync).
         VkExportSemaphoreCreateInfo export_info{
             .sType = VK_STRUCTURE_TYPE_EXPORT_SEMAPHORE_CREATE_INFO,
             .handleTypes = VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_OPAQUE_WIN32_BIT_KHR,
@@ -151,20 +142,17 @@ namespace qualquer::vulkan {
 
         VK_CHECK(vkCreateSemaphore(context.device, &semaphore_info, nullptr, &semaphore));
 
-        // Export the NT handle. VkExportSemaphoreWin32HandleInfoKHR (security attrs /
-        // access mask) is intentionally omitted: same-process CUDA import needs no
-        // custom authorization, and the driver's default descriptor is accessible
-        // within the process.
+        // VkExportSemaphoreWin32HandleInfoKHR (security attrs / access mask) is omitted:
+        // same-process CUDA import needs no custom authorization — the driver's default
+        // descriptor is accessible within the process.
         const VkSemaphoreGetWin32HandleInfoKHR handle_info{
             .sType = VK_STRUCTURE_TYPE_SEMAPHORE_GET_WIN32_HANDLE_INFO_KHR,
             .semaphore = semaphore,
             .handleType = VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_OPAQUE_WIN32_BIT_KHR,
         };
 
-        // vkGetSemaphoreWin32HandleKHR is a non-WSI device-level extension
-        // function: the Vulkan loader provides trampolines only for core and WSI
-        // functions, so it must be loaded via vkGetDeviceProcAddr rather than
-        // called directly (same reason as vkGetMemoryWin32HandleKHR above).
+        // Loaded via vkGetDeviceProcAddr, same reason as vkGetMemoryWin32HandleKHR
+        // above (non-WSI device-level extension function, no loader trampoline).
         const auto get_handle = reinterpret_cast<PFN_vkGetSemaphoreWin32HandleKHR>(
             vkGetDeviceProcAddr(context.device, "vkGetSemaphoreWin32HandleKHR"));
         if (get_handle == nullptr) {

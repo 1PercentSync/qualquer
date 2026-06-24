@@ -13,10 +13,8 @@ namespace qualquer::vulkan {
     /**
      * @brief Vulkan image backed by exportable device memory, for CUDA interop.
      *
-     * Creates an image flagged for external memory, binds dedicated device memory
-     * allocated with export info, and exports a Win32 NT handle that CUDA maps via
-     * cudaImportExternalMemory. The CUDA side then writes pixels into the shared
-     * image (e.g. through a cudaSurfaceObject_t).
+     * CUDA imports the exported NT handle via cudaImportExternalMemory and writes
+     * the shared image (e.g. through a cudaSurfaceObject_t).
      *
      * Per the project ownership principle, this class owns the VkImage,
      * VkDeviceMemory, and the exported NT handle; it holds no handle owned by
@@ -65,9 +63,8 @@ namespace qualquer::vulkan {
     /**
      * @brief Vulkan semaphore with an exported Win32 handle, for CUDA interop.
      *
-     * Creates a semaphore flagged for external handle export and exports a Win32 NT
-     * handle that CUDA imports via cudaImportExternalSemaphore. Coordinates access to
-     * the shared interop image across the two APIs (CUDA signal -> Vulkan wait).
+     * CUDA imports the handle and signals it; Vulkan waits on it, coordinating
+     * access to the shared interop image (CUDA signal -> Vulkan wait).
      *
      * Per the project ownership principle, this class owns the VkSemaphore and the
      * exported NT handle; it holds no handle owned by Context.

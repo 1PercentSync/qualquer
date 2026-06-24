@@ -89,19 +89,15 @@ namespace qualquer::app {
         /**
          * @brief Display buffer: CUDA-written image blitted to the swapchain image.
          *
-         * Owned here and recreated together with the swapchain because its extent
-         * tracks the swapchain extent. Step 13 wires its NT handle into CUDA import;
-         * Step 14 uses it as the vkCmdBlitImage source.
+         * Recreated with the swapchain since its extent tracks the swapchain extent.
          */
         vulkan::InteropImage display_buffer_;
 
         /**
          * @brief Per-frame external semaphores for CUDA signal -> Vulkan wait.
          *
-         * One per frame-in-flight, independent of resolution, so they are created
-         * once in init and never recreated on swapchain resize. Step 13 imports
-         * each handle into CUDA; Step 14 waits on the current frame's semaphore in
-         * the Vulkan submit.
+         * One per frame-in-flight. Resolution-independent, so created once and not
+         * recreated on swapchain resize.
          */
         std::array<vulkan::InteropSemaphore, vulkan::kMaxFramesInFlight> interop_semaphores_{};
 
