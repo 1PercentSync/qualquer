@@ -123,9 +123,10 @@ MUSTREAD:4
 
 ## Step 13：CUDA 导入 + 测试 Kernel
 
+- [ ] 创建 `optix/include/qualquer/optix/cuda_check.h`（可复用 CUDA_CHECK 宏）
 - [ ] CudaContext 添加 external memory 导入（HANDLE → cudaExternalMemory → cudaMipmappedArray → cudaArray → cudaSurfaceObject）
 - [ ] CudaContext 添加 external semaphore 导入（HANDLE → cudaExternalSemaphore）
-- [ ] 创建 `optix/src/test_kernel.cu`（UV 渐变 + 帧号驱动动画，surf2Dwrite 写入 R8G8B8A8）
+- [ ] renderer 层启用 CUDA，创建 `renderer/src/test_kernel.cu`（UV 渐变 + 帧号驱动动画，surf2Dwrite 写入 R8G8B8A8）
 - [ ] Application 初始化中从 Vulkan InteropImage/InteropSemaphore 取 HANDLE → 传给 CudaContext 导入
 - [ ] 请求用户在 CLion 中编译验证
 

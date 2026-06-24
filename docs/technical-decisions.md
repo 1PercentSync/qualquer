@@ -106,6 +106,16 @@ CUDA 侧通过 `cudaExternalMemoryGetMappedMipmappedArray` → `cudaArray_t` →
 - Per-frame 分开避免 2 frames in flight 下 binary semaphore 连续 signal
 - Timeline 的灵活性用不上
 
+### 测试 Kernel 归属
+
+**决策**：测试 kernel 归 renderer 层，不归 optix 层。
+
+测试 kernel 是“画什么”（渲染内容），renderer 层职责。optix 层是 OptiX/CUDA 封装层，只提供纯能力（如导入后的 surface object 句柄），不含渲染逻辑（遵循 `docs/architecture.md` 的层次约束）。renderer 拿 optix 提供的句柄 + 自己持有的帧号计数器去 launch kernel。
+
+**理由**：
+- optix 层不包含渲染逻辑是硬约束（编译期单向依赖的语义边界）
+- 帧号计数器是渲染状态（时间累积/噪声变化用途），天然归 renderer 层，与 Himalaya `Renderer::frame_counter_` 一致
+
 ### CUDA 每帧工作
 
 **参数传输**：`cudaMemcpyAsync`

@@ -76,10 +76,12 @@ MUSTREAD:8
 - UUID 类型：跨层用裸 `std::array<uint8_t,16>`（不用 `cudaUUID_t`，使 vulkan 层比对 UUID 时不依赖 CUDA 头；不在任一层定义别名，各层直接用裸类型）
 - 设备扩展：`VK_KHR_external_memory_win32`、`VK_KHR_external_semaphore_win32`
 - 显示 buffer：`R8G8B8A8_UNORM`、OPTIMAL tiling、手动 `vkAllocateMemory`（不走 VMA）
-- CUDA 侧通过 `cudaSurfaceObject_t` 写入显示 buffer
-- 同步：per-frame binary external semaphore × 2，CUDA signal → Vulkan wait
+- CUDA 侧通过 `cudaSurfaceObject_t` 写入显示 buffer（路径：`cudaImportExternalMemory` → `cudaExternalMemoryGetMappedMipmappedArray`（single-mip，numLevels=1）→ `cudaGetMipmappedArrayLevel` 取 level 0 `cudaArray_t` → `cudaCreateSurfaceObject`；dedicated allocation 需设 `cudaExternalMemoryDedicated` 标志）
+- 同步：per-frame binary external semaphore × 2，CUDA signal → Vulkan wait（路径：`cudaImportExternalSemaphore`，OPAQUE_WIN32 binary 语义）
 - Blit：`vkCmdBlitImage`（显示 buffer → swapchain image，线性→sRGB 自动编码）
 - 测试 kernel：UV 渐变 + 帧号驱动动画
+- 测试 kernel 归 renderer 层（渲染内容属 renderer，optix 层只提供封装能力）；帧号计数器由 renderer 层持有（与 Himalaya `Renderer::frame_counter_` 一致）
+- `CUDA_CHECK` 宏定义于 `optix/include/qualquer/optix/cuda_check.h`，optix/renderer 层复用
 
 ### CUDA 设备打分
 
