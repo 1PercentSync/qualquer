@@ -4,13 +4,32 @@
  */
 
 #include <cstdint>
+#include <cstdio>
+#include <cstdlib>
 
 #include <cuda_runtime.h>
 
-#include <qualquer/optix/cuda_check.h>
-
 namespace qualquer::renderer {
     namespace {
+        // Checks the last CUDA error and aborts on failure with diagnostic output.
+        // Inlined here rather than sharing optix::cuda_check because that header pulls
+        // in spdlog/fmt, whose UTF-8 requirements complicate nvcc compilation. The
+        // output format matches CUDA_CHECK so failures read identically either side;
+        // stderr is unbuffered so the line is guaranteed to print before abort.
+#define CUDA_CHECK_KERNEL(x)                                                              \
+            do {                                                                          \
+                cudaError_t cuda_check_result_ = (x);                                     \
+                if (cuda_check_result_ != cudaSuccess) {                                  \
+                    std::fprintf(stderr,                                                 \
+                                 "CUDA_CHECK failed: {} returned {} at {}:{}\n",         \
+                                 #x,                                                      \
+                                 cudaGetErrorString(cuda_check_result_),                  \
+                                 __FILE__,                                                \
+                                 __LINE__);                                               \
+                    std::abort();                                                         \
+                }                                                                         \
+            } while (0)
+
         // Animated UV gradient: color channels driven by normalized pixel position
         // and a frame counter, producing a moving pattern that verifies the CUDA
         // write path and per-frame animation end-to-end.
@@ -57,6 +76,6 @@ namespace qualquer::renderer {
 
         test_kernel<<<grid, block>>>(surface, width, height, frame);
 
-        CUDA_CHECK(cudaGetLastError());
+        CUDA_CHECK_KERNEL(cudaGetLastError());
     }
 } // namespace qualquer::renderer
