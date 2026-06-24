@@ -11,13 +11,13 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 1 — Vulkan 基础设施 + ImGui + 调试面板
-- **进度**：Step 13 完成（CUDA 侧 display buffer + semaphore 导入、测试 kernel、Application 接线全部就位，编译验证通过）
+- **进度**：Step 14 进行中（显式 CUDA stream 就位，待 launch_test_kernel 接入 stream）
 
 ### 下一个任务
 
-Step 14 第 1 项：帧循环中集成 CUDA test kernel launch + cudaSignalExternalSemaphoresAsync
+Step 14 第 2 项：`launch_test_kernel` 添加 stream 参数，kernel `<<<…,stream>>>`
 
-> Step 13 完成。CUDA 侧导入链（display buffer → surface、semaphore → cudaExternalSemaphore）和测试 kernel 就位，Application 完成接线。接下来进入 Step 14，把 CUDA kernel launch + semaphore signal 接入帧循环，并在 Vulkan 侧加 blit 与 external semaphore wait，实现渐变色呈现。详见 `tasks/phase1.md`。
+> Step 14 第 1 项完成。`optix::Context` 持有显式 cudaStream_t。接下来给 test kernel 的 launch 路径接入 stream。详见 `tasks/phase1.md`。
 
 ---
 

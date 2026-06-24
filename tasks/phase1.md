@@ -132,7 +132,7 @@ MUSTREAD:4
 
 ## Step 14：帧循环集成（CUDA blit）
 
-- [ ] `optix::Context` 添加显式 `cudaStream_t stream`（init 创建 / destroy 销毁）
+- [x] `optix::Context` 添加显式 `cudaStream_t stream`（init 创建 / destroy 销毁）
 - [ ] `launch_test_kernel` 添加 stream 参数，kernel `<<<…,stream>>>`
 - [ ] 创建 `renderer::Renderer` 类（持 frame_counter_ + imgui_ 非拥有指针，init/destroy，render_frame 入口 + 内部 submit_cuda/record_vulkan 拆分）
 - [ ] Renderer 接管 Vulkan 命令录制（从 Application 移入，保持原逻辑，imgui 经指针）
