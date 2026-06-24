@@ -11,13 +11,13 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 1 — Vulkan 基础设施 + ImGui + 调试面板
-- **进度**：Step 14 进行中（显式 CUDA stream 就位，待 launch_test_kernel 接入 stream）
+- **进度**：Step 14 进行中（显式 stream + launch 接入完成，待创建 renderer::Renderer 类）
 
 ### 下一个任务
 
-Step 14 第 2 项：`launch_test_kernel` 添加 stream 参数，kernel `<<<…,stream>>>`
+Step 14 第 3 项：创建 `renderer::Renderer` 类（持 frame_counter_ + imgui_ 非拥有指针，init/destroy，render_frame 入口 + 内部 submit_cuda/record_vulkan 拆分）
 
-> Step 14 第 1 项完成。`optix::Context` 持有显式 cudaStream_t。接下来给 test kernel 的 launch 路径接入 stream。详见 `tasks/phase1.md`。
+> Step 14 第 2 项完成。launch_test_kernel 已接入显式 stream。接下来创建 renderer::Renderer 类，作为 Step 14 剩余工作的载体。详见 `tasks/phase1.md`。
 
 ---
 
