@@ -4,33 +4,16 @@
  */
 
 #include <qualquer/optix/context.h>
+#include <qualquer/optix/cuda_check.h>
 
 #include <algorithm>
 #include <array>
+#include <cstring>
 #include <cuda_runtime.h>
 #include <spdlog/spdlog.h>
 
 namespace qualquer::optix {
     namespace {
-        /**
-         * @brief Checks a cudaError_t and aborts on failure with diagnostic output.
-         *
-         * CUDA runtime errors during device selection are unrecoverable
-         * configuration failures; mirroring VK_CHECK's fail-fast policy.
-         */
-#define CUDA_CHECK(x)                                                             \
-            do {                                                                  \
-                cudaError_t cuda_check_result_ = (x);                             \
-                if (cuda_check_result_ != cudaSuccess) {                          \
-                    spdlog::critical("CUDA_CHECK failed: {} returned {} at {}:{}", \
-                                     #x,                                          \
-                                     cudaGetErrorString(cuda_check_result_),      \
-                                     __FILE__,                                    \
-                                     __LINE__);                                   \
-                    std::abort();                                                 \
-                }                                                                 \
-            } while (0)
-
         /**
          * @brief Queries an integer device attribute via the runtime attribute API.
          *
