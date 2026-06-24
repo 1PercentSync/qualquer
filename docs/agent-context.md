@@ -11,13 +11,13 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 1 — Vulkan 基础设施 + ImGui + 调试面板
-- **进度**：Step 13 进行中（external memory 导入完成，待 external semaphore 导入）
+- **进度**：Step 13 进行中（external memory/semaphore 导入完成，待 renderer 层测试 kernel）
 
 ### 下一个任务
 
-Step 13 第 3 项：CudaContext 添加 external semaphore 导入（HANDLE → cudaExternalSemaphore）
+Step 13 第 4 项：renderer 层启用 CUDA，创建 `renderer/src/test_kernel.cu`（UV 渐变 + 帧号驱动动画，surf2Dwrite 写入 R8G8B8A8）
 
-> Step 13 第 2 项完成。display buffer 的 external memory 导入链（import → mipmapped array → level-0 cudaArray → surface object）就位，renderer 层 kernel 通过 display_surface 写入。接下来导入 2 个 per-frame external semaphore。详见 `tasks/phase1.md`。
+> Step 13 第 3 项完成。CUDA 侧 display buffer 和 per-frame semaphore 导入链就位。接下来在 renderer 层启用 CUDA 并编写测试 kernel（测试图案属渲染内容，归 renderer 层）。详见 `tasks/phase1.md`。
 
 ---
 
