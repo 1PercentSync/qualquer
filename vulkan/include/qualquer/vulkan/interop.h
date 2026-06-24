@@ -38,10 +38,12 @@ namespace qualquer::vulkan {
          *
          * The NT handle holds a reference to the underlying memory, so it must be
          * closed before the memory can be freed; the image is destroyed before the
-         * memory is freed (creation order reversed).
+         * memory is freed (creation order reversed). Idempotent: members reset so a
+         * repeat call is a no-op (vkDestroy* and vkFreeMemory accept VK_NULL_HANDLE,
+         * CloseHandle(nullptr) is a no-op).
          * @param context Vulkan context providing the owning device.
          */
-        void destroy(const Context &context) const;
+        void destroy(const Context &context);
 
         /** @brief The image handle. */
         VkImage image = VK_NULL_HANDLE;
@@ -87,9 +89,11 @@ namespace qualquer::vulkan {
 
         /**
          * @brief Closes the NT handle, then destroys the semaphore.
+         *
+         * Idempotent: members reset so a repeat call is a no-op.
          * @param context Vulkan context providing the owning device.
          */
-        void destroy(const Context &context) const;
+        void destroy(const Context &context);
 
         /** @brief The semaphore handle. */
         VkSemaphore semaphore = VK_NULL_HANDLE;

@@ -60,9 +60,11 @@ namespace qualquer::vulkan {
 
         /**
          * @brief Destroys image views and the swapchain in reverse creation order.
+         *
+         * Idempotent: members reset to null/empty, so a repeat call is a no-op.
          * @param context Vulkan context providing the owning device.
          */
-        void destroy(const Context &context) const;
+        void destroy(const Context &context);
 
         /** @brief Current present mode. Reflected back to the effective value after fallback. */
         VkPresentModeKHR present_mode = VK_PRESENT_MODE_MAILBOX_KHR;

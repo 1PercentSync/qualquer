@@ -60,7 +60,7 @@ namespace qualquer::vulkan {
 
     // Reverse creation order: image views first, then the swapchain (which also
     // releases the swapchain images, so those handles are never destroyed manually).
-    void Swapchain::destroy(const Context &context) const {
+    void Swapchain::destroy(const Context &context) {
         for (const auto semaphore : render_finished_semaphores) {
             vkDestroySemaphore(context.device, semaphore, nullptr);
         }
@@ -68,6 +68,11 @@ namespace qualquer::vulkan {
             vkDestroyImageView(context.device, view, nullptr);
         }
         vkDestroySwapchainKHR(context.device, swapchain, nullptr);
+
+        render_finished_semaphores.clear();
+        image_views.clear();
+        images.clear();
+        swapchain = VK_NULL_HANDLE;
 
         spdlog::info("Swapchain destroyed");
     }

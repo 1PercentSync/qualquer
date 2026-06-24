@@ -164,24 +164,32 @@ namespace qualquer::vulkan {
         create_frame_data();
     }
 
-    void Context::destroy() const {
-        for (const auto &frame: frames) {
+    void Context::destroy() {
+        for (auto &frame: frames) {
             vkDestroyCommandPool(device, frame.command_pool, nullptr);
             vkDestroyFence(device, frame.render_fence, nullptr);
             vkDestroySemaphore(device, frame.image_available_semaphore, nullptr);
+            frame.command_pool = VK_NULL_HANDLE;
+            frame.render_fence = VK_NULL_HANDLE;
+            frame.image_available_semaphore = VK_NULL_HANDLE;
         }
 
         vmaDestroyAllocator(allocator);
+        allocator = VK_NULL_HANDLE;
         vkDestroyDevice(device, nullptr);
+        device = VK_NULL_HANDLE;
         vkDestroySurfaceKHR(instance, surface, nullptr);
+        surface = VK_NULL_HANDLE;
 
         if constexpr (kEnableValidationLayers) {
             const auto func = reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(
                 vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT"));
             func(instance, debug_messenger, nullptr);
+            debug_messenger = VK_NULL_HANDLE;
         }
 
         vkDestroyInstance(instance, nullptr);
+        instance = VK_NULL_HANDLE;
 
         spdlog::info("Vulkan context destroyed");
     }

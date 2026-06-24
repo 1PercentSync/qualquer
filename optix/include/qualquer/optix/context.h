@@ -66,12 +66,17 @@ namespace qualquer::optix {
          * @brief Releases only the display-buffer import, keeping the semaphores.
          *
          * For swapchain resize: the display buffer is resolution-dependent and rebuilt,
-         * while the semaphores are resolution-independent and persist.
+         * while the semaphores are resolution-independent and persist. Idempotent:
+         * the display-buffer handles are reset, so a repeat call is a no-op.
          */
-        void release_display_buffer() const;
+        void release_display_buffer();
 
-        /** @brief Releases CUDA resources associated with the selected device. */
-        void destroy() const;
+        /**
+         * @brief Releases CUDA resources associated with the selected device.
+         *
+         * Idempotent: members reset so a repeat call is a no-op.
+         */
+        void destroy();
 
         /**
          * @brief Selected device UUID, for Vulkan physical-device matching.

@@ -106,8 +106,11 @@ namespace qualquer::vulkan {
 
         /**
          * @brief Destroys all Vulkan objects in reverse creation order.
+         *
+         * Idempotent: members are reset to null handles, so a repeat call is a no-op
+         * (vkDestroy* accept VK_NULL_HANDLE).
          */
-        void destroy() const;
+        void destroy();
 
         /** @brief Vulkan instance. */
         VkInstance instance = VK_NULL_HANDLE;

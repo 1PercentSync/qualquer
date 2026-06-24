@@ -193,7 +193,7 @@ namespace qualquer::optix {
         spdlog::info("Imported {} external semaphores", kMaxFramesInFlight);
     }
 
-    void Context::release_display_buffer() const {
+    void Context::release_display_buffer() {
         // Reverse creation order: the surface wraps array_, so it must go before
         // array_; array_ is a level of mipmap_array_, which is mapped onto
         // external_memory_, so each is freed before its backing object.
@@ -209,22 +209,28 @@ namespace qualquer::optix {
         if (external_memory_ != nullptr) {
             CUDA_CHECK(cudaDestroyExternalMemory(external_memory_));
         }
+        display_surface = 0;
+        array_ = nullptr;
+        mipmap_array_ = nullptr;
+        external_memory_ = nullptr;
     }
 
-    void Context::destroy() const {
+    void Context::destroy() {
         // Display-buffer import first (surface wraps the imported image memory), then
         // the independent semaphores, then the stream last — cudaStreamDestroy waits
         // for pending work on it, so destroying it last also drains any in-flight
         // kernel/signal submitted earlier in teardown. device_id_ needs no cleanup —
         // the runtime-managed primary context is left intact for other holders.
         release_display_buffer();
-        for (const auto sem : external_semaphores) {
+        for (auto & sem : external_semaphores) {
             if (sem != nullptr) {
                 CUDA_CHECK(cudaDestroyExternalSemaphore(sem));
+                sem = nullptr;
             }
         }
         if (stream != nullptr) {
             CUDA_CHECK(cudaStreamDestroy(stream));
+            stream = nullptr;
         }
     }
 } // namespace qualquer::optix

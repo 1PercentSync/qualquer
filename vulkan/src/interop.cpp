@@ -122,10 +122,16 @@ namespace qualquer::vulkan {
 
     // Close the handle first: it holds a reference to the memory, so freeing memory
     // before closing leaks it. Image before memory (creation order reversed).
-    void InteropImage::destroy(const Context &context) const {
-        CloseHandle(win32_handle);
+    void InteropImage::destroy(const Context &context) {
+        if (win32_handle != nullptr) {
+            CloseHandle(win32_handle);
+            win32_handle = nullptr;
+        }
         vkDestroyImage(context.device, image, nullptr);
         vkFreeMemory(context.device, memory, nullptr);
+        image = VK_NULL_HANDLE;
+        memory = VK_NULL_HANDLE;
+        size = 0;
     }
 
     void InteropSemaphore::init(const Context &context) {
@@ -168,8 +174,12 @@ namespace qualquer::vulkan {
 
     // Same close-before-destroy ordering as InteropImage: the NT handle holds a
     // reference to the semaphore and must be released first.
-    void InteropSemaphore::destroy(const Context &context) const {
-        CloseHandle(win32_handle);
+    void InteropSemaphore::destroy(const Context &context) {
+        if (win32_handle != nullptr) {
+            CloseHandle(win32_handle);
+            win32_handle = nullptr;
+        }
         vkDestroySemaphore(context.device, semaphore, nullptr);
+        semaphore = VK_NULL_HANDLE;
     }
 } // namespace qualquer::vulkan
