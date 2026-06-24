@@ -37,18 +37,24 @@ namespace qualquer::app {
 
     private:
         /**
-         * @brief Waits for the current frame slot's fence and acquires a swapchain image.
+         * @brief Waits for the current frame slot's fence and resets it.
          *
-         * Handles the frame-loop head: vkWaitForFences, vkAcquireNextImageKHR, and
-         * vkResetFences once acquisition succeeds.
+         * Must be the first frame-loop step: ensures the slot's prior submit (and
+         * its external-semaphore wait) completed before this frame reuses the slot's
+         * binary semaphore.
+         */
+        void wait_frame_slot();
+
+        /**
+         * @brief Acquires the next swapchain image.
          * @return true if acquisition succeeded and the frame should proceed;
          *         false if the swapchain was out of date and has been recreated
          *         (the caller skips the rest of this frame and retries next iteration).
          */
-        bool begin_frame();
+        bool acquire_image();
 
-        /** @brief Records this frame's commands into the current frame's command buffer. */
-        void render_frame();
+        /** @brief Records this frame's Vulkan commands into the current command buffer. */
+        void record();
 
         /**
          * @brief Submits the recorded commands and presents the swapchain image.
@@ -122,7 +128,7 @@ namespace qualquer::app {
         /**
          * @brief Index of the swapchain image acquired for the current frame.
          *
-         * Produced by begin_frame (acquire) and consumed by render_frame/end_frame.
+         * Produced by acquire_image and consumed by record/end_frame.
          * It is a per-frame transient of the begin→end frame flow, not an input set
          * by a caller, so it lives as a member rather than being threaded as a param.
          */

@@ -18,25 +18,21 @@
 #include <qualquer/vulkan/swapchain.h>
 
 namespace qualquer::renderer {
-    void Renderer::render_frame(const RenderInput &input) {
-        submit_cuda(input);
-        record_vulkan(input);
-        ++frame_counter_;
-    }
-
-    void Renderer::submit_cuda(const RenderInput &input) {
-        launch_test_kernel(input.cuda_context.display_surface,
-                           input.swapchain.extent.width,
-                           input.swapchain.extent.height,
+    void Renderer::submit_cuda(optix::Context &cuda_context, const uint32_t width, const uint32_t height, const uint32_t frame_index) {
+        launch_test_kernel(cuda_context.display_surface,
+                           width,
+                           height,
                            frame_counter_,
-                           input.cuda_context.stream);
+                           cuda_context.stream);
 
         // Signal the frame's external semaphore on the same stream as the kernel, so
         // the signal is posted after the kernel completes (stream submission order).
         // Binary OPAQUE_WIN32 needs no fence value — params stays zeroed.
-        cudaExternalSemaphore_t sem = input.cuda_context.external_semaphores[input.frame_index];
+        cudaExternalSemaphore_t sem = cuda_context.external_semaphores[frame_index];
         cudaExternalSemaphoreSignalParams params{};
-        CUDA_CHECK(cudaSignalExternalSemaphoresAsync(&sem, &params, 1, input.cuda_context.stream));
+        CUDA_CHECK(cudaSignalExternalSemaphoresAsync(&sem, &params, 1, cuda_context.stream));
+
+        ++frame_counter_;
     }
 
     void Renderer::record_vulkan(const RenderInput &input) {

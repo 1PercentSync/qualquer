@@ -68,7 +68,16 @@ namespace qualquer::app {
                 glfwGetFramebufferSize(window_, &fb_width, &fb_height);
             }
 
-            if (!begin_frame()) {
+            wait_frame_slot();
+            // CUDA submit before acquire so the CUDA engine starts computing while
+            // the CPU waits on acquire (async submit decides when the engine starts;
+            // order decides whether the acquire wait overlaps CUDA compute).
+            renderer_.submit_cuda(cuda_context_,
+                                  swapchain_.extent.width,
+                                  swapchain_.extent.height,
+                                  context_.frame_index);
+
+            if (!acquire_image()) {
                 continue;
             }
             imgui_backend_.begin_frame();
@@ -86,10 +95,10 @@ namespace qualquer::app {
                 error_message_.clear();
             }
             // present_mode_changed is acted on after end_frame (see below): recreating
-            // mid-frame would invalidate the image acquired in begin_frame before it is
+            // mid-frame would invalidate the image acquired in acquire_image before it is
             // presented, so the frame runs to completion on the old swapchain first.
 
-            render_frame();
+            record();
             end_frame();
 
             if (actions.present_mode_changed) {
@@ -101,11 +110,15 @@ namespace qualquer::app {
         }
     }
 
-    bool Application::begin_frame() {
+    void Application::wait_frame_slot() {
         // Fences start signaled (Context::create_frame_data), so the first frame's
         // wait returns immediately.
         const auto &frame = context_.current_frame();
         VK_CHECK(vkWaitForFences(context_.device, 1, &frame.render_fence, VK_TRUE, UINT64_MAX));
+    }
+
+    bool Application::acquire_image() {
+        const auto &frame = context_.current_frame();
 
         const VkResult acquire_result = vkAcquireNextImageKHR(
             context_.device, swapchain_.swapchain,
@@ -118,6 +131,23 @@ namespace qualquer::app {
         // The fence has not been reset, so the next iteration's wait still guards the
         // last submit on this slot; recreate itself waits the queue idle first.
         if (acquire_result == VK_ERROR_OUT_OF_DATE_KHR) {
+            // This frame's submit_cuda already signaled the slot's external semaphore.
+            // Skipping submit2 would leave that signal unconsumed, so the next frame's
+            // signal on the same binary semaphore would violate the signal/wait pairing.
+            // Drain it with an empty submit that only waits the semaphore.
+            const VkSemaphore ext_sem = interop_semaphores_[context_.frame_index].semaphore;
+            const VkSemaphoreSubmitInfo drain_wait{
+                .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+                .semaphore = ext_sem,
+                .stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+            };
+            const VkSubmitInfo2 drain_submit{
+                .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
+                .waitSemaphoreInfoCount = 1,
+                .pWaitSemaphoreInfos = &drain_wait,
+            };
+            VK_CHECK(vkQueueSubmit2(context_.graphics_queue, 1, &drain_submit, VK_NULL_HANDLE));
+
             recreate_swapchain();
             return false;
         }
@@ -133,7 +163,7 @@ namespace qualquer::app {
         return true;
     }
 
-    void Application::render_frame() {
+    void Application::record() {
         const auto &frame = context_.current_frame();
         // ReSharper disable once CppLocalVariableMayBeConst
         VkCommandBuffer cmd = frame.command_buffer;
@@ -152,10 +182,9 @@ namespace qualquer::app {
             .display_buffer = display_buffer_,
             .swapchain = swapchain_,
             .image_index = image_index_,
-            .frame_index = context_.frame_index,
             .imgui = imgui_backend_,
         };
-        renderer_.render_frame(input);
+        renderer_.record_vulkan(input);
 
         VK_CHECK(vkEndCommandBuffer(cmd));
     }

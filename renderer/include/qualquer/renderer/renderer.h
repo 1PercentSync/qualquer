@@ -46,9 +46,6 @@ namespace qualquer::renderer {
         /** @brief Index of the acquired swapchain image for this frame. */
         uint32_t image_index;
 
-        /** @brief Current frame-in-flight slot, indexing the external semaphore array. */
-        uint32_t frame_index;
-
         /** @brief ImGui backend for overlay recording. */
         ImGuiBackend &imgui;
     };
@@ -65,29 +62,26 @@ namespace qualquer::renderer {
     class Renderer {
     public:
         /**
-         * @brief Submits CUDA work and records Vulkan commands for one frame.
-         *
-         * CUDA submit (kernel launch + external semaphore signal) happens first so the
-         * display buffer is written before the Vulkan blit reads it; Vulkan recording
-         * follows. The caller is responsible for begin/end command buffer and submit.
-         * @param input Per-frame handles (see RenderInput).
-         */
-        void render_frame(const RenderInput &input);
-
-    private:
-        /**
          * @brief Launches the test kernel and signals the frame's external semaphore.
          *
          * Both run on the CUDA context's explicit stream, in submission order, so the
-         * signal is posted after the kernel completes.
+         * signal is posted after the kernel completes. Intended to be called before
+         * acquiring the swapchain image so the CUDA engine starts computing while
+         * the CPU waits on acquire.
+         * @param cuda_context CUDA context (surface, stream, external semaphores).
+         * @param width        Display buffer width in pixels.
+         * @param height       Display buffer height in pixels.
+         * @param frame_index  Current frame-in-flight slot, indexing external_semaphores.
          */
-        void submit_cuda(const RenderInput &input);
+        void submit_cuda(optix::Context &cuda_context, uint32_t width, uint32_t height, uint32_t frame_index);
 
         /**
          * @brief Records the Vulkan command sequence (blit, ImGui, layout transitions).
+         * @param input Per-frame handles (see RenderInput). cmd must be begun by caller.
          */
         void record_vulkan(const RenderInput &input);
 
+    private:
         /** @brief Monotonic frame counter driving temporal animation. */
         uint32_t frame_counter_ = 0;
     };
