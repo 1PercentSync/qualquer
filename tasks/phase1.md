@@ -136,7 +136,7 @@ MUSTREAD:4
 - [x] `launch_test_kernel` 添加 stream 参数，kernel `<<<…,stream>>>`
 - [ ] 创建 `renderer::Renderer` 类（持 frame_counter_ + imgui_ 非拥有指针，init/destroy，render_frame 入口 + 内部 submit_cuda/record_vulkan 拆分）
 - [x] Renderer 接管 Vulkan 命令录制（从 Application 移入，保持原逻辑，imgui 经 RenderInput）
-- [ ] CUDA launch + cudaSignalExternalSemaphoresAsync 接入（render_frame.submit_cuda，stream）
+- [x] CUDA launch + cudaSignalExternalSemaphoresAsync 接入（render_frame.submit_cuda，stream）
 - [ ] Vulkan submit 添加 external semaphore wait（end_frame 的 submit_info）
 - [ ] blit 录制 + layout 流转重构（display buffer barrier + swapchain UNDEFINED→TRANSFER_DST→blit→COLOR_ATTACHMENT + ImGui loadOp=LOAD + PRESENT）
 - [ ] 请求用户在 CLion 中编译验证（窗口显示渐变色 + ImGui 面板，resize 不崩溃）

@@ -11,13 +11,13 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 1 — Vulkan 基础设施 + ImGui + 调试面板
-- **进度**：Step 14 进行中（Renderer 接管 Vulkan 录制，待 CUDA launch + signal 接入）
+- **进度**：Step 14 进行中（CUDA launch + signal 接入，待 Vulkan submit 加 external wait）
 
 ### 下一个任务
 
-Step 14 第 5 项：CUDA launch + cudaSignalExternalSemaphoresAsync 接入（render_frame.submit_cuda，stream）
+Step 14 第 6 项：Vulkan submit 添加 external semaphore wait（end_frame 的 submit_info）
 
-> Step 14 第 4 项完成。Vulkan 命令录制已从 Application 移入 Renderer::record_vulkan。接下来实现 submit_cuda：launch test kernel + signal external semaphore（显式 stream）。此项后 clang-tidy 的“submit_cuda 可 static”告警会自然消除。详见 `tasks/phase1.md`。
+> Step 14 第 5 项完成。submit_cuda 就位（kernel launch + signal external semaphore，同 stream 顺序提交）。但 Vulkan 侧还没 wait 该 semaphore，不能单独运行验证（binary semaphore 重复 signal）。接下来在 end_frame 的 submit_info 加 external semaphore wait，配对后才安全。详见 `tasks/phase1.md`。
 
 ---
 
