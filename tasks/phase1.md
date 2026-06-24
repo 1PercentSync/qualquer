@@ -118,7 +118,7 @@ MUSTREAD:4
 - [x] 创建 `vulkan/include/qualquer/vulkan/interop.h`（InteropImage、InteropSemaphore 类声明）
 - [x] 实现 InteropImage（R8G8B8A8_UNORM VkImage + OPTIMAL tiling + 手动 vkAllocateMemory with VkExportMemoryAllocateInfo + Win32 HANDLE 导出 + destroy）
 - [x] 实现 InteropSemaphore（VkSemaphore with external + Win32 HANDLE 导出 + destroy）
-- [ ] Application 中创建 display buffer InteropImage（跟随 swapchain extent）和 2 个 per-frame InteropSemaphore
+- [x] Application 中创建 display buffer InteropImage（跟随 swapchain extent）和 2 个 per-frame InteropSemaphore
 - [ ] 请求用户在 CLion 中编译验证
 
 ## Step 13：CUDA 导入 + 测试 Kernel

@@ -11,13 +11,13 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 1 — Vulkan 基础设施 + ImGui + 调试面板
-- **进度**：Step 12 进行中（InteropImage/InteropSemaphore 均已实现，待 Application 接线）
+- **进度**：Step 12 实现完成（InteropImage/InteropSemaphore 声明+实现，Application 接线完成；待用户编译验证）
 
 ### 下一个任务
 
-Step 12 第 4 项：Application 中创建 display buffer InteropImage（跟随 swapchain extent）和 2 个 per-frame InteropSemaphore
+Step 12 验收：用户在 CLion 中编译验证（无 validation 报错即可，运行行为与 Step 11 相同——新资源未进帧循环）。验证通过后进入 Step 13。
 
-> Step 12 第 3 项完成。Vulkan 层 Interop 资源（image + semaphore）全部就位。接下来在 Application 接线：创建跟随 swapchain 的 display buffer 和 2 个 per-frame external semaphore。详见 `tasks/phase1.md`。
+> Step 12 四项代码实现完成。Vulkan 侧 interop 资源（display buffer + 2 个 per-frame external semaphore）全部就位，句柄已导出待 CUDA 导入。详见 `tasks/phase1.md`。
 
 ---
 
