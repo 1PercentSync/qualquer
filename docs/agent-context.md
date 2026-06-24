@@ -11,13 +11,13 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 2 — OptiX 基础（Pipeline/SBT，raygen 输出纯色，替换测试 kernel）
-- **进度**：Phase 1 完成（CUDA-Vulkan interop + 渐变色测试图案打通，编译运行验证通过）；Phase 切换归档进行中
+- **进度**：Phase 1 完成（CUDA-Vulkan interop + 渐变色测试图案打通，编译运行验证通过）；Phase 文档已归档，待创建 Phase 2 文档集
 
 ### 下一个任务
 
-Phase 切换归档：`git mv` 将 `docs/current-phase.md` → `docs/archive/phase1.md`、`tasks/phase1.md` → `tasks/archive/phase1.md`，作为独立 commit；随后创建 `docs/current-phase.md`（Phase 2）与 `tasks/phase2.md`
+创建 `docs/current-phase.md`（Phase 2 目标/范围/技术要点）与 `tasks/phase2.md`（Phase 2 可执行任务清单）
 
-> Phase 1 全部完成。窗口显示 CUDA 渐变色 + ImGui 面板，resize 不崩溃，无 validation 报错。接下来按归档规范处理 Phase 切换，然后进入 Phase 2 规划。详见 `docs/roadmap.md`。
+> Phase 1 全部完成并归档。窗口显示 CUDA 渐变色 + ImGui 面板，resize 不崩溃，无 validation 报错。进入 Phase 2 规划。详见 `docs/roadmap.md`。
 
 ---
 
@@ -28,8 +28,8 @@ Phase 切换归档：`git mv` 将 `docs/current-phase.md` → `docs/archive/phas
 | 文档 | 说明 |
 |------|------|
 | `docs/roadmap.md` | Phase 概览与顺序 |
-| `docs/current-phase.md` | 当前阶段目标、范围、实现指南 |
-| `tasks/phase1.md` | Phase 1 可执行任务清单 |
+| `docs/current-phase.md` | 当前阶段目标、范围、实现指南（Phase 2，待创建） |
+| `tasks/phase2.md` | Phase 2 可执行任务清单（待创建） |
 | `docs/architecture.md` | 渲染器架构与设计理念 |
 | `docs/technical-decisions.md` | 技术选型与决策 |
 
@@ -39,7 +39,8 @@ Phase 切换归档：`git mv` 将 `docs/current-phase.md` → `docs/archive/phas
 
 | 文档 | 说明 |
 |------|------|
-
+| `docs/archive/phase1.md` | Phase 1 目标、范围、实现指南（已归档） |
+| `tasks/archive/phase1.md` | Phase 1 可执行任务清单（已归档） |
 ---
 
 ## 维护规则

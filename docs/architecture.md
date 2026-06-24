@@ -88,7 +88,7 @@ MUSTREAD:4
 
 包含：PT 着色逻辑、材质系统、场景数据结构、累积 buffer、降噪调度。
 
-**不持有帧循环**：acquire/submit/present、fence/semaphore 同步、swapchain 重建都在 app 层。renderer 只暴露 `render(cmd, input)`，由 app 编排好时序后调用。理由：一帧的渲染内容横跨 optix（CUDA 着色）和 vulkan（blit/呈现），有内部数据依赖和时序编排，只有同时依赖两者的 renderer 能承载；但帧循环骨架（编排+同步）属于"驱动时序"，与"画什么"正交，归 app。这条切法来自 Himalaya 的实证——其 Renderer 是 Application 帧循环膨胀后抽出的"渲染内容"，编排+同步始终留在 Application。
+**不持有帧循环**：acquire/submit/present、fence/semaphore 同步、swapchain 重建都在 app 层。renderer 只暴露 “渲染内容” 接口（CUDA 提交 + Vulkan 命令录制），由 app 编排好时序后调用。理由：一帧的渲染内容横跨 optix（CUDA 着色）和 vulkan（blit/呈现），有内部数据依赖和时序编排，只有同时依赖两者的 renderer 能承载；但帧循环骨架（编排+同步）属于“驱动时序”，与“画什么”正交，归 app。这条切法来自 Himalaya 的实证——其 Renderer 是 Application 帧循环膨胀后抽出的“渲染内容”，编排+同步始终留在 Application。
 
 **与 Himalaya 的区别**：Himalaya 的 Layer 1（Framework）和 Layer 2（Pass）在这里合并。原因：
 - PT 是单个 OptiX launch，不需要 Render Graph 编排多 Pass

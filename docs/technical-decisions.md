@@ -127,14 +127,14 @@ CUDA 侧通过 `cudaExternalMemoryGetMappedMipmappedArray` → `cudaArray_t` →
 - 显式 stream 是未来重叠计算的前置条件：累积 buffer ping-pong 下，“累积写入”与“tone map 读上一帧”可并行（见 Buffer 架构），没有显式 stream 就无从谈起
 - 现在引入以验证 stream 机制，避免未来重构时还要动已经铺好的帧循环
 
-### Renderer::render_frame 封装
+### Renderer 内拆分
 
-**决策**：`Renderer::render_frame` 封装一帧全部渲染内容——CUDA 提交（launch + semaphore signal）+ Vulkan 命令录制，Application 只保留 begin_frame/submit/present 的时序骨架。
+**决策**：Renderer 拆分 `submit_cuda`（CUDA launch + external semaphore signal）与 `record_vulkan`（Vulkan 命令录制 = blit + ImGui + layout 转换）两个公共方法，由 Application 在帧循环中按顺序编排（先 CUDA 后 acquire）。Application 保留 begin/end command buffer 与 submit/present 的时序骨架。
 
 **理由**：
-- 一帧要画什么是完整单元（CUDA 写 buffer + Vulkan blit + ImGui 叠加），有内部数据依赖，统一由 renderer 封装最清晰，与 architecture.md 的 renderer 定位一致
-- CUDA launch/signal 是异步提交，不在 command buffer 里，属“驱动时序”的一部分，但它与要画的内容紧耦合，拆到 app 会破坏渲染内容的内聚性
-- 与 Himalaya 一致：其 Renderer 同样封装 PT launch + denoiser + blit + ImGui 录制
+- 一帧要画什么是完整单元（CUDA 写 buffer + Vulkan blit + ImGui 叠加），其内容归 renderer；但 submit_cuda 与 acquire 的先后决定 GPU CUDA 引擎启动时机与重叠收益，属“驱动时序”。故 renderer 内拆两个方法、Application 掌握调度时机，各取职责。
+- CUDA launch/signal 是异步提交，不在 command buffer 里，属“驱动时序”的一部分；但内容紧耦合、不能拆到 app。
+- 与 Himalaya 一致：其 Renderer 同样封装渲染内容；Qualquer 应用层负责 CUDA 提交时序是其区别
 
 ### ImGuiBackend 归属
 
@@ -265,19 +265,21 @@ present 返回 ∈ {OUT_OF_DATE, SUBOPTIMAL}              → present 后 recrea
 
 ### 初始化顺序
 
-**决策**：CUDA → Vulkan
+**决策**：三段式（Vulkan pre-init → CUDA init → Vulkan init）。
+
+Vulkan pre-init 创建 instance/surface 后枚举支持 present 的物理设备并查 UUID；CUDA 在该候选列表约束内打分选设备；Vulkan init 按选中 UUID 完成 device/queue/resource 创建。
 
 **理由**：
-- CUDA 初始化自然检测 NVIDIA GPU 可用性
-- 如果 CUDA 失败，无需继续初始化 Vulkan
-- Vulkan 设备选择可匹配 CUDA 已选中的物理设备（通过 UUID）
+- present 约束前置，排除不可呈现的 CUDA 设备（如 TCC 计算卡）
+- CUDA 与 Vulkan 通过 UUID 对齐到同一物理 GPU
+- 这里的软理由灾区：早期曾记录“CUDA → Vulkan 单向，以便 CUDA 失败时省去 Vulkan init”，但该场景选出的 CUDA 设备可能不可 present，被三段式推翻——依据“决策可更新性”原则
 
 ### 设备检测
 
 **决策**：CUDA 初始化时检测。
 
 **理由**：
-- CUDA 初始化自然检测 NVIDIA GPU 可用性和 compute capability
-- Vulkan 设备选择通过 UUID 匹配 CUDA 已选中的物理设备
+- CUDA init 自然检测 NVIDIA GPU 可用性和 compute capability
+- Vulkan 设备经 UUID 匹配 CUDA 选中的设备
 
 ---
