@@ -127,8 +127,8 @@ MUSTREAD:4
 - [x] CudaContext 添加 external memory 导入（HANDLE → cudaExternalMemory → cudaMipmappedArray → cudaArray → cudaSurfaceObject）
 - [x] CudaContext 添加 external semaphore 导入（HANDLE → cudaExternalSemaphore）
 - [x] renderer 层启用 CUDA，创建 `renderer/src/test_kernel.cu`（UV 渐变 + 帧号驱动动画，surf2Dwrite 写入 R8G8B8A8）
-- [ ] Application 初始化中从 Vulkan InteropImage/InteropSemaphore 取 HANDLE → 传给 CudaContext 导入
-- [ ] 请求用户在 CLion 中编译验证
+- [x] Application 初始化中从 Vulkan InteropImage/InteropSemaphore 取 HANDLE → 传给 CudaContext 导入
+- [x] 请求用户在 CLion 中编译验证
 
 ## Step 14：帧循环集成（CUDA blit）
 
