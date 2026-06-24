@@ -49,6 +49,7 @@ namespace qualquer::vulkan {
 
         VkMemoryRequirements mem_reqs;
         vkGetImageMemoryRequirements(context.device, image, &mem_reqs);
+        size = mem_reqs.size;
 
         // Device-local for the fastest blit; the image stays GPU-resident since CUDA
         // writes it through a surface object.

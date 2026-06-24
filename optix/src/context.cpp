@@ -136,9 +136,69 @@ namespace qualquer::optix {
                      best_device, prop.name, best_major, best_minor);
     }
 
+    void Context::import_display_buffer(void *win32_handle, const VkExtent2D extent, const VkDeviceSize size) {
+        // Import the Vulkan-allocated memory via its NT handle. Dedicated flag is
+        // required because the Vulkan side used a dedicated allocation
+        // (VkMemoryDedicatedAllocateInfo). size must match vkAllocateMemory's size.
+        cudaExternalMemoryHandleDesc mem_handle_desc{};
+        mem_handle_desc.type = cudaExternalMemoryHandleTypeOpaqueWin32;
+        mem_handle_desc.handle.win32.handle = win32_handle;
+        mem_handle_desc.size = size;
+        mem_handle_desc.flags = cudaExternalMemoryDedicated;
+        CUDA_CHECK(cudaImportExternalMemory(&external_memory_, &mem_handle_desc));
+
+        // CUDA's Vulkan interop exposes only the mipmapped-array mapping path
+        // (GetMappedBuffer is for 1D). For a single-mip image this is numLevels=1,
+        // then level 0 is extracted as a plain cudaArray to back the surface object.
+        // flags include cudaArrayColorAttachment because the Vulkan image is a color
+        // target (interop requires the CUDA array flags to match the image usage).
+        cudaChannelFormatDesc fmt_desc{};
+        fmt_desc.x = 8;
+        fmt_desc.y = 8;
+        fmt_desc.z = 8;
+        fmt_desc.w = 8;
+        fmt_desc.f = cudaChannelFormatKindUnsigned;
+
+        cudaExtent cuda_ext{};
+        cuda_ext.width = extent.width;
+        cuda_ext.height = extent.height;
+        cuda_ext.depth = 0;
+
+        cudaExternalMemoryMipmappedArrayDesc mip_desc{};
+        mip_desc.offset = 0;
+        mip_desc.formatDesc = fmt_desc;
+        mip_desc.extent = cuda_ext;
+        mip_desc.numLevels = 1;
+        mip_desc.flags = cudaArrayColorAttachment;
+        CUDA_CHECK(cudaExternalMemoryGetMappedMipmappedArray(&mipmap_array_, external_memory_, &mip_desc));
+
+        CUDA_CHECK(cudaGetMipmappedArrayLevel(&array_, mipmap_array_, 0));
+
+        cudaResourceDesc res_desc{};
+        res_desc.resType = cudaResourceTypeSurface;
+        res_desc.res.surface.array.array = array_;
+        CUDA_CHECK(cudaCreateSurfaceObject(&display_surface, &res_desc));
+
+        spdlog::info("Display buffer imported ({}x{})", extent.width, extent.height);
+    }
+
     void Context::destroy() const {
-        // The CUDA primary context is managed by the runtime; explicit reset
-        // (cudaDeviceReset) would tear down state still referenced by upper
-        // layers during their own destruction. Intentionally empty.
+        // Release interop resources in reverse creation order. The surface object
+        // wraps array_, so it must be destroyed before array_; the array is a level
+        // of mipmap_array_ and the mipmap is mapped onto external_memory_, so each
+        // is freed before its backing object. device_id_ needs no cleanup — the
+        // runtime-managed primary context is left intact for other holders.
+        if (display_surface != 0) {
+            CUDA_CHECK(cudaDestroySurfaceObject(display_surface));
+        }
+        if (array_ != nullptr) {
+            CUDA_CHECK(cudaFreeArray(array_));
+        }
+        if (mipmap_array_ != nullptr) {
+            CUDA_CHECK(cudaFreeMipmappedArray(mipmap_array_));
+        }
+        if (external_memory_ != nullptr) {
+            CUDA_CHECK(cudaDestroyExternalMemory(external_memory_));
+        }
     }
 } // namespace qualquer::optix

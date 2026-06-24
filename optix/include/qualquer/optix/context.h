@@ -9,6 +9,8 @@
 #include <cstdint>
 #include <vector>
 
+#include <cuda_runtime.h>
+
 namespace qualquer::optix {
     /**
      * @brief OptiX layer root context owning the selected CUDA device.
@@ -32,6 +34,19 @@ namespace qualquer::optix {
          */
         void init(const std::vector<std::array<std::uint8_t, 16>> &presentable_uuids);
 
+        /**
+         * @brief Imports the Vulkan-allocated display buffer for CUDA access.
+         *
+         * Maps the exported Win32 NT handle into CUDA through the external-memory path
+         * (import -> mipmapped array, single mip level -> level-0 cudaArray -> surface
+         * object). The resulting display_surface member is the write handle for the
+         * shared image.
+         * @param win32_handle  NT handle exported by vulkan::InteropImage.
+         * @param extent        Image extent, must match the Vulkan image.
+         * @param size          Allocation size from vkGetImageMemoryRequirements.
+         */
+        void import_display_buffer(void *win32_handle, VkExtent2D extent, VkDeviceSize size);
+
         /** @brief Releases CUDA resources associated with the selected device. */
         void destroy() const;
 
@@ -44,8 +59,24 @@ namespace qualquer::optix {
          */
         std::array<std::uint8_t, 16> device_uuid{};
 
+        /**
+         * @brief Surface object over the imported display buffer.
+         *
+         * Zero before import_display_buffer and after destroy.
+         */
+        cudaSurfaceObject_t display_surface = 0;
+
     private:
         /** @brief Index of the selected CUDA device, for subsequent runtime calls. */
         int device_id_ = -1;
+
+        /** @brief Imported external memory object wrapping the Vulkan display buffer. */
+        cudaExternalMemory_t external_memory_ = nullptr;
+
+        /** @brief Mipmapped array mapped onto the external memory (single mip level). */
+        cudaMipmappedArray_t mipmap_array_ = nullptr;
+
+        /** @brief Level-0 cudaArray extracted from the mipmapped array, for the surface object. */
+        cudaArray_t array_ = nullptr;
     };
 } // namespace qualquer::optix

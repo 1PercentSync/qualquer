@@ -50,6 +50,14 @@ namespace qualquer::vulkan {
         VkDeviceMemory memory = VK_NULL_HANDLE;
 
         /**
+         * @brief Allocation size reported by vkGetImageMemoryRequirements.
+         *
+         * Consumed by the CUDA import path, which requires the allocation size to
+         * match what Vulkan allocated for the external memory object.
+         */
+        VkDeviceSize size = 0;
+
+        /**
          * @brief Win32 NT handle exported from the memory.
          *
          * Ownership stays with this object: CUDA does not take handle ownership on
