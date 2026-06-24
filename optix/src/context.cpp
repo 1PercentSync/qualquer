@@ -182,12 +182,28 @@ namespace qualquer::optix {
         spdlog::info("Display buffer imported ({}x{})", extent.width, extent.height);
     }
 
+    void Context::import_semaphores(const std::array<void *, kMaxFramesInFlight> win32_handles) {
+        for (uint32_t i = 0; i < kMaxFramesInFlight; ++i) {
+            cudaExternalSemaphoreHandleDesc sem_handle_desc{};
+            sem_handle_desc.type = cudaExternalSemaphoreHandleTypeOpaqueWin32;
+            sem_handle_desc.handle.win32.handle = win32_handles[i];
+            CUDA_CHECK(cudaImportExternalSemaphore(&external_semaphores[i], &sem_handle_desc));
+        }
+        spdlog::info("Imported {} external semaphores", kMaxFramesInFlight);
+    }
+
     void Context::destroy() const {
         // Release interop resources in reverse creation order. The surface object
         // wraps array_, so it must be destroyed before array_; the array is a level
         // of mipmap_array_ and the mipmap is mapped onto external_memory_, so each
-        // is freed before its backing object. device_id_ needs no cleanup — the
-        // runtime-managed primary context is left intact for other holders.
+        // is freed before its backing object. External semaphores are independent.
+        // device_id_ needs no cleanup — the runtime-managed primary context is left
+        // intact for other holders.
+        for (const auto sem : external_semaphores) {
+            if (sem != nullptr) {
+                CUDA_CHECK(cudaDestroyExternalSemaphore(sem));
+            }
+        }
         if (display_surface != 0) {
             CUDA_CHECK(cudaDestroySurfaceObject(display_surface));
         }

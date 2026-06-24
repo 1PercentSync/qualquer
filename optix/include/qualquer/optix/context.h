@@ -13,6 +13,14 @@
 
 namespace qualquer::optix {
     /**
+     * @brief Number of frames that can be in-flight simultaneously.
+     *
+     * Matches vulkan::kMaxFramesInFlight. Duplicated per-layer rather than shared
+     * to keep the optix layer free of a vulkan dependency (single-direction
+     * dependency is a hard architectural constraint).
+     */
+    constexpr uint32_t kMaxFramesInFlight = 2;
+    /**
      * @brief OptiX layer root context owning the selected CUDA device.
      *
      * Selects the best CUDA-capable device during init() from a presentability-
@@ -47,6 +55,15 @@ namespace qualquer::optix {
          */
         void import_display_buffer(void *win32_handle, VkExtent2D extent, VkDeviceSize size);
 
+        /**
+         * @brief Imports the per-frame Vulkan external semaphores.
+         *
+         * Each NT handle maps to a cudaExternalSemaphore_t for cross-API synchronization
+         * (CUDA signal -> Vulkan wait). One per frame-in-flight, indexed by frame.
+         * @param win32_handles NT handles exported by vulkan::InteropSemaphore.
+         */
+        void import_semaphores(std::array<void *, kMaxFramesInFlight> win32_handles);
+
         /** @brief Releases CUDA resources associated with the selected device. */
         void destroy() const;
 
@@ -65,6 +82,13 @@ namespace qualquer::optix {
          * Zero before import_display_buffer and after destroy.
          */
         cudaSurfaceObject_t display_surface = 0;
+
+        /**
+         * @brief Imported external semaphores, one per frame-in-flight.
+         *
+         * Indexed by frame-in-flight slot. Zero before import_semaphores and after destroy.
+         */
+        std::array<cudaExternalSemaphore_t, kMaxFramesInFlight> external_semaphores{};
 
     private:
         /** @brief Index of the selected CUDA device, for subsequent runtime calls. */
