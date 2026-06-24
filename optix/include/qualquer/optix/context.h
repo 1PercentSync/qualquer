@@ -45,10 +45,7 @@ namespace qualquer::optix {
         /**
          * @brief Imports the Vulkan-allocated display buffer for CUDA access.
          *
-         * Maps the exported Win32 NT handle into CUDA through the external-memory path
-         * (import -> mipmapped array, single mip level -> level-0 cudaArray -> surface
-         * object). The resulting display_surface member is the write handle for the
-         * shared image.
+         * The resulting display_surface member is the write handle for the shared image.
          * @param win32_handle  NT handle exported by vulkan::InteropImage.
          * @param width         Image width in pixels, must match the Vulkan image.
          * @param height        Image height in pixels, must match the Vulkan image.
@@ -59,8 +56,8 @@ namespace qualquer::optix {
         /**
          * @brief Imports the per-frame Vulkan external semaphores.
          *
-         * Each NT handle maps to a cudaExternalSemaphore_t for cross-API synchronization
-         * (CUDA signal -> Vulkan wait). One per frame-in-flight, indexed by frame.
+         * Cross-API synchronization (CUDA signal -> Vulkan wait). One per
+         * frame-in-flight, indexed by frame.
          * @param win32_handles NT handles exported by vulkan::InteropSemaphore.
          */
         void import_semaphores(std::array<void *, kMaxFramesInFlight> win32_handles);
@@ -68,9 +65,8 @@ namespace qualquer::optix {
         /**
          * @brief Releases only the display-buffer import, keeping the semaphores.
          *
-         * Used on swapchain resize: the display buffer is resolution-dependent and
-         * rebuilt, but the semaphores are resolution-independent and persist. Follow
-         * with import_display_buffer once the new buffer is ready.
+         * For swapchain resize: the display buffer is resolution-dependent and rebuilt,
+         * while the semaphores are resolution-independent and persist.
          */
         void release_display_buffer() const;
 

@@ -137,9 +137,8 @@ namespace qualquer::optix {
     }
 
     void Context::import_display_buffer(void *win32_handle, const uint32_t width, const uint32_t height, const uint64_t size) {
-        // Import the Vulkan-allocated memory via its NT handle. Dedicated flag is
-        // required because the Vulkan side used a dedicated allocation
-        // (VkMemoryDedicatedAllocateInfo). size must match vkAllocateMemory's size.
+        // Dedicated flag is required because the Vulkan side used a dedicated
+        // allocation (VkMemoryDedicatedAllocateInfo). size must match vkAllocateMemory's size.
         cudaExternalMemoryHandleDesc mem_handle_desc{};
         mem_handle_desc.type = cudaExternalMemoryHandleTypeOpaqueWin32;
         mem_handle_desc.handle.win32.handle = win32_handle;

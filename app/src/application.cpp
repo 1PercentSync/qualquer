@@ -305,9 +305,8 @@ namespace qualquer::app {
         // Swapchain::recreate waits the graphics queue idle first, which also guards
         // the display buffer's destruction — any GPU work referencing it has finished.
         // The CUDA side must release its imported surface before the Vulkan image is
-        // destroyed (the surface wraps that image's memory); after the Vulkan display
-        // buffer is rebuilt against the new swapchain extent, the CUDA side re-imports.
-        // External semaphores are resolution-independent and stay (not released here).
+        // destroyed (the surface wraps that image's memory). External semaphores are
+        // resolution-independent and stay.
         cuda_context_.release_display_buffer();
         swapchain_.recreate(context_);
         display_buffer_.destroy(context_);

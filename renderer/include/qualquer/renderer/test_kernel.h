@@ -13,8 +13,7 @@ namespace qualquer::renderer {
     /**
      * @brief Launches the display-buffer test kernel.
      *
-     * Writes an animated UV gradient into the surface object backing the display
-     * buffer. The caller owns the frame counter that drives the animation.
+     * The caller owns the frame counter that drives the animation.
      * @param surface Surface object over the imported display buffer.
      * @param width   Display buffer width in pixels.
      * @param height  Display buffer height in pixels.

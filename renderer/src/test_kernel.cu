@@ -30,9 +30,8 @@ namespace qualquer::renderer {
                 }                                                                         \
             } while (0)
 
-        // Animated UV gradient: color channels driven by normalized pixel position
-        // and a frame counter, producing a moving pattern that verifies the CUDA
-        // write path and per-frame animation end-to-end.
+        // Animated UV gradient with a frame counter, producing a moving pattern that
+        // verifies the CUDA write path and per-frame animation end-to-end.
         __global__ void test_kernel(const cudaSurfaceObject_t surface,
                                     const uint32_t width,
                                     const uint32_t height,
