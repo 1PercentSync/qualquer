@@ -11,13 +11,13 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 1 — Vulkan 基础设施 + ImGui + 调试面板
-- **进度**：Step 13 进行中（CUDA_CHECK 可复用头文件已创建，待 CudaContext external memory 导入）
+- **进度**：Step 13 进行中（external memory 导入完成，待 external semaphore 导入）
 
 ### 下一个任务
 
-Step 13 第 2 项：CudaContext 添加 external memory 导入（HANDLE → cudaExternalMemory → cudaMipmappedArray → cudaArray → cudaSurfaceObject）
+Step 13 第 3 项：CudaContext 添加 external semaphore 导入（HANDLE → cudaExternalSemaphore）
 
-> Step 13 第 1 项完成。CUDA_CHECK 宏提升为可复用头文件，optix/renderer 层共享。接下来在 `optix::Context` 添加 display buffer 的 external memory 导入。详见 `tasks/phase1.md`。
+> Step 13 第 2 项完成。display buffer 的 external memory 导入链（import → mipmapped array → level-0 cudaArray → surface object）就位，renderer 层 kernel 通过 display_surface 写入。接下来导入 2 个 per-frame external semaphore。详见 `tasks/phase1.md`。
 
 ---
 
