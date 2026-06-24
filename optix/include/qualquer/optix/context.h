@@ -96,6 +96,15 @@ namespace qualquer::optix {
          */
         std::array<cudaExternalSemaphore_t, kMaxFramesInFlight> external_semaphores{};
 
+        /**
+         * @brief CUDA stream for kernel launch and external semaphore signaling.
+         *
+         * Explicit (not the default stream) so future overlap of accumulation and
+         * tone-mapping across multiple streams is possible. Null before init and
+         * after destroy.
+         */
+        cudaStream_t stream = nullptr;
+
     private:
         /** @brief Index of the selected CUDA device, for subsequent runtime calls. */
         int device_id_ = -1;

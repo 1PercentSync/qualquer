@@ -132,6 +132,8 @@ namespace qualquer::optix {
         device_id_ = best_device;
         device_uuid = get_device_uuid(prop);
 
+        CUDA_CHECK(cudaStreamCreate(&stream));
+
         spdlog::info("CUDA device {}: \"{}\" with compute capability {}.{}",
                      best_device, prop.name, best_major, best_minor);
     }
@@ -211,13 +213,18 @@ namespace qualquer::optix {
 
     void Context::destroy() const {
         // Display-buffer import first (surface wraps the imported image memory), then
-        // the independent semaphores. device_id_ needs no cleanup — the runtime-
-        // managed primary context is left intact for other holders.
+        // the independent semaphores, then the stream last — cudaStreamDestroy waits
+        // for pending work on it, so destroying it last also drains any in-flight
+        // kernel/signal submitted earlier in teardown. device_id_ needs no cleanup —
+        // the runtime-managed primary context is left intact for other holders.
         release_display_buffer();
         for (const auto sem : external_semaphores) {
             if (sem != nullptr) {
                 CUDA_CHECK(cudaDestroyExternalSemaphore(sem));
             }
+        }
+        if (stream != nullptr) {
+            CUDA_CHECK(cudaStreamDestroy(stream));
         }
     }
 } // namespace qualquer::optix
