@@ -136,12 +136,12 @@ CUDA 侧通过 `cudaExternalMemoryGetMappedMipmappedArray` → `cudaArray_t` →
 
 ### ImGuiBackend 归属
 
-**决策**：`ImGuiBackend` 所有权归 Application，Renderer 经非拥有裸指针引用。
+**决策**：`ImGuiBackend` 所有权归 Application，Renderer 经 `RenderInput` 引用传入，不缓存为成员。
 
 **理由**：
 - ImGui 生命周期绑定窗口/输入（GLFW、DeltaTime、begin_frame 需事件后状态），归 app
 - ImGui “在 cmd 里录制”属渲染内容，归 renderer，但只需使用不需所有
-- 与 Himalaya 同构（Application 持有 `ImGuiBackend imgui_backend_`，Renderer 存 `ImGuiBackend *imgui_`，init 传入）
+- Renderer 作为使用方不缓存 Application 拥有的引用（项目所有权原则：使用方不在成员中缓存所有者拥有的引用），故所有依赖（cuda_context/display_buffer/swapchain/imgui）均走 RenderInput，Renderer 唯一成员是自有的 frame_counter_。与 Himalaya 缓存指针成员的做法不同——Qualquer 的所有权原则更严格
 
 ### CUDA 每帧工作
 
