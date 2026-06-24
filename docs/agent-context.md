@@ -11,13 +11,13 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 1 — Vulkan 基础设施 + ImGui + 调试面板
-- **进度**：Step 12 实现完成（InteropImage/InteropSemaphore 声明+实现，Application 接线完成；待用户编译验证）
+- **进度**：Step 12 完成（Vulkan 侧 interop 资源创建、导出、销毁全部就位，编译验证通过）
 
 ### 下一个任务
 
-Step 12 验收：用户在 CLion 中编译验证（无 validation 报错即可，运行行为与 Step 11 相同——新资源未进帧循环）。验证通过后进入 Step 13。
+Step 13 第 1 项：CudaContext 添加 external memory 导入（HANDLE → cudaExternalMemory → cudaMipmappedArray → cudaArray → cudaSurfaceObject）
 
-> Step 12 四项代码实现完成。Vulkan 侧 interop 资源（display buffer + 2 个 per-frame external semaphore）全部就位，句柄已导出待 CUDA 导入。详见 `tasks/phase1.md`。
+> Step 12 完成。Vulkan 侧 interop 资源（display buffer + 2 个 per-frame external semaphore）全部就位，NT handle 已导出。接下来进入 Step 13，CUDA 侧导入这些 handle 并写测试 kernel。详见 `tasks/phase1.md`。
 
 ---
 
