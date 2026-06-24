@@ -37,6 +37,15 @@ namespace qualquer::app {
         context_.init(cuda_context_.device_uuid);
 
         swapchain_.init(context_, VK_PRESENT_MODE_MAILBOX_KHR);
+        // The display buffer tracks the swapchain extent and is the blit source for
+        // CUDA-rendered output; TRANSFER_SRC_BIT is required for vkCmdBlitImage.
+        display_buffer_.init(context_,
+                             VK_FORMAT_R8G8B8A8_UNORM,
+                             swapchain_.extent,
+                             VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
+        for (auto &sem: interop_semaphores_) {
+            sem.init(context_);
+        }
         imgui_backend_.init(context_, swapchain_, window_);
     }
 
@@ -286,13 +295,28 @@ namespace qualquer::app {
     }
 
     void Application::recreate_swapchain() {
+        // Swapchain::recreate waits the graphics queue idle first, which also
+        // guarantees any GPU work referencing the display buffer (added in a later
+        // step) has completed before it is destroyed. The display buffer is
+        // resolution-dependent and recreated with the swapchain; the now-updated
+        // swapchain.extent feeds the new buffer. External semaphores are
+        // resolution-independent and are not recreated.
         swapchain_.recreate(context_);
+        display_buffer_.destroy(context_);
+        display_buffer_.init(context_,
+                             VK_FORMAT_R8G8B8A8_UNORM,
+                             swapchain_.extent,
+                             VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
     }
 
     void Application::destroy() {
         vkQueueWaitIdle(context_.graphics_queue);
 
         imgui_backend_.destroy();
+        for (auto &sem: interop_semaphores_) {
+            sem.destroy(context_);
+        }
+        display_buffer_.destroy(context_);
         swapchain_.destroy(context_);
         context_.destroy();
         cuda_context_.destroy();

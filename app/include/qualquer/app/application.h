@@ -5,12 +5,14 @@
  * @brief Main application class: window management, frame loop, init/destroy sequence.
  */
 
+#include <array>
 #include <string>
 
 #include <qualquer/optix/context.h>
 #include <qualquer/renderer/debug_ui.h>
 #include <qualquer/renderer/imgui_backend.h>
 #include <qualquer/vulkan/context.h>
+#include <qualquer/vulkan/interop.h>
 #include <qualquer/vulkan/swapchain.h>
 
 struct GLFWwindow;
@@ -83,6 +85,25 @@ namespace qualquer::app {
 
         /** @brief Vulkan swapchain (surface, images, image views). */
         vulkan::Swapchain swapchain_;
+
+        /**
+         * @brief Display buffer: CUDA-written image blitted to the swapchain image.
+         *
+         * Owned here and recreated together with the swapchain because its extent
+         * tracks the swapchain extent. Step 13 wires its NT handle into CUDA import;
+         * Step 14 uses it as the vkCmdBlitImage source.
+         */
+        vulkan::InteropImage display_buffer_;
+
+        /**
+         * @brief Per-frame external semaphores for CUDA signal -> Vulkan wait.
+         *
+         * One per frame-in-flight, independent of resolution, so they are created
+         * once in init and never recreated on swapchain resize. Step 13 imports
+         * each handle into CUDA; Step 14 waits on the current frame's semaphore in
+         * the Vulkan submit.
+         */
+        std::array<vulkan::InteropSemaphore, vulkan::kMaxFramesInFlight> interop_semaphores_{};
 
         /** @brief ImGui integration (context, backends, UI rendering). */
         renderer::ImGuiBackend imgui_backend_;
