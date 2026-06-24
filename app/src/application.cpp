@@ -146,93 +146,15 @@ namespace qualquer::app {
         };
         VK_CHECK(vkBeginCommandBuffer(cmd, &begin_info));
 
-        VkImage swapchain_image = swapchain_.images[image_index_];
-
-        // No prior GPU work touched the acquired image (acquire hands it over via
-        // the wait semaphore in end_frame), so the src stage is TOP_OF_PIPE.
-        const VkImageMemoryBarrier2 to_attachment{
-            .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-            .srcStageMask = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
-            .srcAccessMask = 0,
-            .dstStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-            .dstAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-            .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-            .newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-            .image = swapchain_image,
-            .subresourceRange =
-            {
-                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                .baseMipLevel = 0,
-                .levelCount = 1,
-                .baseArrayLayer = 0,
-                .layerCount = 1,
-            },
+        renderer::RenderInput input{
+            .cmd = cmd,
+            .cuda_context = cuda_context_,
+            .display_buffer = display_buffer_,
+            .swapchain = swapchain_,
+            .image_index = image_index_,
+            .imgui = imgui_backend_,
         };
-
-        const VkDependencyInfo to_attachment_dep{
-            .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-            .imageMemoryBarrierCount = 1,
-            .pImageMemoryBarriers = &to_attachment,
-        };
-        vkCmdPipelineBarrier2(cmd, &to_attachment_dep);
-
-        const VkRenderingAttachmentInfo color_attachment{
-            .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-            .imageView = swapchain_.image_views[image_index_],
-            .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-            .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-            .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-            .clearValue =
-            {
-                .color = {{0.0f, 0.0f, 0.0f, 1.0f}},
-            },
-        };
-
-        const VkRenderingInfo rendering_info{
-            .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
-            .renderArea =
-            {
-                .offset = {0, 0},
-                .extent = swapchain_.extent,
-            },
-            .layerCount = 1,
-            .colorAttachmentCount = 1,
-            .pColorAttachments = &color_attachment,
-        };
-
-        vkCmdBeginRendering(cmd, &rendering_info);
-        imgui_backend_.render(cmd);
-        vkCmdEndRendering(cmd);
-
-        const VkImageMemoryBarrier2 to_present{
-            .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-            .srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-            .srcAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-            .dstStageMask = VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT,
-            .dstAccessMask = 0,
-            .oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-            .newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-            .image = swapchain_image,
-            .subresourceRange =
-            {
-                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                .baseMipLevel = 0,
-                .levelCount = 1,
-                .baseArrayLayer = 0,
-                .layerCount = 1,
-            },
-        };
-
-        const VkDependencyInfo to_present_dep{
-            .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-            .imageMemoryBarrierCount = 1,
-            .pImageMemoryBarriers = &to_present,
-        };
-        vkCmdPipelineBarrier2(cmd, &to_present_dep);
+        renderer_.render_frame(input);
 
         VK_CHECK(vkEndCommandBuffer(cmd));
     }

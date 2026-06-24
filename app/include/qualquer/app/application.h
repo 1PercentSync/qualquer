@@ -11,6 +11,7 @@
 #include <qualquer/optix/context.h>
 #include <qualquer/renderer/debug_ui.h>
 #include <qualquer/renderer/imgui_backend.h>
+#include <qualquer/renderer/renderer.h>
 #include <qualquer/vulkan/context.h>
 #include <qualquer/vulkan/interop.h>
 #include <qualquer/vulkan/swapchain.h>
@@ -103,6 +104,9 @@ namespace qualquer::app {
 
         /** @brief ImGui integration (context, backends, UI rendering). */
         renderer::ImGuiBackend imgui_backend_;
+
+        /** @brief Single-frame render content (CUDA submit + Vulkan recording). */
+        renderer::Renderer renderer_;
 
         /** @brief Debug panel (frame stats, GPU info, present-mode/log-level controls). */
         renderer::DebugUI debug_ui_;
