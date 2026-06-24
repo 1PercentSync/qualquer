@@ -1,0 +1,108 @@
+#pragma once
+
+/**
+ * @file interop.h
+ * @brief Vulkan external memory and semaphore resources for CUDA interop.
+ */
+
+#include <vulkan/vulkan.h>
+
+namespace qualquer::vulkan {
+    class Context;
+
+    /**
+     * @brief Vulkan image backed by exportable device memory, for CUDA interop.
+     *
+     * Creates an image flagged for external memory, binds dedicated device memory
+     * allocated with export info, and exports a Win32 NT handle that CUDA maps via
+     * cudaImportExternalMemory. The CUDA side then writes pixels into the shared
+     * image (e.g. through a cudaSurfaceObject_t).
+     *
+     * Per the project ownership principle, this class owns the VkImage,
+     * VkDeviceMemory, and the exported NT handle; it holds no handle owned by
+     * Context. Device / physical-device are obtained from the Context reference
+     * passed to each operation.
+     */
+    class InteropImage {
+    public:
+        /**
+         * @brief Creates the image, allocates and binds dedicated exportable memory,
+         *        and exports the Win32 NT handle.
+         * @param context Vulkan context providing the device and physical device.
+         * @param format  Image format (e.g. R8G8B8A8_UNORM for the display buffer).
+         * @param extent  Image extent in pixels.
+         * @param usage   Image usage flags (e.g. TRANSFER_SRC_BIT for a blit source).
+         */
+        void init(const Context &context, VkFormat format, VkExtent2D extent, VkImageUsageFlags usage);
+
+        /**
+         * @brief Closes the NT handle, then destroys the image and frees the memory.
+         *
+         * The NT handle holds a reference to the underlying memory, so it must be
+         * closed before the memory can be freed; the image is destroyed before the
+         * memory is freed (creation order reversed).
+         * @param context Vulkan context providing the owning device.
+         */
+        void destroy(const Context &context) const;
+
+        /** @brief The image handle. */
+        VkImage image = VK_NULL_HANDLE;
+
+        /** @brief Dedicated device memory bound to the image. */
+        VkDeviceMemory memory = VK_NULL_HANDLE;
+
+        /**
+         * @brief Win32 NT handle exported from the memory.
+         *
+         * Ownership stays with this object: CUDA does not take handle ownership on
+         * import, so the application reads it to call cudaImportExternalMemory and
+         * this object closes it on destroy. Raw void* so this header does not depend
+         * on windows.h (CUDA's handle.win32.handle is void*).
+         */
+        void *win32_handle = nullptr;
+
+        /** @brief Image format, as requested at creation. */
+        VkFormat format = VK_FORMAT_UNDEFINED;
+
+        /** @brief Image extent, as requested at creation. */
+        VkExtent2D extent = {0, 0};
+    };
+
+    /**
+     * @brief Vulkan semaphore with an exported Win32 handle, for CUDA interop.
+     *
+     * Creates a semaphore flagged for external handle export and exports a Win32 NT
+     * handle that CUDA imports via cudaImportExternalSemaphore. Coordinates access to
+     * the shared interop image across the two APIs (CUDA signal -> Vulkan wait).
+     *
+     * Per the project ownership principle, this class owns the VkSemaphore and the
+     * exported NT handle; it holds no handle owned by Context.
+     */
+    class InteropSemaphore {
+    public:
+        /**
+         * @brief Creates the semaphore and exports the Win32 NT handle.
+         * @param context Vulkan context providing the device.
+         */
+        void init(const Context &context);
+
+        /**
+         * @brief Closes the NT handle, then destroys the semaphore.
+         * @param context Vulkan context providing the owning device.
+         */
+        void destroy(const Context &context) const;
+
+        /** @brief The semaphore handle. */
+        VkSemaphore semaphore = VK_NULL_HANDLE;
+
+        /**
+         * @brief Win32 NT handle exported from the semaphore.
+         *
+         * Ownership stays with this object: CUDA does not take handle ownership on
+         * import, so the application reads it to call cudaImportExternalSemaphore
+         * and this object closes it on destroy. Raw void* so this header does not
+         * depend on windows.h.
+         */
+        void *win32_handle = nullptr;
+    };
+} // namespace qualquer::vulkan
