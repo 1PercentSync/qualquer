@@ -116,6 +116,33 @@ CUDA 侧通过 `cudaExternalMemoryGetMappedMipmappedArray` → `cudaArray_t` →
 - optix 层不包含渲染逻辑是硬约束（编译期单向依赖的语义边界）
 - 帧号计数器是渲染状态（时间累积/噪声变化用途），天然归 renderer 层，与 Himalaya `Renderer::frame_counter_` 一致
 
+### 显式 CUDA Stream
+
+**决策**：kernel launch 与 external semaphore signal 提交到显式 `cudaStream_t`（由 `optix::Context` 持有），不用默认流。
+
+**理由**：
+- 默认流会与所有显式流隐式同步，等于全局序列化点，堵死重叠空间
+- 显式 stream 是未来重叠计算的前置条件：累积 buffer ping-pong 下，“累积写入”与“tone map 读上一帧”可并行（见 Buffer 架构），没有显式 stream 就无从谈起
+- 现在引入以验证 stream 机制，避免未来重构时还要动已经铺好的帧循环
+
+### Renderer::render_frame 封装
+
+**决策**：`Renderer::render_frame` 封装一帧全部渲染内容——CUDA 提交（launch + semaphore signal）+ Vulkan 命令录制，Application 只保留 begin_frame/submit/present 的时序骨架。
+
+**理由**：
+- 一帧要画什么是完整单元（CUDA 写 buffer + Vulkan blit + ImGui 叠加），有内部数据依赖，统一由 renderer 封装最清晰，与 architecture.md 的 renderer 定位一致
+- CUDA launch/signal 是异步提交，不在 command buffer 里，属“驱动时序”的一部分，但它与要画的内容紧耦合，拆到 app 会破坏渲染内容的内聚性
+- 与 Himalaya 一致：其 Renderer 同样封装 PT launch + denoiser + blit + ImGui 录制
+
+### ImGuiBackend 归属
+
+**决策**：`ImGuiBackend` 所有权归 Application，Renderer 经非拥有裸指针引用。
+
+**理由**：
+- ImGui 生命周期绑定窗口/输入（GLFW、DeltaTime、begin_frame 需事件后状态），归 app
+- ImGui “在 cmd 里录制”属渲染内容，归 renderer，但只需使用不需所有
+- 与 Himalaya 同构（Application 持有 `ImGuiBackend imgui_backend_`，Renderer 存 `ImGuiBackend *imgui_`，init 传入）
+
 ### CUDA 每帧工作
 
 **参数传输**：`cudaMemcpyAsync`

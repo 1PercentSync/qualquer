@@ -55,17 +55,18 @@ Step 1 → Step 2 → Step 3 → Step 4 → Step 5 → Step 6 → Step 7 → Ste
 MUSTREAD:8
 - Per-swapchain-image 资源（Swapchain）：render_finished semaphore
 
-### 帧循环（归属 app 层）
+### 帧循环（编排与同步归 app 层）
 
-- 流程：`wait fence → acquire → reset fence → begin cmd → [录制] → end cmd → submit2 → present`
-- Clear 用 dynamic rendering：`vkCmdBeginRendering` + attachment `loadOp=CLEAR`（黑色）→ `vkCmdEndRendering`。不选 `vkCmdClearColorImage`，因为 ImGui 必须画在 rendering pass 内，用 `begin_rendering`/`end_rendering` 形态在 begin/end 间插入 ImGui 录制即可。`loadOp` 在 Step 14 blit 介入前保持 `CLEAR`（此前 oldLayout=UNDEFINED，无有意义内容可 LOAD）；blit 写入 swapchain image 后改为 `LOAD` 以保留 blit 结果
-- swapchain image 的 layout 流转：`UNDEFINED → COLOR_ATTACHMENT_OPTIMAL → PRESENT_SRC_KHR`，两个手写 `vkCmdPipelineBarrier2`（dynamic rendering 不自动管 layout）
+- 流程：`wait fence → acquire → reset fence → [CUDA 提交 + Vulkan 录制 by renderer] → submit2 → present`
+- 录制与 CUDA 提交归 renderer（`Renderer::render_frame`，内部拆 submit_cuda / record_vulkan）；begin_frame（含 ImGui begin_frame，需 GLFW/DeltaTime）与 submit/present 的时序骨架留 app
+- Clear 用 dynamic rendering：`vkCmdBeginRendering` + attachment `loadOp` → `vkCmdEndRendering`。blit 介入后 `loadOp=LOAD` 保留 blit 结果；此前为 `CLEAR`（oldLayout=UNDEFINED 无内容可 LOAD）
+- swapchain image 的 layout 流转（blit 介入后）：`UNDEFINED → TRANSFER_DST_OPTIMAL →（blit）→ COLOR_ATTACHMENT_OPTIMAL → PRESENT_SRC_KHR`，手写 `vkCmdPipelineBarrier2`（dynamic rendering 不自动管 layout）
 
 ### ImGui
 
 - 使用 Dynamic Rendering（无 render pass）
 - 直接渲染到 swapchain image
-- 封装类归 renderer 层（架构上"ImGui 录制"属渲染内容录制，归 renderer；当前 Application 临时调用，Step 14 renderer 接管 render_frame 内容时已就位）
+- 封装类（`ImGuiBackend`）所有权归 Application（绑定窗口/输入生命周期），Renderer 经非拥有指针引用（与 Himalaya 同构）；begin_frame 留 Application（需 GLFW/DeltaTime）
 - Descriptor Pool 由 ImGui backend 自建自销（`DescriptorPoolSize > 0`），不手动管理
 - 版本 1.92.6 的 Vulkan backend API 与 Himalaya 参考的 1.91.9 不同：渲染管线信息在 `PipelineInfoMain.PipelineRenderingCreateInfo` 下、`Init` 返回 bool 需检查、需设 `ApiVersion`
 
@@ -78,10 +79,11 @@ MUSTREAD:8
 - 显示 buffer：`R8G8B8A8_UNORM`、OPTIMAL tiling、手动 `vkAllocateMemory`（不走 VMA）
 - CUDA 侧通过 `cudaSurfaceObject_t` 写入显示 buffer（路径：`cudaImportExternalMemory` → `cudaExternalMemoryGetMappedMipmappedArray`（single-mip，numLevels=1）→ `cudaGetMipmappedArrayLevel` 取 level 0 `cudaArray_t` → `cudaCreateSurfaceObject`；dedicated allocation 需设 `cudaExternalMemoryDedicated` 标志）
 - 同步：per-frame binary external semaphore × 2，CUDA signal → Vulkan wait（路径：`cudaImportExternalSemaphore`，OPAQUE_WIN32 binary 语义）
-- Blit：`vkCmdBlitImage`（显示 buffer → swapchain image，线性→sRGB 自动编码）
+- Blit：`vkCmdBlitImage`（显示 buffer → swapchain image）。src `R8G8B8A8_UNORM` → dst `B8G8R8A8_SRGB`，blit 硬件自动完成：UNORM→float→通道重排（RGBA→BGRA）→sRGB 编码（spec 明确支持 unorm/snorm 互转 + sRGB 目标编码）
 - 测试 kernel：UV 渐变 + 帧号驱动动画
 - 测试 kernel 归 renderer 层（渲染内容属 renderer，optix 层只提供封装能力）；帧号计数器由 renderer 层持有（与 Himalaya `Renderer::frame_counter_` 一致）
-- `CUDA_CHECK` 宏定义于 `optix/include/qualquer/optix/cuda_check.h`，optix/renderer 层复用
+- 显式 CUDA stream：`optix::Context` 持有 `cudaStream_t`，kernel launch 与 external semaphore signal 提交其上。本步验证 stream 机制，为未来重叠计算（累积/tone map 并行）铺路
+- `CUDA_CHECK` 宏定义于 `optix/include/qualquer/optix/cuda_check.h`，optix/renderer 层复用；.cu kernel 文件用内联 `CUDA_CHECK_KERNEL`（fprintf+abort，不拉 spdlog/fmt）
 
 ### CUDA 设备打分
 

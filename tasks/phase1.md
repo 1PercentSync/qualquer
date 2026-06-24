@@ -132,8 +132,11 @@ MUSTREAD:4
 
 ## Step 14：帧循环集成（CUDA blit）
 
-- [ ] 帧循环中集成 CUDA test kernel launch + cudaSignalExternalSemaphoresAsync
-- [ ] Vulkan submit 中添加 external semaphore wait
-- [ ] 命令录制中添加 display buffer → swapchain image 的 vkCmdBlitImage（含 layout transition）
-- [ ] Swapchain 重建时同步重建 display buffer（Vulkan InteropImage destroy/recreate + CUDA 侧 reimport）
+- [ ] `optix::Context` 添加显式 `cudaStream_t stream`（init 创建 / destroy 销毁）
+- [ ] `launch_test_kernel` 添加 stream 参数，kernel `<<<…,stream>>>`
+- [ ] 创建 `renderer::Renderer` 类（持 frame_counter_ + imgui_ 非拥有指针，init/destroy，render_frame 入口 + 内部 submit_cuda/record_vulkan 拆分）
+- [ ] Renderer 接管 Vulkan 命令录制（从 Application 移入，保持原逻辑，imgui 经指针）
+- [ ] CUDA launch + cudaSignalExternalSemaphoresAsync 接入（render_frame.submit_cuda，stream）
+- [ ] Vulkan submit 添加 external semaphore wait（end_frame 的 submit_info）
+- [ ] blit 录制 + layout 流转重构（display buffer barrier + swapchain UNDEFINED→TRANSFER_DST→blit→COLOR_ATTACHMENT + ImGui loadOp=LOAD + PRESENT）
 - [ ] 请求用户在 CLion 中编译验证（窗口显示渐变色 + ImGui 面板，resize 不崩溃）
