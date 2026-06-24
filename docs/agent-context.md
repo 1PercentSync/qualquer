@@ -11,13 +11,13 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 1 — Vulkan 基础设施 + ImGui + 调试面板
-- **进度**：Step 14 进行中（external wait 接入；下一步重构帧循环时序为“先 CUDA 后 acquire”）
+- **进度**：Step 14 进行中（帧循环时序重构完成，先 CUDA 后 acquire；待 blit 录制）
 
 ### 下一个任务
 
-Step 14（新增小项）：帧循环时序重构——submit_cuda 移到 acquire 之前；begin_frame 拆为 wait_frame_slot + acquire_image；Renderer 拆 submit_cuda/record_vulkan 为 public
+Step 14 第 7 项：blit 录制 + layout 流转重构（display buffer barrier + swapchain UNDEFINED→TRANSFER_DST→blit→COLOR_ATTACHMENT + ImGui loadOp=LOAD + PRESENT）
 
-> Step 14 第 6 项完成。Vulkan submit 已 wait CUDA external semaphore。接下来调整帧循环提交顺序：把 CUDA submit 移到 acquire 之前，使 acquire 等待被 CUDA 计算重叠隐藏（当前实现是 acquire→CUDA，与目标设计 CUDA→acquire 相反）。详见 `tasks/phase1.md`。
+> 帧循环时序重构完成。submit_cuda 移到 acquire 之前，CUDA 引擎在 acquire 等待期间就在算。接下来加 blit 录制，把 CUDA 写入的 display buffer 呈现到 swapchain——这是最后一项实质改动，完成后窗口显示渐变色。详见 `tasks/phase1.md`。
 
 ---
 
