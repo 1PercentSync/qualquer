@@ -1,0 +1,91 @@
+#pragma once
+
+/**
+ * @file renderer.h
+ * @brief Renderer: single-frame render content (CUDA submit + Vulkan recording).
+ */
+
+#include <cstdint>
+
+#include <vulkan/vulkan.h>
+
+namespace qualquer::optix {
+    class Context;
+}
+
+namespace qualquer::vulkan {
+    class InteropImage;
+
+    class Swapchain;
+}
+
+namespace qualquer::renderer {
+    class ImGuiBackend;
+
+    /**
+     * @brief Inputs handed to Renderer::render_frame each frame.
+     *
+     * Bundles the per-frame handles the renderer needs to submit CUDA work and
+     * record Vulkan commands. Every member is owned elsewhere (Application or
+     * Context); this struct only borrows references for the duration of one
+     * render_frame call, per the ownership principle (no handle caching by users).
+     */
+    struct RenderInput {
+        /** @brief Command buffer to record into (already begun by the caller). */
+        VkCommandBuffer cmd;
+
+        /** @brief CUDA context: surface, stream, external semaphores. */
+        optix::Context &cuda_context;
+
+        /** @brief Display buffer (interop image) blitted to the swapchain image. */
+        vulkan::InteropImage &display_buffer;
+
+        /** @brief Swapchain providing the target image and its view. */
+        vulkan::Swapchain &swapchain;
+
+        /** @brief Index of the acquired swapchain image for this frame. */
+        uint32_t image_index;
+
+        /** @brief ImGui backend for overlay recording. */
+        ImGuiBackend &imgui;
+    };
+
+    /**
+     * @brief Single-frame render content: CUDA submit + Vulkan command recording.
+     *
+     * Encapsulates what one frame draws — the CUDA write into the display buffer,
+     * the Vulkan blit to the swapchain image, and the ImGui overlay — so the
+     * Application only keeps the timing skeleton (begin_frame / submit / present).
+     * Owns no handles it does not create; the frame counter driving temporal
+     * animation is the sole owned state.
+     */
+    class Renderer {
+    public:
+        /**
+         * @brief Submits CUDA work and records Vulkan commands for one frame.
+         *
+         * CUDA submit (kernel launch + external semaphore signal) happens first so the
+         * display buffer is written before the Vulkan blit reads it; Vulkan recording
+         * follows. The caller is responsible for begin/end command buffer and submit.
+         * @param input Per-frame handles (see RenderInput).
+         */
+        void render_frame(const RenderInput &input);
+
+    private:
+        /**
+         * @brief Launches the test kernel and signals the frame's external semaphore.
+         *
+         * Both run on the CUDA context's explicit stream, in submission order, so the
+         * signal is posted after the kernel completes.
+         */
+        void submit_cuda(const RenderInput &input);
+
+        /**
+         * @brief Records the Vulkan command sequence (blit, ImGui, layout transitions).
+         */
+        void record_vulkan(const RenderInput &input);
+
+        /** @brief Monotonic frame counter driving temporal animation. */
+        uint32_t frame_counter_ = 0;
+    };
+} // namespace qualquer::renderer
