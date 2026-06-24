@@ -44,6 +44,15 @@ namespace qualquer::app {
         for (auto &sem: interop_semaphores_) {
             sem.init(context_);
         }
+        cuda_context_.import_display_buffer(display_buffer_.win32_handle,
+                                             swapchain_.extent.width,
+                                             swapchain_.extent.height,
+                                             display_buffer_.size);
+        std::array<void *, optix::kMaxFramesInFlight> semaphore_handles{};
+        for (uint32_t i = 0; i < optix::kMaxFramesInFlight; ++i) {
+            semaphore_handles[i] = interop_semaphores_[i].win32_handle;
+        }
+        cuda_context_.import_semaphores(semaphore_handles);
         imgui_backend_.init(context_, swapchain_, window_);
     }
 
@@ -295,27 +304,37 @@ namespace qualquer::app {
     void Application::recreate_swapchain() {
         // Swapchain::recreate waits the graphics queue idle first, which also guards
         // the display buffer's destruction — any GPU work referencing it has finished.
-        // The display buffer is resolution-dependent and rebuilt against the new
-        // swapchain extent; the external semaphores are resolution-independent and stay.
+        // The CUDA side must release its imported surface before the Vulkan image is
+        // destroyed (the surface wraps that image's memory); after the Vulkan display
+        // buffer is rebuilt against the new swapchain extent, the CUDA side re-imports.
+        // External semaphores are resolution-independent and stay (not released here).
+        cuda_context_.release_display_buffer();
         swapchain_.recreate(context_);
         display_buffer_.destroy(context_);
         display_buffer_.init(context_,
                              VK_FORMAT_R8G8B8A8_UNORM,
                              swapchain_.extent,
                              VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
+        cuda_context_.import_display_buffer(display_buffer_.win32_handle,
+                                             swapchain_.extent.width,
+                                             swapchain_.extent.height,
+                                             display_buffer_.size);
     }
 
     void Application::destroy() {
         vkQueueWaitIdle(context_.graphics_queue);
 
         imgui_backend_.destroy();
+        // CUDA releases its imported surface/semaphores before the Vulkan resources
+        // they wrap: the surface backs the display-buffer image memory, and the
+        // imported semaphores back the Vulkan external semaphores.
+        cuda_context_.destroy();
         for (auto &sem: interop_semaphores_) {
             sem.destroy(context_);
         }
         display_buffer_.destroy(context_);
         swapchain_.destroy(context_);
         context_.destroy();
-        cuda_context_.destroy();
 
         glfwDestroyWindow(window_);
         glfwTerminate();
