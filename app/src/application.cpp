@@ -168,10 +168,20 @@ namespace qualquer::app {
             .commandBuffer = frame.command_buffer,
         };
 
-        const VkSemaphoreSubmitInfo wait_info{
-            .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-            .semaphore = frame.image_available_semaphore,
-            .stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+        const VkSemaphoreSubmitInfo wait_infos[2]{
+            {
+                .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+                .semaphore = frame.image_available_semaphore,
+                .stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+            },
+            {
+                .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+                // External semaphore signaled by CUDA after writing the display buffer.
+                // Waits the CUDA write before Vulkan reads the buffer (blit). ALL_COMMANDS
+                // is conservative; the actual first read is the blit in record_vulkan.
+                .semaphore = interop_semaphores_[context_.frame_index].semaphore,
+                .stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+            },
         };
 
         // Per-swapchain-image (not per-frame-slot): see Swapchain::render_finished_semaphores.
@@ -183,8 +193,8 @@ namespace qualquer::app {
 
         const VkSubmitInfo2 submit_info{
             .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
-            .waitSemaphoreInfoCount = 1,
-            .pWaitSemaphoreInfos = &wait_info,
+            .waitSemaphoreInfoCount = 2,
+            .pWaitSemaphoreInfos = wait_infos,
             .commandBufferInfoCount = 1,
             .pCommandBufferInfos = &cmd_submit_info,
             .signalSemaphoreInfoCount = 1,
