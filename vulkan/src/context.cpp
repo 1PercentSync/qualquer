@@ -5,7 +5,6 @@
 
 #include <qualquer/vulkan/context.h>
 
-#include <cstring>
 #include <string>
 #include <vector>
 
@@ -148,7 +147,7 @@ namespace qualquer::vulkan {
         }
     } // namespace
 
-    std::vector<std::array<std::uint8_t, 16>> Context::pre_init(GLFWwindow *window) {
+    std::vector<std::array<std::uint8_t, 16> > Context::pre_init(GLFWwindow *window) {
         create_instance();
         create_debug_messenger();
         VK_CHECK(glfwCreateWindowSurface(instance, window, nullptr, &surface));
@@ -251,7 +250,7 @@ namespace qualquer::vulkan {
         spdlog::info("Debug messenger created");
     }
 
-    std::vector<std::array<std::uint8_t, 16>> Context::enumerate_presentable_devices() const {
+    std::vector<std::array<std::uint8_t, 16> > Context::enumerate_presentable_devices() const {
         uint32_t device_count = 0;
         vkEnumeratePhysicalDevices(instance, &device_count, nullptr);
 
@@ -263,7 +262,7 @@ namespace qualquer::vulkan {
         std::vector<VkPhysicalDevice> devices(device_count);
         vkEnumeratePhysicalDevices(instance, &device_count, devices.data());
 
-        std::vector<std::array<std::uint8_t, 16>> uuids;
+        std::vector<std::array<std::uint8_t, 16> > uuids;
         // ReSharper disable once CppLocalVariableMayBeConst
         for (VkPhysicalDevice dev: devices) {
             if (is_presentable_device(dev, surface)) {

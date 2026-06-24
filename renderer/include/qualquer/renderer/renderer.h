@@ -5,8 +5,6 @@
  * @brief Renderer: single-frame render content (CUDA submit + Vulkan recording).
  */
 
-#include <cstdint>
-
 #include <vulkan/vulkan.h>
 
 namespace qualquer::optix {

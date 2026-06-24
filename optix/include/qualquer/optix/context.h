@@ -40,7 +40,7 @@ namespace qualquer::optix {
          * match for presentation.
          * @param presentable_uuids UUIDs of devices the Vulkan layer confirmed presentable.
          */
-        void init(const std::vector<std::array<std::uint8_t, 16>> &presentable_uuids);
+        void init(const std::vector<std::array<std::uint8_t, 16> > &presentable_uuids);
 
         /**
          * @brief Imports the Vulkan-allocated display buffer for CUDA access.

@@ -8,7 +8,6 @@
 
 #include <algorithm>
 #include <array>
-#include <cstring>
 #include <cuda_runtime.h>
 #include <spdlog/spdlog.h>
 
@@ -138,7 +137,8 @@ namespace qualquer::optix {
                      best_device, prop.name, best_major, best_minor);
     }
 
-    void Context::import_display_buffer(void *win32_handle, const uint32_t width, const uint32_t height, const uint64_t size) {
+    void Context::import_display_buffer(void *win32_handle, const uint32_t width, const uint32_t height,
+                                        const uint64_t size) {
         // Dedicated flag is required because the Vulkan side used a dedicated
         // allocation (VkMemoryDedicatedAllocateInfo). size must match vkAllocateMemory's size.
         cudaExternalMemoryHandleDesc mem_handle_desc{};
@@ -222,7 +222,7 @@ namespace qualquer::optix {
         // kernel/signal submitted earlier in teardown. device_id_ needs no cleanup —
         // the runtime-managed primary context is left intact for other holders.
         release_display_buffer();
-        for (auto & sem : external_semaphores) {
+        for (auto &sem: external_semaphores) {
             if (sem != nullptr) {
                 CUDA_CHECK(cudaDestroyExternalSemaphore(sem));
                 sem = nullptr;

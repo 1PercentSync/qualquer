@@ -91,7 +91,7 @@ namespace qualquer::vulkan {
          * @param window GLFW window used to create the presentation surface.
          * @return UUIDs of all physical devices supporting presentation to the surface.
          */
-        std::vector<std::array<std::uint8_t, 16>> pre_init(GLFWwindow *window);
+        std::vector<std::array<std::uint8_t, 16> > pre_init(GLFWwindow *window);
 
         /**
          * @brief Phase 2 of the two-stage init: complete the device and its resources.
@@ -187,7 +187,7 @@ namespace qualquer::vulkan {
          * and supports Vulkan 1.4. UUIDs are read via VkPhysicalDeviceIDProperties.
          * @return UUIDs of all qualifying devices, for CUDA-side constrained selection.
          */
-        [[nodiscard]] std::vector<std::array<std::uint8_t, 16>> enumerate_presentable_devices() const;
+        [[nodiscard]] std::vector<std::array<std::uint8_t, 16> > enumerate_presentable_devices() const;
 
         /**
          * @brief Matches the physical device whose UUID equals the given UUID.

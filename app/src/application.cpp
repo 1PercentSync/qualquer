@@ -32,7 +32,7 @@ namespace qualquer::app {
         // selects among them (presentability-constrained), Vulkan completes on
         // the CUDA-selected device. This binds both layers to the same physical
         // GPU and excludes compute-only devices (e.g. a TCC GPU) up front.
-        const std::vector<std::array<std::uint8_t, 16>> presentable_uuids = context_.pre_init(window_);
+        const std::vector<std::array<std::uint8_t, 16> > presentable_uuids = context_.pre_init(window_);
         cuda_context_.init(presentable_uuids);
         context_.init(cuda_context_.device_uuid);
 
@@ -45,9 +45,9 @@ namespace qualquer::app {
             sem.init(context_);
         }
         cuda_context_.import_display_buffer(display_buffer_.win32_handle,
-                                             swapchain_.extent.width,
-                                             swapchain_.extent.height,
-                                             display_buffer_.size);
+                                            swapchain_.extent.width,
+                                            swapchain_.extent.height,
+                                            display_buffer_.size);
         std::array<void *, optix::kMaxFramesInFlight> semaphore_handles{};
         for (uint32_t i = 0; i < optix::kMaxFramesInFlight; ++i) {
             semaphore_handles[i] = interop_semaphores_[i].win32_handle;
@@ -135,7 +135,8 @@ namespace qualquer::app {
             // Skipping submit2 would leave that signal unconsumed, so the next frame's
             // signal on the same binary semaphore would violate the signal/wait pairing.
             // Drain it with an empty submit that only waits the semaphore.
-            const VkSemaphore ext_sem = interop_semaphores_[context_.frame_index].semaphore;
+            // ReSharper disable once CppLocalVariableMayBeConst
+            VkSemaphore ext_sem = interop_semaphores_[context_.frame_index].semaphore;
             const VkSemaphoreSubmitInfo drain_wait{
                 .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
                 .semaphore = ext_sem,
@@ -277,9 +278,9 @@ namespace qualquer::app {
                              swapchain_.extent,
                              VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
         cuda_context_.import_display_buffer(display_buffer_.win32_handle,
-                                             swapchain_.extent.width,
-                                             swapchain_.extent.height,
-                                             display_buffer_.size);
+                                            swapchain_.extent.width,
+                                            swapchain_.extent.height,
+                                            display_buffer_.size);
     }
 
     void Application::destroy() {

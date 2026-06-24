@@ -5,7 +5,6 @@
 
 #include <cstdint>
 #include <cstdio>
-#include <cstdlib>
 
 #include <cuda_runtime.h>
 
@@ -32,10 +31,10 @@ namespace qualquer::renderer {
 
         // Animated UV gradient with a frame counter, producing a moving pattern that
         // verifies the CUDA write path and per-frame animation end-to-end.
-        __global__ void test_kernel(const cudaSurfaceObject_t surface,
-                                    const uint32_t width,
-                                    const uint32_t height,
-                                    const uint32_t frame) {
+        __global__ void test_kernel(cudaSurfaceObject_t surface,
+                                    uint32_t width,
+                                    uint32_t height,
+                                    uint32_t frame) {
             const uint32_t x = blockIdx.x * blockDim.x + threadIdx.x;
             const uint32_t y = blockIdx.y * blockDim.y + threadIdx.y;
             if (x >= width || y >= height) {
@@ -65,11 +64,13 @@ namespace qualquer::renderer {
         }
     } // namespace
 
-    void launch_test_kernel(const cudaSurfaceObject_t surface,
-                            const uint32_t width,
-                            const uint32_t height,
-                            const uint32_t frame,
-                            const cudaStream_t stream) {
+    // ReSharper disable CppParameterMayBeConst
+    void launch_test_kernel(cudaSurfaceObject_t surface,
+                            uint32_t width,
+                            uint32_t height,
+                            uint32_t frame,
+                            cudaStream_t stream) {
+        // ReSharper restore CppParameterMayBeConst
         constexpr uint32_t kBlockDim = 16;
         constexpr dim3 block(kBlockDim, kBlockDim);
         const dim3 grid((width + kBlockDim - 1) / kBlockDim, (height + kBlockDim - 1) / kBlockDim);
