@@ -68,12 +68,13 @@ namespace qualquer::renderer {
     void launch_test_kernel(const cudaSurfaceObject_t surface,
                             const uint32_t width,
                             const uint32_t height,
-                            const uint32_t frame) {
+                            const uint32_t frame,
+                            const cudaStream_t stream) {
         constexpr uint32_t kBlockDim = 16;
         constexpr dim3 block(kBlockDim, kBlockDim);
         const dim3 grid((width + kBlockDim - 1) / kBlockDim, (height + kBlockDim - 1) / kBlockDim);
 
-        test_kernel<<<grid, block>>>(surface, width, height, frame);
+        test_kernel<<<grid, block, 0, stream>>>(surface, width, height, frame);
 
         CUDA_CHECK_KERNEL(cudaGetLastError());
     }
