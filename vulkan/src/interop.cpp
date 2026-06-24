@@ -122,4 +122,43 @@ namespace qualquer::vulkan {
         vkDestroyImage(context.device, image, nullptr);
         vkFreeMemory(context.device, memory, nullptr);
     }
+
+    void InteropSemaphore::init(const Context &context) {
+        // Flag the semaphore as exportable so CUDA can import the handle and
+        // signal it from its side, coordinating display-buffer ownership with
+        // the Vulkan wait in the frame loop. The OPAQUE_WIN32 handle type pairs
+        // with CUDA's cudaExternalSemaphoreHandleTypeOpaqueWin32.
+        VkExportSemaphoreCreateInfo export_info{
+            .sType = VK_STRUCTURE_TYPE_EXPORT_SEMAPHORE_CREATE_INFO,
+            .handleTypes = VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_OPAQUE_WIN32_BIT_KHR,
+        };
+
+        const VkSemaphoreCreateInfo semaphore_info{
+            .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+            .pNext = &export_info,
+        };
+
+        VK_CHECK(vkCreateSemaphore(context.device, &semaphore_info, nullptr, &semaphore));
+
+        // Export the NT handle. VkExportSemaphoreWin32HandleInfoKHR (security attrs /
+        // access mask) is intentionally omitted: same-process CUDA import needs no
+        // custom authorization, and the driver's default descriptor is accessible
+        // within the process.
+        const VkSemaphoreGetWin32HandleInfoKHR handle_info{
+            .sType = VK_STRUCTURE_TYPE_SEMAPHORE_GET_WIN32_HANDLE_INFO_KHR,
+            .semaphore = semaphore,
+            .handleType = VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_OPAQUE_WIN32_BIT_KHR,
+        };
+
+        VK_CHECK(vkGetSemaphoreWin32HandleKHR(context.device, &handle_info, &win32_handle));
+
+        spdlog::info("Interop semaphore created");
+    }
+
+    // Same close-before-destroy ordering as InteropImage: the NT handle holds a
+    // reference to the semaphore and must be released first.
+    void InteropSemaphore::destroy(const Context &context) const {
+        CloseHandle(win32_handle);
+        vkDestroySemaphore(context.device, semaphore, nullptr);
+    }
 } // namespace qualquer::vulkan
