@@ -152,6 +152,7 @@ namespace qualquer::app {
             .display_buffer = display_buffer_,
             .swapchain = swapchain_,
             .image_index = image_index_,
+            .frame_index = context_.frame_index,
             .imgui = imgui_backend_,
         };
         renderer_.render_frame(input);

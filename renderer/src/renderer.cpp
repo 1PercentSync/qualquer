@@ -5,9 +5,16 @@
 
 #include <qualquer/renderer/renderer.h>
 
+#include <cuda_runtime.h>
+
 #include <vulkan/vulkan.h>
 
+#include <qualquer/optix/context.h>
+#include <qualquer/optix/cuda_check.h>
 #include <qualquer/renderer/imgui_backend.h>
+#include <qualquer/renderer/test_kernel.h>
+#include <qualquer/vulkan/context.h>
+#include <qualquer/vulkan/interop.h>
 #include <qualquer/vulkan/swapchain.h>
 
 namespace qualquer::renderer {
@@ -18,7 +25,18 @@ namespace qualquer::renderer {
     }
 
     void Renderer::submit_cuda(const RenderInput &input) {
-        (void) input;
+        launch_test_kernel(input.cuda_context.display_surface,
+                           input.swapchain.extent.width,
+                           input.swapchain.extent.height,
+                           frame_counter_,
+                           input.cuda_context.stream);
+
+        // Signal the frame's external semaphore on the same stream as the kernel, so
+        // the signal is posted after the kernel completes (stream submission order).
+        // Binary OPAQUE_WIN32 needs no fence value — params stays zeroed.
+        cudaExternalSemaphore_t sem = input.cuda_context.external_semaphores[input.frame_index];
+        cudaExternalSemaphoreSignalParams params{};
+        CUDA_CHECK(cudaSignalExternalSemaphoresAsync(&sem, &params, 1, input.cuda_context.stream));
     }
 
     void Renderer::record_vulkan(const RenderInput &input) {
