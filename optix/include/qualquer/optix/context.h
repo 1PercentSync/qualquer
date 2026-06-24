@@ -50,10 +50,11 @@ namespace qualquer::optix {
          * object). The resulting display_surface member is the write handle for the
          * shared image.
          * @param win32_handle  NT handle exported by vulkan::InteropImage.
-         * @param extent        Image extent, must match the Vulkan image.
+         * @param width         Image width in pixels, must match the Vulkan image.
+         * @param height        Image height in pixels, must match the Vulkan image.
          * @param size          Allocation size from vkGetImageMemoryRequirements.
          */
-        void import_display_buffer(void *win32_handle, VkExtent2D extent, VkDeviceSize size);
+        void import_display_buffer(void *win32_handle, uint32_t width, uint32_t height, uint64_t size);
 
         /**
          * @brief Imports the per-frame Vulkan external semaphores.
@@ -63,6 +64,15 @@ namespace qualquer::optix {
          * @param win32_handles NT handles exported by vulkan::InteropSemaphore.
          */
         void import_semaphores(std::array<void *, kMaxFramesInFlight> win32_handles);
+
+        /**
+         * @brief Releases only the display-buffer import, keeping the semaphores.
+         *
+         * Used on swapchain resize: the display buffer is resolution-dependent and
+         * rebuilt, but the semaphores are resolution-independent and persist. Follow
+         * with import_display_buffer once the new buffer is ready.
+         */
+        void release_display_buffer() const;
 
         /** @brief Releases CUDA resources associated with the selected device. */
         void destroy() const;
@@ -79,7 +89,7 @@ namespace qualquer::optix {
         /**
          * @brief Surface object over the imported display buffer.
          *
-         * Zero before import_display_buffer and after destroy.
+         * Zero before import_display_buffer and after release_display_buffer / destroy.
          */
         cudaSurfaceObject_t display_surface = 0;
 

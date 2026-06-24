@@ -136,7 +136,7 @@ namespace qualquer::optix {
                      best_device, prop.name, best_major, best_minor);
     }
 
-    void Context::import_display_buffer(void *win32_handle, const VkExtent2D extent, const VkDeviceSize size) {
+    void Context::import_display_buffer(void *win32_handle, const uint32_t width, const uint32_t height, const uint64_t size) {
         // Import the Vulkan-allocated memory via its NT handle. Dedicated flag is
         // required because the Vulkan side used a dedicated allocation
         // (VkMemoryDedicatedAllocateInfo). size must match vkAllocateMemory's size.
@@ -160,8 +160,8 @@ namespace qualquer::optix {
         fmt_desc.f = cudaChannelFormatKindUnsigned;
 
         cudaExtent cuda_ext{};
-        cuda_ext.width = extent.width;
-        cuda_ext.height = extent.height;
+        cuda_ext.width = width;
+        cuda_ext.height = height;
         cuda_ext.depth = 0;
 
         cudaExternalMemoryMipmappedArrayDesc mip_desc{};
@@ -175,11 +175,11 @@ namespace qualquer::optix {
         CUDA_CHECK(cudaGetMipmappedArrayLevel(&array_, mipmap_array_, 0));
 
         cudaResourceDesc res_desc{};
-        res_desc.resType = cudaResourceTypeSurface;
-        res_desc.res.surface.array.array = array_;
+        res_desc.resType = cudaResourceTypeArray;
+        res_desc.res.array.array = array_;
         CUDA_CHECK(cudaCreateSurfaceObject(&display_surface, &res_desc));
 
-        spdlog::info("Display buffer imported ({}x{})", extent.width, extent.height);
+        spdlog::info("Display buffer imported ({}x{})", width, height);
     }
 
     void Context::import_semaphores(const std::array<void *, kMaxFramesInFlight> win32_handles) {
@@ -192,18 +192,10 @@ namespace qualquer::optix {
         spdlog::info("Imported {} external semaphores", kMaxFramesInFlight);
     }
 
-    void Context::destroy() const {
-        // Release interop resources in reverse creation order. The surface object
-        // wraps array_, so it must be destroyed before array_; the array is a level
-        // of mipmap_array_ and the mipmap is mapped onto external_memory_, so each
-        // is freed before its backing object. External semaphores are independent.
-        // device_id_ needs no cleanup — the runtime-managed primary context is left
-        // intact for other holders.
-        for (const auto sem : external_semaphores) {
-            if (sem != nullptr) {
-                CUDA_CHECK(cudaDestroyExternalSemaphore(sem));
-            }
-        }
+    void Context::release_display_buffer() const {
+        // Reverse creation order: the surface wraps array_, so it must go before
+        // array_; array_ is a level of mipmap_array_, which is mapped onto
+        // external_memory_, so each is freed before its backing object.
         if (display_surface != 0) {
             CUDA_CHECK(cudaDestroySurfaceObject(display_surface));
         }
@@ -215,6 +207,18 @@ namespace qualquer::optix {
         }
         if (external_memory_ != nullptr) {
             CUDA_CHECK(cudaDestroyExternalMemory(external_memory_));
+        }
+    }
+
+    void Context::destroy() const {
+        // Display-buffer import first (surface wraps the imported image memory), then
+        // the independent semaphores. device_id_ needs no cleanup — the runtime-
+        // managed primary context is left intact for other holders.
+        release_display_buffer();
+        for (const auto sem : external_semaphores) {
+            if (sem != nullptr) {
+                CUDA_CHECK(cudaDestroyExternalSemaphore(sem));
+            }
         }
     }
 } // namespace qualquer::optix
