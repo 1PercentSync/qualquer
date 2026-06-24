@@ -57,7 +57,7 @@ MUSTREAD:8
 
 ### 帧循环（编排与同步归 app 层）
 
-- 流程：`wait fence → acquire → reset fence → [CUDA 提交 + Vulkan 录制 by renderer] → submit2 → present`
+- 流程：`wait fence → reset fence → [CUDA 提交] → acquire → [Vulkan 录制 by renderer] → submit2 → present`。CUDA submit 置于 acquire 之前，使 acquire 等待被 CUDA 计算隐藏（异步提交下，提交顺序决定 GPU CUDA 引擎启动时机与重叠，见 `docs/technical-decisions.md`）
 - 录制与 CUDA 提交归 renderer（`Renderer::render_frame`，内部拆 submit_cuda / record_vulkan）；begin_frame（含 ImGui begin_frame，需 GLFW/DeltaTime）与 submit/present 的时序骨架留 app
 - Clear 用 dynamic rendering：`vkCmdBeginRendering` + attachment `loadOp` → `vkCmdEndRendering`。blit 介入后 `loadOp=LOAD` 保留 blit 结果；此前为 `CLEAR`（oldLayout=UNDEFINED 无内容可 LOAD）
 - swapchain image 的 layout 流转（blit 介入后）：`UNDEFINED → TRANSFER_DST_OPTIMAL →（blit）→ COLOR_ATTACHMENT_OPTIMAL → PRESENT_SRC_KHR`，手写 `vkCmdPipelineBarrier2`（dynamic rendering 不自动管 layout）

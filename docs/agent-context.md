@@ -11,13 +11,13 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 1 — Vulkan 基础设施 + ImGui + 调试面板
-- **进度**：Step 14 进行中（CUDA launch + signal 接入，待 Vulkan submit 加 external wait）
+- **进度**：Step 14 进行中（external wait 接入；下一步重构帧循环时序为“先 CUDA 后 acquire”）
 
 ### 下一个任务
 
-Step 14 第 6 项：Vulkan submit 添加 external semaphore wait（end_frame 的 submit_info）
+Step 14（新增小项）：帧循环时序重构——submit_cuda 移到 acquire 之前；begin_frame 拆为 wait_frame_slot + acquire_image；Renderer 拆 submit_cuda/record_vulkan 为 public
 
-> Step 14 第 5 项完成。submit_cuda 就位（kernel launch + signal external semaphore，同 stream 顺序提交）。但 Vulkan 侧还没 wait 该 semaphore，不能单独运行验证（binary semaphore 重复 signal）。接下来在 end_frame 的 submit_info 加 external semaphore wait，配对后才安全。详见 `tasks/phase1.md`。
+> Step 14 第 6 项完成。Vulkan submit 已 wait CUDA external semaphore。接下来调整帧循环提交顺序：把 CUDA submit 移到 acquire 之前，使 acquire 等待被 CUDA 计算重叠隐藏（当前实现是 acquire→CUDA，与目标设计 CUDA→acquire 相反）。详见 `tasks/phase1.md`。
 
 ---
 

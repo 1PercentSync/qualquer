@@ -55,11 +55,13 @@ MUSTREAD:8
 **帧循环顺序**：
 
 ```
-1. CUDA：累积 + tone map
+1. CUDA：累积 + tone map（submit 在最前，GPU CUDA 引擎立即启动）
 2. Vulkan：acquire + blit + ImGui + present
 ```
 
 先 CUDA 后 acquire，使 acquire 等待时间被累积隐藏。
+
+**为什么提交顺序重要（异步 ≠ 重叠）**：异步提交只保证 CPU 不阻塞，不保证 GPU 引擎何时启动。submit_CUDA 一调用，GPU 的 CUDA 引擎立刻开始算；若 acquire 在前，CUDA 引擎在 CPU 等 acquire 期间空转，CUDA 计算时间全额串行追加。正确性由 external semaphore 保证（与提交先后无关），但重叠收益取决于提交顺序——先 CUDA 让 CUDA 引擎在 acquire 等待期间就在算。
 
 **性能特征**：
 
