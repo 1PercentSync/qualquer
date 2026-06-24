@@ -1,0 +1,125 @@
+/**
+ * @file interop.cpp
+ * @brief Vulkan external memory and semaphore resource implementation.
+ */
+
+// windows.h must precede any vulkan_win32.h inclusion: the Win32 handle types
+// (HANDLE) that vkGetMemoryWin32HandleKHR's signature depends on come from it.
+// WIN32_LEAN_AND_MEAN trims the macro surface to only the handle API needed here.
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+
+#include <qualquer/vulkan/interop.h>
+
+#include <vulkan/vulkan_win32.h>
+
+#include <spdlog/spdlog.h>
+
+#include <qualquer/vulkan/context.h>
+
+namespace qualquer::vulkan {
+    void InteropImage::init(const Context &context,
+                            const VkFormat format,
+                            const VkExtent2D extent,
+                            const VkImageUsageFlags usage) {
+        // Flag the image as exportable so its backing memory can be allocated with
+        // export info and mapped by another API (CUDA). The handleType chosen is the
+        // opaque Win32 NT handle — the same type CUDA's cudaExternalMemoryHandleTypeOpaqueWin32
+        // imports, so the two sides agree on the handle representation.
+        VkExternalMemoryImageCreateInfo external_info{
+            .sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
+            .handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT_KHR,
+        };
+
+        const VkImageCreateInfo image_info{
+            .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+            .pNext = &external_info,
+            .imageType = VK_IMAGE_TYPE_2D,
+            .format = format,
+            .extent = {extent.width, extent.height, 1},
+            .mipLevels = 1,
+            .arrayLayers = 1,
+            .samples = VK_SAMPLE_COUNT_1_BIT,
+            .tiling = VK_IMAGE_TILING_OPTIMAL,
+            .usage = usage,
+            .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+            .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+        };
+
+        VK_CHECK(vkCreateImage(context.device, &image_info, nullptr, &image));
+
+        VkMemoryRequirements mem_reqs;
+        vkGetImageMemoryRequirements(context.device, image, &mem_reqs);
+
+        // Pick a device-local memory type among those the driver reports as
+        // compatible with this image. Device-local gives the fastest blit source;
+        // interop images stay GPU-resident since CUDA writes them via a surface object.
+        VkPhysicalDeviceMemoryProperties mem_props;
+        vkGetPhysicalDeviceMemoryProperties(context.physical_device, &mem_props);
+
+        uint32_t memory_type_index = VK_MAX_MEMORY_TYPES;
+        for (uint32_t i = 0; i < mem_props.memoryTypeCount; ++i) {
+            if (!(mem_reqs.memoryTypeBits & (1u << i))) {
+                continue;
+            }
+            if (mem_props.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) {
+                memory_type_index = i;
+                break;
+            }
+        }
+        if (memory_type_index == VK_MAX_MEMORY_TYPES) {
+            spdlog::critical("No device-local memory type available for interop image");
+            std::abort();
+        }
+
+        // Dedicated allocation: one memory object bound exclusively to this image.
+        // External/exportable memory cannot go through VMA's suballocation block
+        // path, so the whole requirement is a single vkAllocateMemory, and the
+        // dedicated-allocate-info tells the driver this allocation is tied to one
+        // resource (required for interop export on most drivers).
+        VkMemoryDedicatedAllocateInfo dedicated{
+            .sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO,
+            .image = image,
+            .buffer = VK_NULL_HANDLE,
+        };
+
+        VkExportMemoryAllocateInfo export_info{
+            .sType = VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO,
+            .pNext = &dedicated,
+            .handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT_KHR,
+        };
+
+        const VkMemoryAllocateInfo alloc_info{
+            .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+            .pNext = &export_info,
+            .allocationSize = mem_reqs.size,
+            .memoryTypeIndex = memory_type_index,
+        };
+
+        VK_CHECK(vkAllocateMemory(context.device, &alloc_info, nullptr, &memory));
+        VK_CHECK(vkBindImageMemory(context.device, image, memory, 0));
+
+        // Export the NT handle. VkExportMemoryWin32HandleInfoKHR (security attrs /
+        // access mask) is intentionally omitted: same-process CUDA import needs no
+        // custom authorization, and the driver's default descriptor is accessible
+        // within the process.
+        const VkMemoryGetWin32HandleInfoKHR handle_info{
+            .sType = VK_STRUCTURE_TYPE_MEMORY_GET_WIN32_HANDLE_INFO_KHR,
+            .memory = memory,
+            .handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT_KHR,
+        };
+
+        VK_CHECK(vkGetMemoryWin32HandleKHR(context.device, &handle_info, &win32_handle));
+
+        spdlog::info("Interop image created ({}x{})", extent.width, extent.height);
+    }
+
+    // The NT handle holds a reference to the backing memory, so it must be closed
+    // before the memory is freed, or the driver keeps the storage alive (leak).
+    // The image is destroyed before its memory is freed (creation order reversed).
+    void InteropImage::destroy(const Context &context) const {
+        CloseHandle(win32_handle);
+        vkDestroyImage(context.device, image, nullptr);
+        vkFreeMemory(context.device, memory, nullptr);
+    }
+} // namespace qualquer::vulkan

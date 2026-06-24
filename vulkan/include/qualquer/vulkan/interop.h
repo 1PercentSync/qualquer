@@ -60,12 +60,6 @@ namespace qualquer::vulkan {
          * on windows.h (CUDA's handle.win32.handle is void*).
          */
         void *win32_handle = nullptr;
-
-        /** @brief Image format, as requested at creation. */
-        VkFormat format = VK_FORMAT_UNDEFINED;
-
-        /** @brief Image extent, as requested at creation. */
-        VkExtent2D extent = {0, 0};
     };
 
     /**
