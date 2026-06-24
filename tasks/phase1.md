@@ -115,7 +115,7 @@ MUSTREAD:4
 
 ## Step 12：Vulkan Interop 资源
 
-- [ ] 创建 `vulkan/include/qualquer/vulkan/interop.h`（InteropImage、InteropSemaphore 类声明）
+- [x] 创建 `vulkan/include/qualquer/vulkan/interop.h`（InteropImage、InteropSemaphore 类声明）
 - [ ] 实现 InteropImage（R8G8B8A8_UNORM VkImage + OPTIMAL tiling + 手动 vkAllocateMemory with VkExportMemoryAllocateInfo + Win32 HANDLE 导出 + destroy）
 - [ ] 实现 InteropSemaphore（VkSemaphore with external + Win32 HANDLE 导出 + destroy）
 - [ ] Application 中创建 display buffer InteropImage（跟随 swapchain extent）和 2 个 per-frame InteropSemaphore

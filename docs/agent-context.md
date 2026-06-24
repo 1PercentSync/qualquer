@@ -11,13 +11,13 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 1 — Vulkan 基础设施 + ImGui + 调试面板
-- **进度**：Step 11 完成（external memory/semaphore win32 扩展启用，为 CUDA interop 导出做准备）
+- **进度**：Step 12 进行中（InteropImage、InteropSemaphore 类声明已创建，待实现）
 
 ### 下一个任务
 
-Step 12 第 1 项：创建 `vulkan/include/qualquer/vulkan/interop.h`（InteropImage、InteropSemaphore 类声明）
+Step 12 第 2 项：实现 InteropImage（R8G8B8A8_UNORM VkImage + OPTIMAL tiling + 手动 vkAllocateMemory with VkExportMemoryAllocateInfo + Win32 HANDLE 导出 + destroy）
 
-> Step 11 完成。下一步进入 Vulkan Interop 资源（导出 memory/semaphore 句柄给 CUDA）。详见 `tasks/phase1.md`。
+> Step 12 第 1 项完成。InteropImage/InteropSemaphore 类声明就位，接下来实现 InteropImage 的创建、dedicated exportable memory 绑定与 Win32 handle 导出。详见 `tasks/phase1.md`。
 
 ---
 
