@@ -147,6 +147,206 @@ renderer 用 Pipeline 暴露的 ProgramGroup handle 构建 SBT records。OptiX A
 
 ---
 
+## OptiX 9.1 API 参考
+
+> Phase 2 涉及的 API 函数和结构体速查。来源：[OptiX 9.1 API Reference](https://raytracing-docs.nvidia.com/optix9/api/OptiX_API_Reference.pdf)、[Programming Guide](https://raytracing-docs.nvidia.com/optix9/guide/optix_guide.251118.A4.pdf)。
+
+### 初始化
+
+```cpp
+// 加载 OptiX 库并初始化函数表（inline，定义在 optix_stubs.h）
+OptixResult optixInit(void);
+
+// 创建设备上下文。fromContext=0 使用当前 CUDA context
+OptixResult optixDeviceContextCreate(
+    CUcontext fromContext,
+    const OptixDeviceContextOptions* options,
+    OptixDeviceContext* context);
+
+OptixResult optixDeviceContextDestroy(OptixDeviceContext context);
+```
+
+```cpp
+struct OptixDeviceContextOptions {
+    OptixLogCallback logCallbackFunction;  // 日志回调函数指针
+    void*            logCallbackData;      // 传给回调的用户数据
+    int              logCallbackLevel;     // 最大日志级别（1-4）
+    OptixDeviceContextValidationMode validationMode;  // 验证模式
+};
+// logCallbackLevel: 1=fatal, 2=error, 3=warning, 4=print
+```
+
+### Module
+
+```cpp
+// 从 OptiX IR 或 PTX 创建 Module（注意：不是旧版 optixModuleCreateFromPTX）
+OptixResult optixModuleCreate(
+    OptixDeviceContext              context,
+    const OptixModuleCompileOptions*   moduleCompileOptions,
+    const OptixPipelineCompileOptions* pipelineCompileOptions,
+    const char*                     input,       // OptiX IR 或 PTX 数据
+    size_t                          inputSize,
+    char*                           logString,
+    size_t*                         logStringSize,
+    OptixModule*                    module);
+```
+
+```cpp
+struct OptixModuleCompileOptions {
+    int                          maxRegisterCount;  // 0 = 无限制
+    OptixCompileOptimizationLevel optLevel;         // DEFAULT / LEVEL_0..3
+    OptixCompileDebugLevel       debugLevel;        // DEFAULT / NONE / MINIMAL / MODERATE / FULL
+    const OptixModuleCompileBoundValueEntry* boundValues;
+    unsigned int                 numBoundValues;
+    unsigned int                 numPayloadTypes;
+    const OptixPayloadType*      payloadTypes;
+    OptixModule                  baseModule;        // 特化用，通常 nullptr
+};
+```
+
+### ProgramGroup
+
+```cpp
+OptixResult optixProgramGroupCreate(
+    OptixDeviceContext           context,
+    const OptixProgramGroupDesc* programDescriptions,
+    unsigned int                 numProgramGroups,
+    const OptixProgramGroupOptions* options,
+    char*                        logString,
+    size_t*                      logStringSize,
+    OptixProgramGroup*           programGroups);
+
+OptixResult optixProgramGroupDestroy(OptixProgramGroup programGroup);
+```
+
+```cpp
+struct OptixProgramGroupDesc {
+    OptixProgramGroupKind kind;  // RAYGEN / MISS / HITGROUP / ...
+    unsigned int          flags; // 通常 0
+    union {
+        OptixProgramGroupSingleModule raygen;    // { module, entryFunctionName }
+        OptixProgramGroupSingleModule miss;      // { module, entryFunctionName }
+        OptixProgramGroupHitgroup     hitgroup;  // 见下
+        // callables 省略
+    };
+};
+
+struct OptixProgramGroupSingleModule {
+    OptixModule module;
+    const char* entryFunctionName;  // e.g. "__raygen__rg"
+};
+
+struct OptixProgramGroupHitgroup {
+    OptixModule moduleCH;              // closest-hit module（可 nullptr）
+    const char* entryFunctionNameCH;
+    OptixModule moduleAH;              // any-hit module（可 nullptr）
+    const char* entryFunctionNameAH;
+    OptixModule moduleIS;              // intersection module（三角形时 nullptr）
+    const char* entryFunctionNameIS;
+};
+```
+
+### Pipeline
+
+```cpp
+OptixResult optixPipelineCreate(
+    OptixDeviceContext                 context,
+    const OptixPipelineCompileOptions* pipelineCompileOptions,
+    const OptixPipelineLinkOptions*    pipelineLinkOptions,
+    const OptixProgramGroup*           programGroups,
+    unsigned int                       numProgramGroups,
+    char*                              logString,
+    size_t*                            logStringSize,
+    OptixPipeline*                     pipeline);
+
+OptixResult optixPipelineSetStackSize(
+    OptixPipeline pipeline,
+    unsigned int  directCallableStackSizeFromTraversal,
+    unsigned int  directCallableStackSizeFromState,
+    unsigned int  continuationStackSize,
+    unsigned int  maxTraversableGraphDepth);
+```
+
+```cpp
+struct OptixPipelineCompileOptions {
+    int          usesMotionBlur;
+    unsigned int traversableGraphFlags;        // ALLOW_SINGLE_GAS / ALLOW_SINGLE_LEVEL_INSTANCING / ALLOW_ANY
+    int          numPayloadValues;             // 32-bit payload 寄存器数
+    int          numAttributeValues;           // 通常 2（三角形重心坐标）
+    unsigned int exceptionFlags;               // NONE / STACK_OVERFLOW / TRACE_DEPTH / DEBUG
+    const char*  pipelineLaunchParamsVariableName;  // 设备侧 extern __constant__ 变量名
+    size_t       pipelineLaunchParamsSizeInBytes;
+    unsigned int usesPrimitiveTypeFlags;       // 0 = 三角形 + custom
+    int          allowOpacityMicromaps;
+    int          allowClusteredGeometry;
+};
+
+struct OptixPipelineLinkOptions {
+    unsigned int maxTraceDepth;
+    unsigned int maxContinuationCallableDepth;
+    unsigned int maxDirectCallableDepthFromState;
+    unsigned int maxDirectCallableDepthFromTraversal;
+    unsigned int maxTraversableGraphDepth;
+};
+```
+
+### SBT
+
+```cpp
+OptixResult optixSbtRecordPackHeader(
+    OptixProgramGroup programGroup,
+    void*             sbtRecordHeaderHostPointer);  // 写 32 字节 header
+
+// 常量
+#define OPTIX_SBT_RECORD_HEADER_SIZE  32   // header 大小（字节）
+#define OPTIX_SBT_RECORD_ALIGNMENT    16   // record 最小对齐
+
+// SBT record 模板（用户定义）
+template<typename T>
+struct SbtRecord {
+    __align__(OPTIX_SBT_RECORD_ALIGNMENT)
+    char header[OPTIX_SBT_RECORD_HEADER_SIZE];
+    T data;  // 用户数据（可省略）
+};
+
+struct OptixShaderBindingTable {
+    CUdeviceptr  raygenRecord;
+    CUdeviceptr  exceptionRecord;
+    CUdeviceptr  missRecordBase;
+    unsigned int missRecordStrideInBytes;
+    unsigned int missRecordCount;
+    CUdeviceptr  hitgroupRecordBase;
+    unsigned int hitgroupRecordStrideInBytes;
+    unsigned int hitgroupRecordCount;
+    CUdeviceptr  callablesRecordBase;
+    unsigned int callablesRecordStrideInBytes;
+    unsigned int callablesRecordCount;
+};
+```
+
+### Launch
+
+```cpp
+OptixResult optixLaunch(
+    OptixPipeline                    pipeline,
+    CUstream                         stream,
+    CUdeviceptr                      pipelineParams,      // 设备侧 LaunchParams 地址
+    size_t                           pipelineParamsSize,
+    const OptixShaderBindingTable*   sbt,
+    unsigned int                     width,
+    unsigned int                     height,
+    unsigned int                     depth);
+```
+
+设备侧声明（每个需要访问的 module 中）：
+
+```cpp
+extern "C" __constant__ LaunchParams params;
+// 变量名必须与 pipelineLaunchParamsVariableName 一致
+```
+
+---
+
 ## 完成标准
 
 - optixLaunch 输出纯色到累积 buffer
