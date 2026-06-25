@@ -9,7 +9,7 @@
 
 ## Step 1：OptiX SDK 集成 + DeviceContext
 
-- [ ] 创建 `cmake/FindOptiX.cmake`（通过 `OptiX_INSTALL_DIR` 查找 include 目录，设置 `OptiX_INCLUDE_DIR`）
+- [x] 创建 `cmake/FindOptiX.cmake`（通过默认安装路径查找 include 目录，设置 `OptiX_INCLUDE_DIR`）
 - [ ] 更新 `optix/CMakeLists.txt`（引入 FindOptiX，添加 OptiX include 路径）
 - [ ] 创建 `optix/include/qualquer/optix/optix_check.h`（OPTIX_CHECK 宏）
 - [ ] `optix::Context` 新增 `OptixDeviceContext` 成员，init 中 `optixInit()` + `optixDeviceContextCreate()`（含日志回调），destroy 中销毁
