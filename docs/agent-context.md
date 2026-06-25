@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 2 — OptiX 基础（Pipeline/SBT，raygen 输出纯色，替换测试 kernel）
-- **进度**：Step 3 第一项完成，第二项待开始
+- **进度**：Step 3 第二项完成，第三项待开始
 
 ### 下一个任务
 
-Step 3 第二项：创建 `renderer/src/device/programs.cu`（最小 `__raygen__rg` 空实现，验证编译链路）
+Step 3 第三项：更新 `renderer/CMakeLists.txt`（引入 compile_optix_ir，编译 programs.cu 并部署 .optixir）
 
 > Phase 1 全部完成并归档。Phase 2 文档集已创建，8 个 Step 覆盖 OptiX Pipeline 框架搭建。
 
