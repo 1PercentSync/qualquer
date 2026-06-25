@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 2 — OptiX 基础（Pipeline/SBT，raygen 输出纯色，替换测试 kernel）
-- **进度**：Step 3 第二项完成，第三项待开始
+- **进度**：Step 3 完成，Step 4 待开始
 
 ### 下一个任务
 
-Step 3 第三项：更新 `renderer/CMakeLists.txt`（引入 compile_optix_ir，编译 programs.cu 并部署 .optixir）
+Step 4 第一项：创建 `renderer/include/qualquer/renderer/launch_params.h`（LaunchParams 结构体：累积 buffer 指针、宽高、帧号）
 
 > Phase 1 全部完成并归档。Phase 2 文档集已创建，8 个 Step 覆盖 OptiX Pipeline 框架搭建。
 

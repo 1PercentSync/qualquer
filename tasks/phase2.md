@@ -24,8 +24,8 @@
 
 - [x] 创建 `cmake/CompileOptiXIR.cmake`（`compile_optix_ir(target file1.cu ...)` 函数：nvcc --optix-ir → .optixir，POST_BUILD 部署到运行目录）
 - [x] 创建 `renderer/src/device/programs.cu`（最小 `__raygen__rg` 空实现，验证编译链路）
-- [ ] 更新 `renderer/CMakeLists.txt`（引入 compile_optix_ir，编译 programs.cu 并部署 .optixir）
-- [ ] 请求用户在 CLion 中编译验证
+- [x] 更新 `renderer/CMakeLists.txt`（引入 compile_optix_ir，编译 programs.cu 并部署 .optixir）
+- [x] 请求用户在 CLion 中编译验证
 
 MUSTREAD:4
 ## Step 4：LaunchParams + 设备程序
