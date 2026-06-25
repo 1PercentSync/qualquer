@@ -30,6 +30,9 @@ function(compile_optix_ir target)
         # directly as a single phase. compute_89 is the virtual architecture
         # required here because OptiX IR is JIT-compiled by the OptiX runtime to
         # the actual GPU, so it must stay at the virtual level (never sm_XX).
+        # -Xcompiler=/utf-8 mirrors the top-level add_compile_options for CUDA:
+        # this custom command bypasses it, and without it MSVC under code page
+        # 936 spams C4819 on non-ASCII bytes inside NVIDIA's own CUDA headers.
         add_custom_command(
             OUTPUT "${_out}"
             COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/optix_ir"
@@ -37,6 +40,7 @@ function(compile_optix_ir target)
                     --optix-ir
                     --gpu-architecture=compute_89
                     -std=c++20
+                    -Xcompiler=/utf-8
                     "-I${OptiX_INCLUDE_DIR}"
                     -o "${_out}"
                     "${_cu_abs}"
