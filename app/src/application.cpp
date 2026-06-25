@@ -23,6 +23,7 @@ namespace qualquer::app {
 
     void Application::init() {
         spdlog::set_level(kLogLevel);
+        spdlog::flush_on(spdlog::level::critical);
 
         glfwInit();
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
