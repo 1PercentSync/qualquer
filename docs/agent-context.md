@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 2 — OptiX 基础（Pipeline/SBT，raygen 输出纯色，替换测试 kernel）
-- **进度**：Step 1 完成，Step 2 待开始
+- **进度**：Step 2 完成，Step 3 待开始
 
 ### 下一个任务
 
-Step 2 第一项：创建 `optix/include/qualquer/optix/cuda_buffer.h`
+Step 3 第一项：创建 `cmake/CompileOptiXIR.cmake`（`compile_optix_ir(target file1.cu ...)` 函数：nvcc --optix-ir → .optixir → bin2c → .c → 加入 target）
 
 > Phase 1 全部完成并归档。Phase 2 文档集已创建，8 个 Step 覆盖 OptiX Pipeline 框架搭建。
 

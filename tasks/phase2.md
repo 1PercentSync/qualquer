@@ -17,8 +17,8 @@
 
 ## Step 2：CudaBuffer\<T\>
 
-- [ ] 创建 `optix/include/qualquer/optix/cuda_buffer.h`（RAII 模板：alloc / free / resize / upload / clear / data / device_ptr / count / size_bytes）
-- [ ] 请求用户在 CLion 中编译验证
+- [x] 创建 `optix/include/qualquer/optix/cuda_buffer.h`（RAII 模板：alloc / free / resize / upload / clear / data / device_ptr / count / size_bytes）
+- [x] 请求用户在 CLion 中编译验证
 
 ## Step 3：OptiX IR 编译基础设施
 
