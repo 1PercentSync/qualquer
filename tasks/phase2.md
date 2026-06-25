@@ -11,7 +11,7 @@
 
 - [x] 创建 `cmake/FindOptiX.cmake`（通过默认安装路径查找 include 目录，设置 `OptiX_INCLUDE_DIR`）
 - [x] 更新 `optix/CMakeLists.txt`（引入 FindOptiX，添加 OptiX include 路径）+ 顶层 CMakeLists.txt 注册 cmake/ 模块路径
-- [ ] 创建 `optix/include/qualquer/optix/optix_check.h`（OPTIX_CHECK 宏）
+- [x] 创建 `optix/include/qualquer/optix/optix_check.h`（OPTIX_CHECK 宏）+ `flush_on(critical)` 保证 abort 前日志输出
 - [ ] `optix::Context` 新增 `OptixDeviceContext` 成员，init 中 `optixInit()` + `optixDeviceContextCreate()`（含日志回调），destroy 中销毁
 - [ ] 请求用户在 CLion 中编译验证
 
