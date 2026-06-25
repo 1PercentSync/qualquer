@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 2 — OptiX 基础（Pipeline/SBT，raygen 输出纯色，替换测试 kernel）
-- **进度**：Step 1 进行中（4/5）
+- **进度**：Step 1 完成，Step 2 待开始
 
 ### 下一个任务
 
-Step 1 第五项：请求用户在 CLion 中编译验证（已通过，待提交标记）
+Step 2 第一项：创建 `optix/include/qualquer/optix/cuda_buffer.h`
 
 > Phase 1 全部完成并归档。Phase 2 文档集已创建，8 个 Step 覆盖 OptiX Pipeline 框架搭建。
 
