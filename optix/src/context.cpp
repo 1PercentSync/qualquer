@@ -5,10 +5,12 @@
 
 #include <qualquer/optix/context.h>
 #include <qualquer/optix/cuda_check.h>
+#include <qualquer/optix/optix_check.h>
 
 #include <algorithm>
 #include <array>
 #include <cuda_runtime.h>
+#include <optix_stubs.h>
 #include <spdlog/spdlog.h>
 
 namespace qualquer::optix {
@@ -69,6 +71,20 @@ namespace qualquer::optix {
             std::array<std::uint8_t, 16> uuid{};
             std::memcpy(uuid.data(), &prop.uuid, uuid.size());
             return uuid;
+        }
+
+        // Routes OptiX internal diagnostics to spdlog by severity level.
+        // OptiX levels: 1=fatal, 2=error, 3=warning, 4=print (informational).
+        void optix_log_callback(const unsigned int level,
+                                [[maybe_unused]] const char *tag,
+                                const char *message,
+                                [[maybe_unused]] void *cb_data) {
+            switch (level) {
+                case 1: spdlog::critical("[OptiX] {}", message); break;
+                case 2: spdlog::error("[OptiX] {}", message); break;
+                case 3: spdlog::warn("[OptiX] {}", message); break;
+                default: spdlog::info("[OptiX] {}", message); break;
+            }
         }
     } // namespace
 
@@ -135,6 +151,21 @@ namespace qualquer::optix {
 
         spdlog::info("CUDA device {}: \"{}\" with compute capability {}.{}",
                      best_device, prop.name, best_major, best_minor);
+
+        // OptiX init loads the library from the driver and populates the function
+        // table (optix_stubs.h). Must precede any other optix* call.
+        OPTIX_CHECK(optixInit());
+
+        // CUcontext 0 = use the current CUDA context (set by cudaSetDevice above).
+        // Log level 4 includes all messages (fatal through informational).
+        const OptixDeviceContextOptions ctx_options{
+            .logCallbackFunction = optix_log_callback,
+            .logCallbackData = nullptr,
+            .logCallbackLevel = 4,
+        };
+        OPTIX_CHECK(optixDeviceContextCreate(nullptr, &ctx_options, &device_context));
+
+        spdlog::info("OptiX device context created");
     }
 
     void Context::import_display_buffer(void *win32_handle, const uint32_t width, const uint32_t height,
@@ -217,16 +248,21 @@ namespace qualquer::optix {
 
     void Context::destroy() {
         // Display-buffer import first (surface wraps the imported image memory), then
-        // the independent semaphores, then the stream last — cudaStreamDestroy waits
-        // for pending work on it, so destroying it last also drains any in-flight
-        // kernel/signal submitted earlier in teardown. device_id_ needs no cleanup —
-        // the runtime-managed primary context is left intact for other holders.
+        // the independent semaphores, then OptiX device context, then the stream last
+        // — cudaStreamDestroy waits for pending work on it, so destroying it last also
+        // drains any in-flight kernel/signal submitted earlier in teardown. device_id_
+        // needs no cleanup — the runtime-managed primary context is left intact for
+        // other holders.
         release_display_buffer();
         for (auto &sem: external_semaphores) {
             if (sem != nullptr) {
                 CUDA_CHECK(cudaDestroyExternalSemaphore(sem));
                 sem = nullptr;
             }
+        }
+        if (device_context != nullptr) {
+            OPTIX_CHECK(optixDeviceContextDestroy(device_context));
+            device_context = nullptr;
         }
         if (stream != nullptr) {
             CUDA_CHECK(cudaStreamDestroy(stream));

@@ -10,6 +10,7 @@
 #include <vector>
 
 #include <cuda_runtime.h>
+#include <optix.h>
 
 namespace qualquer::optix {
     /**
@@ -100,6 +101,14 @@ namespace qualquer::optix {
          * Indexed by frame-in-flight slot. Zero before import_semaphores and after destroy.
          */
         std::array<cudaExternalSemaphore_t, kMaxFramesInFlight> external_semaphores{};
+
+        /**
+         * @brief OptiX device context for pipeline and module creation.
+         *
+         * Created from the CUDA primary context during init. Null before init
+         * and after destroy.
+         */
+        OptixDeviceContext device_context = nullptr;
 
         /**
          * @brief CUDA stream for kernel launch and external semaphore signaling.
