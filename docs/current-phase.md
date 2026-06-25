@@ -83,9 +83,9 @@ MUSTREAD:8
 `optix::Pipeline` 类：持有 OptixModule + OptixProgramGroup[] + OptixPipeline handle。init 接收 OptixDeviceContext + embedded IR（数据指针 + 大小）。
 
 - **ProgramGroup** 作为公开成员暴露——renderer 需要它们来 pack SBT records
-- **PipelineCompileOptions**：`numPayloadValues`、`numAttributeValues=2`（三角形重心坐标）、`traversableGraphFlags`
+- **PipelineCompileOptions**：`numPayloadValues`、`numAttributeValues=2`（三角形重心坐标）、`traversableGraphFlags`、`pipelineLaunchParamsSizeInBytes=sizeof(LaunchParams)`（9.1 可选，下个大版本强制，现在就设好）
 - **PipelineLinkOptions**：`maxTraceDepth=1`（Phase 2 raygen 不调 optixTrace，但 Pipeline 要求 ≥1）
-- **Stack size**：`optixPipelineSetStackSize`，Phase 2 值保守，后续按实际 trace depth 调整
+- **Stack size**：使用 `optixPipelineSetStackSizeFromCallDepths`（传入 trace depth / callable depth 等语义参数，内部自动计算 stack size，比手动 `optixPipelineSetStackSize` 更不易出错）
 
 ### SBT（renderer 层）
 
@@ -259,11 +259,21 @@ OptixResult optixPipelineCreate(
     size_t*                            logStringSize,
     OptixPipeline*                     pipeline);
 
+// 手动版：需自行计算各 stack size
 OptixResult optixPipelineSetStackSize(
     OptixPipeline pipeline,
     unsigned int  directCallableStackSizeFromTraversal,
     unsigned int  directCallableStackSizeFromState,
     unsigned int  continuationStackSize,
+    unsigned int  maxTraversableGraphDepth);
+
+// 简化版（推荐）：传入语义参数，内部自动计算 stack size
+OptixResult optixPipelineSetStackSizeFromCallDepths(
+    OptixPipeline pipeline,
+    unsigned int  maxTraceDepth,
+    unsigned int  maxContinuationCallableDepth,
+    unsigned int  maxDirectCallableDepthFromState,
+    unsigned int  maxDirectCallableDepthFromTraversal,
     unsigned int  maxTraversableGraphDepth);
 ```
 
