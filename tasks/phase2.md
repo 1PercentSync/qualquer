@@ -27,6 +27,7 @@
 - [ ] 更新 `renderer/CMakeLists.txt`（引入 compile_optix_ir，编译 programs.cu）
 - [ ] 请求用户在 CLion 中编译验证
 
+MUSTREAD:4
 ## Step 4：LaunchParams + 设备程序
 
 - [ ] 创建 `renderer/include/qualquer/renderer/launch_params.h`（LaunchParams 结构体：累积 buffer 指针、宽高、帧号）
