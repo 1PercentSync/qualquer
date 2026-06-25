@@ -20,11 +20,11 @@
 - [x] 创建 `optix/include/qualquer/optix/cuda_buffer.h`（RAII 模板：alloc / free / resize / upload / clear / data / device_ptr / count / size_bytes）
 - [x] 请求用户在 CLion 中编译验证
 
-## Step 3：OptiX IR 编译基础设施
+## Step 3：OptiX IR 编译与加载基础设施
 
-- [ ] 创建 `cmake/CompileOptiXIR.cmake`（`compile_optix_ir(target file1.cu ...)` 函数：nvcc --optix-ir → .optixir → bin2c → .c → 加入 target）
+- [ ] 创建 `cmake/CompileOptiXIR.cmake`（`compile_optix_ir(target file1.cu ...)` 函数：nvcc --optix-ir → .optixir，POST_BUILD 部署到运行目录）
 - [ ] 创建 `renderer/src/device/programs.cu`（最小 `__raygen__rg` 空实现，验证编译链路）
-- [ ] 更新 `renderer/CMakeLists.txt`（引入 compile_optix_ir，编译 programs.cu）
+- [ ] 更新 `renderer/CMakeLists.txt`（引入 compile_optix_ir，编译 programs.cu 并部署 .optixir）
 - [ ] 请求用户在 CLion 中编译验证
 
 MUSTREAD:4
@@ -37,7 +37,7 @@ MUSTREAD:4
 ## Step 5：Pipeline 类
 
 - [ ] 创建 `optix/include/qualquer/optix/pipeline.h`（Pipeline 类：init / destroy，持有 Module + ProgramGroup[] + Pipeline handle，ProgramGroup 公开暴露）
-- [ ] 创建 `optix/src/pipeline.cpp`（Module 创建、ProgramGroup 创建、Pipeline 链接、stack size 配置）
+- [ ] 创建 `optix/src/pipeline.cpp`（读 .optixir 文件创建 Module、ProgramGroup 创建、Pipeline 链接、stack size 配置）
 - [ ] 更新 `optix/CMakeLists.txt`（新增 pipeline.cpp）
 - [ ] 请求用户在 CLion 中编译验证
 
@@ -51,7 +51,7 @@ MUSTREAD:4
 ## Step 7：Renderer 状态化重构
 
 - [ ] `Renderer` 新增 init / destroy / resize 声明（init 接收 OptixDeviceContext + 宽高；destroy 释放所有资源；resize 重建累积 buffer）
-- [ ] `Renderer::init` 实现：创建 Pipeline（embedded IR）、构建 SBT records（pack header + upload 三块 CudaBuffer）、分配累积 buffers（2 × CudaBuffer\<float4\>）和 LaunchParams buffer
+- [ ] `Renderer::init` 实现：创建 Pipeline（读 .optixir 文件）、构建 SBT records（pack header + upload 三块 CudaBuffer）、分配累积 buffers（2 × CudaBuffer\<float4\>）和 LaunchParams buffer
 - [ ] `Renderer::resize` 实现：累积 buffer resize + clear
 - [ ] 请求用户在 CLion 中编译验证
 

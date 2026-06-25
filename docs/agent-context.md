@@ -15,7 +15,7 @@
 
 ### 下一个任务
 
-Step 3 第一项：创建 `cmake/CompileOptiXIR.cmake`（`compile_optix_ir(target file1.cu ...)` 函数：nvcc --optix-ir → .optixir → bin2c → .c → 加入 target）
+Step 3 第一项：创建 `cmake/CompileOptiXIR.cmake`（`compile_optix_ir(target file1.cu ...)` 函数：nvcc --optix-ir → .optixir，POST_BUILD 部署到运行目录）
 
 > Phase 1 全部完成并归档。Phase 2 文档集已创建，8 个 Step 覆盖 OptiX Pipeline 框架搭建。
 

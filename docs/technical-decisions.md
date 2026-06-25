@@ -5,6 +5,23 @@
 
 ---
 
+## OptiX
+
+### IR 加载方式
+
+**决策**：构建期 nvcc `--optix-ir` 编译为 .optixir 文件，运行时从文件加载，不嵌入可执行文件。
+
+**理由**：
+- 嵌入（bin2c 转 C 数组）引入 bin2c 的 size 符号命名、stdint 依赖、padding 等复杂度；对单一 module 的项目，其收益（免去运行时文件路径管理）不足以抵消——违反 architecture.md「复杂度与收益成正比」
+- 不嵌入下，改 .cu 只需 CMake 重编 .optixir（incremental），不重新链接整个 exe，开发迭代快
+- 本地学习项目不分发，.optixir 部署的路径管理（POST_BUILD 复制到运行目录）开销可控
+
+**备选（已排除）**：
+- **嵌入（bin2c）**：bin2c `--length` 生成的符号（`uint32_t <name>Length`）与设计约定的 `programs_optixir_size` 不符，需额外 wrapper 拼接，得不偿失
+- **运行时 NVRTC 编译**：OptiX `.cu` 需运行时访问 OptiX headers 路径，且单 module 用不上磁盘缓存收益，复杂度高于构建期 nvcc
+
+**部署参考**：himalaya 的 POST_BUILD copy 模式——himalaya 复制 shader 源文件、运行时 shaderc 编译；Qualquer 借其「部署 + 运行时加载」形态，编译留在构建期（nvcc），运行时只读已编译的 .optixir。
+
 ## CUDA-Vulkan 互操作
 
 ### 内存所有权
