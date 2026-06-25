@@ -11,13 +11,13 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 2 — OptiX 基础（Pipeline/SBT，raygen 输出纯色，替换测试 kernel）
-- **进度**：Phase 1 完成（CUDA-Vulkan interop + 渐变色测试图案打通，编译运行验证通过）；Phase 文档已归档，待创建 Phase 2 文档集
+- **进度**：Phase 2 文档已创建，尚未开始实现
 
 ### 下一个任务
 
-创建 `docs/current-phase.md`（Phase 2 目标/范围/技术要点）与 `tasks/phase2.md`（Phase 2 可执行任务清单）
+Step 1 第一项：创建 `cmake/FindOptiX.cmake`
 
-> Phase 1 全部完成并归档。窗口显示 CUDA 渐变色 + ImGui 面板，resize 不崩溃，无 validation 报错。进入 Phase 2 规划。详见 `docs/roadmap.md`。
+> Phase 1 全部完成并归档。Phase 2 文档集已创建，8 个 Step 覆盖 OptiX Pipeline 框架搭建。
 
 ---
 
@@ -28,8 +28,8 @@
 | 文档 | 说明 |
 |------|------|
 | `docs/roadmap.md` | Phase 概览与顺序 |
-| `docs/current-phase.md` | 当前阶段目标、范围、实现指南（Phase 2，待创建） |
-| `tasks/phase2.md` | Phase 2 可执行任务清单（待创建） |
+| `docs/current-phase.md` | 当前阶段目标、范围、实现指南（Phase 2） |
+| `tasks/phase2.md` | Phase 2 可执行任务清单 |
 | `docs/architecture.md` | 渲染器架构与设计理念 |
 | `docs/technical-decisions.md` | 技术选型与决策 |
 
