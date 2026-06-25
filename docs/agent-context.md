@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 2 — OptiX 基础（Pipeline/SBT，raygen 输出纯色，替换测试 kernel）
-- **进度**：Step 1 进行中（1/5）
+- **进度**：Step 1 进行中（2/5）
 
 ### 下一个任务
 
-Step 1 第二项：更新 `optix/CMakeLists.txt`（引入 FindOptiX，添加 OptiX include 路径）
+Step 1 第三项：创建 `optix/include/qualquer/optix/optix_check.h`（OPTIX_CHECK 宏）
 
 > Phase 1 全部完成并归档。Phase 2 文档集已创建，8 个 Step 覆盖 OptiX Pipeline 框架搭建。
 
