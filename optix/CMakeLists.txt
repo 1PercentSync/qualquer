@@ -10,6 +10,11 @@ target_include_directories(qualquer_optix
 
 find_package(spdlog CONFIG REQUIRED)
 find_package(CUDAToolkit REQUIRED)
+find_package(OptiX REQUIRED)
+
+target_include_directories(qualquer_optix
+    PUBLIC ${OptiX_INCLUDE_DIR}
+)
 
 target_link_libraries(qualquer_optix
     PUBLIC spdlog::spdlog

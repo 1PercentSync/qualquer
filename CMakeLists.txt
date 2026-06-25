@@ -14,6 +14,8 @@ set(CMAKE_CUDA_ARCHITECTURES 89)
 # represent them). Suppresses the warning spam without affecting codegen.
 add_compile_options($<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=/utf-8>)
 
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
+
 add_subdirectory(vulkan)
 add_subdirectory(optix)
 add_subdirectory(renderer)
