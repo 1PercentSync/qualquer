@@ -30,7 +30,7 @@
 MUSTREAD:4
 ## Step 4：LaunchParams + 设备程序
 
-- [ ] 创建 `renderer/include/qualquer/renderer/launch_params.h`（LaunchParams 结构体：累积 buffer 指针、宽高、帧号）
+- [x] 创建 `renderer/include/qualquer/renderer/launch_params.h`（LaunchParams 结构体：累积 buffer 指针、宽高、帧号）
 - [ ] 完善 `renderer/src/device/programs.cu`（`__raygen__rg` 写纯色到累积 buffer、`__miss__ms` / `__closesthit__ch` / `__anyhit__ah` 空实现）
 - [ ] 请求用户在 CLion 中编译验证
 
