@@ -86,6 +86,23 @@ namespace qualquer::optix {
                 default: spdlog::info("[OptiX] {}", message); break;
             }
         }
+
+        /**
+         * @brief OptiX device-context validation mode, toggled by an overlay flag.
+         *
+         * Validation is enabled only when the QUALQUER_OPTIX_VALIDATE CMake option
+         * is ON; it is an overlay on the standard build types rather than a build
+         * type of its own, so it composes with Debug/Release without touching
+         * NDEBUG-based switches. When on, OptiX actively checks API usage (SBT
+         * layout, handles, parameters, caught builtin exceptions) and routes the
+         * findings through the log callback above, turning silent misuse into
+         * explicit diagnostic messages at a notable runtime cost.
+         */
+#ifdef QUALQUER_OPTIX_VALIDATE
+        constexpr OptixDeviceContextValidationMode kValidationMode = OPTIX_DEVICE_CONTEXT_VALIDATION_MODE_ALL;
+#else
+        constexpr OptixDeviceContextValidationMode kValidationMode = OPTIX_DEVICE_CONTEXT_VALIDATION_MODE_OFF;
+#endif
     } // namespace
 
     void Context::init(const std::vector<std::array<std::uint8_t, 16> > &presentable_uuids) {
@@ -162,6 +179,7 @@ namespace qualquer::optix {
             .logCallbackFunction = optix_log_callback,
             .logCallbackData = nullptr,
             .logCallbackLevel = 4,
+            .validationMode = kValidationMode,
         };
         OPTIX_CHECK(optixDeviceContextCreate(nullptr, &ctx_options, &device_context));
 

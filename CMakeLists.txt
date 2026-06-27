@@ -14,6 +14,15 @@ set(CMAKE_CUDA_ARCHITECTURES 89)
 # represent them). Suppresses the warning spam without affecting codegen.
 add_compile_options($<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=/utf-8>)
 
+# OptiX validation overlay: an independent option (not a build type) that turns
+# on OptiX device-context validation for extra error logging. Overlays on the
+# standard Debug/Release build types, so existing NDEBUG-based switches are
+# left untouched. Enable with -DQUALQUER_OPTIX_VALIDATE=ON.
+option(QUALQUER_OPTIX_VALIDATE "Enable OptiX validation mode for extra error logging" OFF)
+if(QUALQUER_OPTIX_VALIDATE)
+    add_compile_definitions(QUALQUER_OPTIX_VALIDATE)
+endif()
+
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 
 add_subdirectory(vulkan)
