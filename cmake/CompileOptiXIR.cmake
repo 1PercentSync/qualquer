@@ -15,6 +15,19 @@
 function(compile_optix_ir target)
     set(_cu_files ${ARGN})
 
+    # Collect -I flags: the target's own include directories (so device
+    # programs can include project headers) plus the OptiX SDK headers.
+    get_target_property(_target_includes ${target} INCLUDE_DIRECTORIES)
+    if(_target_includes STREQUAL "_target_includes-NOTFOUND")
+        set(_target_includes)
+    endif()
+    set(_include_flags)
+    foreach(_inc ${_target_includes})
+        get_filename_component(_abs_inc "${_inc}" ABSOLUTE BASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
+        list(APPEND _include_flags "-I${_abs_inc}")
+    endforeach()
+    list(APPEND _include_flags "-I${OptiX_INCLUDE_DIR}")
+
     set(_optixir_files)
     foreach(_cu ${_cu_files})
         if(NOT IS_ABSOLUTE "${_cu}")
@@ -41,7 +54,7 @@ function(compile_optix_ir target)
                     --gpu-architecture=compute_89
                     -std=c++20
                     -Xcompiler=/utf-8
-                    "-I${OptiX_INCLUDE_DIR}"
+                    ${_include_flags}
                     -o "${_out}"
                     "${_cu_abs}"
             DEPENDS "${_cu_abs}"

@@ -22,5 +22,11 @@ target_link_libraries(qualquer_renderer
     PRIVATE qualquer_optix
 )
 
+# Expose device programs to CLion's code model (inherits target include paths)
+# without compiling them as regular CUDA objects — actual compilation is handled
+# by the compile_optix_ir custom command below.
+set_source_files_properties(src/device/programs.cu PROPERTIES HEADER_FILE_ONLY ON)
+target_sources(qualquer_renderer PRIVATE src/device/programs.cu)
+
 # Compile and deploy OptiX device programs to the runtime shader directory.
 compile_optix_ir(qualquer_renderer src/device/programs.cu)
