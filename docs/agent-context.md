@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 2 — OptiX 基础（Pipeline/SBT，raygen 输出纯色，替换测试 kernel）
-- **进度**：Step 4 完成，Step 5 待开始
+- **进度**：Step 5 进行中（pipeline.h 完成）
 
 ### 下一个任务
 
-Step 5 第一项：创建 `optix/include/qualquer/optix/pipeline.h`（Pipeline 类：init / destroy，持有 Module + ProgramGroup[] + Pipeline handle，ProgramGroup 公开暴露）
+Step 5 第二项：创建 `optix/src/pipeline.cpp`（读 .optixir 文件创建 Module、ProgramGroup 创建、Pipeline 链接、stack size 配置）
 
 > Phase 1 全部完成并归档。Phase 2 文档集已创建，8 个 Step 覆盖 OptiX Pipeline 框架搭建。
 
