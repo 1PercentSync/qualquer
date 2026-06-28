@@ -120,13 +120,13 @@ namespace qualquer::renderer {
         void resize(const optix::Context &cuda_context, uint32_t width, uint32_t height);
 
         /**
-         * @brief Launches the test kernel and signals the frame's external semaphore.
+         * @brief Submits raygen and tonemap on two CUDA streams, then signals the semaphore.
          *
-         * Both run on the CUDA context's explicit stream, in submission order, so the
-         * signal is posted after the kernel completes. Intended to be called before
-         * acquiring the swapchain image so the CUDA engine starts computing while the
-         * CPU waits on acquire.
-         * @param cuda_context CUDA context (surface, stream, external semaphores).
+         * compute_stream: waits previous tonemap done → params upload + optixLaunch →
+         * records raygen done. display_stream: waits previous raygen done → tonemap →
+         * records tonemap done → signals external semaphore. The two streams run in
+         * parallel; CUDA events enforce the ping-pong buffer dependencies across frames.
+         * @param cuda_context CUDA context (surface, streams, external semaphores).
          * @param width        Display buffer width in pixels.
          * @param height       Display buffer height in pixels.
          * @param frame_index  Current frame-in-flight slot, indexing external_semaphores.

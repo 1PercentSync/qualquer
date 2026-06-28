@@ -16,7 +16,6 @@
 #include <qualquer/renderer/imgui_backend.h>
 #include <qualquer/renderer/launch_params.h>
 #include <qualquer/renderer/tonemap.h>
-#include <qualquer/vulkan/context.h>
 #include <qualquer/vulkan/interop.h>
 #include <qualquer/vulkan/swapchain.h>
 
@@ -129,10 +128,20 @@ namespace qualquer::renderer {
                                const uint32_t width,
                                const uint32_t height,
                                const uint32_t frame_index) {
-        // raygen writes [1 - accum_index_] (new accumulation); tonemap reads
-        // [accum_index_] (previous frame's result). The one-frame display lag is
-        // intentional (see technical-decisions.md): write and read target distinct
-        // buffers, the precondition for overlapping them on separate streams.
+        // Dual-stream overlap: compute_stream runs raygen while display_stream
+        // runs tonemap + semaphore signal in parallel. Ping-pong buffers guarantee
+        // raygen and tonemap access different buffers within the same frame; CUDA
+        // events enforce the cross-frame dependencies (each buffer must finish
+        // being written before tonemap reads it, and finish being read before
+        // raygen overwrites it).
+        const uint32_t slot = frame_counter_ % 2;
+        const uint32_t prev_slot = 1 - slot;
+
+        // --- compute_stream: wait prev tonemap → upload + raygen → record ---
+        // Wait until the previous frame's tonemap finished reading the buffer
+        // that this frame's raygen is about to overwrite.
+        CUDA_CHECK(cudaStreamWaitEvent(cuda_context.compute_stream, event_tonemap_done_[prev_slot]));
+
         const LaunchParams params{
             .accumulation_buffer = accum_buffers_[1 - accum_index_].data(),
             .width = width,
@@ -164,18 +173,26 @@ namespace qualquer::renderer {
                                 &sbt,
                                 width, height, 1));
 
+        CUDA_CHECK(cudaEventRecord(event_raygen_done_[slot], cuda_context.compute_stream));
+
+        // --- display_stream: wait prev raygen → tonemap → record → signal ---
+        // Wait until the previous frame's raygen finished writing the buffer
+        // that this frame's tonemap is about to read.
+        CUDA_CHECK(cudaStreamWaitEvent(cuda_context.display_stream, event_raygen_done_[prev_slot]));
+
         launch_tonemap(accum_buffers_[accum_index_].data(),
                        cuda_context.display_surface,
                        width, height,
-                       cuda_context.compute_stream);
+                       cuda_context.display_stream);
 
-        // Signal on the same stream as optixLaunch + tonemap, so the signal is
-        // posted after both complete (stream submission order). Binary OPAQUE_WIN32
+        CUDA_CHECK(cudaEventRecord(event_tonemap_done_[slot], cuda_context.display_stream));
+
+        // Signal after tonemap completes on display_stream. Binary OPAQUE_WIN32
         // needs no fence value — signal_params stays zeroed.
         // ReSharper disable once CppLocalVariableMayBeConst
         cudaExternalSemaphore_t sem = cuda_context.external_semaphores[frame_index];
         constexpr cudaExternalSemaphoreSignalParams signal_params{};
-        CUDA_CHECK(cudaSignalExternalSemaphoresAsync(&sem, &signal_params, 1, cuda_context.compute_stream));
+        CUDA_CHECK(cudaSignalExternalSemaphoresAsync(&sem, &signal_params, 1, cuda_context.display_stream));
 
         accum_index_ = 1 - accum_index_;
         ++frame_counter_;
