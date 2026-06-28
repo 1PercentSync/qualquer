@@ -116,15 +116,20 @@ CUDA 侧通过 `cudaExternalMemoryGetMappedMipmappedArray` → `cudaArray_t` →
 
 ### 同步
 
-**决策**：Binary semaphore，per-frame-in-flight 各一个（共 2 个）。
+**决策**：Binary semaphore 双向，per-frame-in-flight 各一对（共 4 个）。
 
-使用 Vulkan external semaphore（`VK_KHR_external_semaphore_win32`）协调 CUDA 和 Vulkan 对显示 buffer 的访问时序。CUDA signal → Vulkan wait，每帧一次。
+| 方向 | CUDA 侧 | Vulkan 侧 | 保护的依赖 |
+|------|---------|-----------|-----------|
+| CUDA→Vulkan（forward） | signal（display_stream，tonemap 后） | wait（submit，blit 前） | blit 读 display_surface 前 tonemap 写完 |
+| Vulkan→CUDA（reverse） | wait（display_stream，tonemap 前） | signal（submit，blit 后） | tonemap 写 display_surface 前 blit 读完 |
 
 **理由**：
-- 简单的一对一同步，binary 足够
-- 帧循环 + fence 保证同一 frame slot 的 signal/wait 严格配对
+- 显示 buffer 只有一份，CUDA tonemap 写、Vulkan blit 读，存在 write-after-read 依赖
+- 单向（仅 forward）时，display_surface 的 write-after-read 靠 T_blit << T_raygen 的隐式间隙——形式上不正确
+- 反向 semaphore 在 T_blit << T_raygen 时不损失并行度：blit 在 raygen 期间完成，反向 signal 远早于 raygen_done event，tonemap 启动时机仍由 raygen_done 决定
+- Binary 仍然足够：每方向每帧恰好一次 signal/wait
 - Per-frame 分开避免 2 frames in flight 下 binary semaphore 连续 signal
-- Timeline 的灵活性用不上
+- acquire 失败时 Vulkan submit 被跳过，drain submit 需代为 signal 反向 semaphore（否则 CUDA wait 挂起）
 
 ### 测试 Kernel 归属
 

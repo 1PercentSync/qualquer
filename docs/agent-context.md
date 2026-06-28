@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 2 — OptiX 基础（Pipeline/SBT，raygen 输出纯色，替换测试 kernel）
-- **进度**：Phase 2 Step 1-8 完成
+- **进度**：Phase 2 Step 9 进行中（前两项完成，第三项代码已写待审查）
 
 ### 下一个任务
 
-Step 9：双 Stream 流水线（compute_stream + display_stream 拆分，CUDA event 同步）。
+Step 9 第三项：`submit_cuda` 双 stream 拆分（代码已写，待审查提交）。
 
 > Phase 1 全部完成并归档。
 

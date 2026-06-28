@@ -65,7 +65,8 @@ MUSTREAD:4
 
 ## Step 9：双 Stream 流水线
 
-- [ ] `optix::Context`：`stream` 重命名为 `compute_stream`，新增 `display_stream`；init/destroy 中创建/销毁
-- [ ] `renderer::Renderer`：新增 `cudaEvent_t event_raygen_done_[2]`、`event_tonemap_done_[2]`；init 中创建并初始记录，destroy 中销毁
+- [x] `optix::Context`：`stream` 重命名为 `compute_stream`，新增 `display_stream`；init/destroy 中创建/销毁
+- [x] `renderer::Renderer`：新增 `cudaEvent_t event_raygen_done_[2]`、`event_tonemap_done_[2]`；init 中创建并初始记录，destroy 中销毁
 - [ ] `renderer::Renderer::submit_cuda`：拆分双 stream 提交（compute_stream: wait + upload + raygen + record; display_stream: wait + tonemap + record + signal）
+- [ ] display_surface 反向同步：新增 per-frame-slot 反向 interop semaphore（Vulkan signal after blit → CUDA wait before tonemap）；end_frame 的 submit signal 列表新增反向 sem（stage=TRANSFER_BIT）；submit_cuda 的 display_stream 新增 wait；acquire 失败路径的 drain submit 新增 signal
 - [ ] 请求用户在 CLion 中编译验证（窗口显示纯色 + ImGui，功能不变，无 validation / OptiX / CUDA 报错）
