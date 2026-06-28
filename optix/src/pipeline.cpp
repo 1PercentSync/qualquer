@@ -113,6 +113,9 @@ namespace qualquer::optix {
         }};
 
         std::array<OptixProgramGroup, 3> program_groups{};
+        // optixProgramGroupCreate dereferences the options pointer; null crashes.
+        // A zero-initialized options leaves payloadType null, letting OptiX deduce
+        // a unique payload type.
         constexpr OptixProgramGroupOptions program_options{};
         OPTIX_CHECK(optixProgramGroupCreate(device_context,
                                             program_descs.data(),

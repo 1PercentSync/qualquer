@@ -22,8 +22,8 @@ set(QUALQUER_OPTIX_IR_DIR "${CMAKE_BINARY_DIR}/optix_ir" CACHE INTERNAL "OptiX I
 function(compile_optix_ir target)
     set(_cu_files ${ARGN})
 
-    # Collect -I flags: the target's own include directories (so device
-    # programs can include project headers) plus the OptiX SDK headers.
+    # Device programs include project and OptiX SDK headers, resolved from the
+    # target's include directories and the SDK path.
     get_target_property(_target_includes ${target} INCLUDE_DIRECTORIES)
     if(_target_includes STREQUAL "_target_includes-NOTFOUND")
         set(_target_includes)
