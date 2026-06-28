@@ -15,7 +15,7 @@
 
 ### 下一个任务
 
-Step 6 第一项：创建 `renderer/include/qualquer/renderer/tonemap.h`（tone map kernel launch 入口声明）
+Step 6 第二项：创建 `renderer/src/tonemap.cu`（读 float4 累积 buffer → clamp → 写 uchar4 到 display surface）
 
 > Phase 1 全部完成并归档。Phase 2 文档集已创建，8 个 Step 覆盖 OptiX Pipeline 框架搭建。
 
