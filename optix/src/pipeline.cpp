@@ -52,7 +52,8 @@ namespace qualquer::optix {
         }
     } // namespace
 
-    void Pipeline::init(const OptixDeviceContext device_context,
+    // ReSharper disable once CppParameterMayBeConst
+    void Pipeline::init(OptixDeviceContext device_context,
                         const std::string &optixir_path,
                         const std::size_t launch_params_size,
                         const char *launch_params_variable_name) {
