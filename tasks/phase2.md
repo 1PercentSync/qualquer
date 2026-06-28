@@ -58,7 +58,7 @@ MUSTREAD:4
 ## Step 8：optixLaunch + 帧循环集成 + 清理
 
 - [x] `submit_cuda` 实现更新：LaunchParams 填充 + 上传 → `optixLaunch`（pipeline, stream, params, sbt, w, h, 1）→ tone map → signal semaphore；ping-pong 索引翻转
-- [ ] Application 接线：init 中调 `Renderer::init`，destroy 中调 `Renderer::destroy`，resize 路径调 `Renderer::resize`
+- [x] Application 接线：init 中调 `Renderer::init`，destroy 中调 `Renderer::destroy`，resize 路径调 `Renderer::resize`
 - [ ] 移除 `renderer/src/test_kernel.cu` 和 `renderer/include/qualquer/renderer/test_kernel.h`
 - [ ] 更新 `renderer/CMakeLists.txt`（移除 test_kernel.cu）
 - [ ] 请求用户在 CLion 中编译验证（窗口显示纯色 + ImGui，resize 不崩溃，无 validation / OptiX / CUDA 报错）

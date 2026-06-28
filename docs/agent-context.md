@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 2 — OptiX 基础（Pipeline/SBT，raygen 输出纯色，替换测试 kernel）
-- **进度**：Step 8 第一项完成
+- **进度**：Step 8 第二项完成
 
 ### 下一个任务
 
-Step 8 第二项：Application 接线 —— init 中调 `Renderer::init`，destroy 中调 `Renderer::destroy`，resize 路径调 `Renderer::resize`
+Step 8 第三项：移除 `renderer/src/test_kernel.cu` 和 `renderer/include/qualquer/renderer/test_kernel.h`
 
 > Phase 1 全部完成并归档。Phase 2 文档集已创建，8 个 Step 覆盖 OptiX Pipeline 框架搭建。
 
