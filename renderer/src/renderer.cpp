@@ -69,6 +69,23 @@ namespace qualquer::renderer {
                      3);
     }
 
+    void Renderer::resize(const optix::Context &cuda_context,
+                          const uint32_t width,
+                          const uint32_t height) {
+        // A size change invalidates prior HDR accumulation, so both buffers are
+        // reallocated to the new pixel count and cleared, and the ping-pong index
+        // restarts from zero. Pipeline, SBT records, and the params buffer are
+        // resolution-independent and stay.
+        const std::size_t pixel_count = static_cast<std::size_t>(width) * height;
+        for (auto &buffer : accum_buffers_) {
+            buffer.resize(pixel_count);
+            buffer.clear(cuda_context.stream);
+        }
+        accum_index_ = 0;
+
+        spdlog::info("Renderer resized ({}x{})", width, height);
+    }
+
     void Renderer::submit_cuda(const optix::Context &cuda_context,
                                const uint32_t width,
                                const uint32_t height,
