@@ -10,6 +10,7 @@ target_sources(qualquer_renderer PRIVATE
     src/debug_ui.cpp
     src/renderer.cpp
     src/test_kernel.cu
+    src/tonemap.cu
 )
 
 target_include_directories(qualquer_renderer
