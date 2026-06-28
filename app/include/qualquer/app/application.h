@@ -101,12 +101,22 @@ namespace qualquer::app {
         vulkan::InteropImage display_buffer_;
 
         /**
-         * @brief Per-frame external semaphores for CUDA signal -> Vulkan wait.
+         * @brief Per-frame forward external semaphores (CUDA signal → Vulkan wait).
          *
          * One per frame-in-flight. Resolution-independent, so created once and not
          * recreated on swapchain resize.
          */
         std::array<vulkan::InteropSemaphore, vulkan::kMaxFramesInFlight> interop_semaphores_{};
+
+        /**
+         * @brief Reverse external semaphore (Vulkan signal → CUDA wait).
+         *
+         * Protects the display surface's write-after-read dependency: Vulkan
+         * signals after blit (read), CUDA waits before tonemap (write). A single
+         * semaphore suffices: the forward semaphore chain structurally prevents
+         * double-signaling. Resolution-independent, created once.
+         */
+        vulkan::InteropSemaphore reverse_interop_semaphore_{};
 
         /** @brief ImGui integration (context, backends, UI rendering). */
         renderer::ImGuiBackend imgui_backend_;

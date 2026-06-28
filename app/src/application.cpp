@@ -54,6 +54,21 @@ namespace qualquer::app {
             semaphore_handles[i] = interop_semaphores_[i].win32_handle;
         }
         cuda_context_.import_semaphores(semaphore_handles);
+        reverse_interop_semaphore_.init(context_);
+        cuda_context_.import_reverse_semaphore(reverse_interop_semaphore_.win32_handle);
+        // Pre-signal the reverse semaphore so the first frame's CUDA wait
+        // passes immediately — there is no prior blit to wait for.
+        const VkSemaphoreSubmitInfo presignal_info{
+            .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+            .semaphore = reverse_interop_semaphore_.semaphore,
+            .stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+        };
+        const VkSubmitInfo2 presignal_submit{
+            .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
+            .signalSemaphoreInfoCount = 1,
+            .pSignalSemaphoreInfos = &presignal_info,
+        };
+        VK_CHECK(vkQueueSubmit2(context_.graphics_queue, 1, &presignal_submit, VK_NULL_HANDLE));
         imgui_backend_.init(context_, swapchain_, window_);
         renderer_.init(cuda_context_,
                        swapchain_.extent.width,
@@ -136,21 +151,30 @@ namespace qualquer::app {
         // The fence has not been reset, so the next iteration's wait still guards the
         // last submit on this slot; recreate itself waits the queue idle first.
         if (acquire_result == VK_ERROR_OUT_OF_DATE_KHR) {
-            // This frame's submit_cuda already signaled the slot's external semaphore.
-            // Skipping submit2 would leave that signal unconsumed, so the next frame's
-            // signal on the same binary semaphore would violate the signal/wait pairing.
-            // Drain it with an empty submit that only waits the semaphore.
+            // This frame's submit_cuda already signaled the forward semaphore.
+            // Skipping submit2 would leave that signal unconsumed, so the next
+            // frame's signal on the same binary semaphore would violate the
+            // signal/wait pairing. The drain also signals the reverse semaphore:
+            // with no blit this frame, nothing else would produce the signal the
+            // next frame's CUDA tonemap wait consumes, so it would hang.
             // ReSharper disable once CppLocalVariableMayBeConst
-            VkSemaphore ext_sem = interop_semaphores_[context_.frame_index].semaphore;
+            VkSemaphore forward_sem = interop_semaphores_[context_.frame_index].semaphore;
             const VkSemaphoreSubmitInfo drain_wait{
                 .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-                .semaphore = ext_sem,
+                .semaphore = forward_sem,
+                .stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+            };
+            const VkSemaphoreSubmitInfo drain_signal{
+                .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+                .semaphore = reverse_interop_semaphore_.semaphore,
                 .stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
             };
             const VkSubmitInfo2 drain_submit{
                 .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
                 .waitSemaphoreInfoCount = 1,
                 .pWaitSemaphoreInfos = &drain_wait,
+                .signalSemaphoreInfoCount = 1,
+                .pSignalSemaphoreInfos = &drain_signal,
             };
             VK_CHECK(vkQueueSubmit2(context_.graphics_queue, 1, &drain_submit, VK_NULL_HANDLE));
 
@@ -182,7 +206,7 @@ namespace qualquer::app {
         };
         VK_CHECK(vkBeginCommandBuffer(cmd, &begin_info));
 
-        renderer::RenderInput input{
+        const renderer::RenderInput input{
             .cmd = cmd,
             .cuda_context = cuda_context_,
             .display_buffer = display_buffer_,
@@ -190,7 +214,7 @@ namespace qualquer::app {
             .image_index = image_index_,
             .imgui = imgui_backend_,
         };
-        renderer_.record_vulkan(input);
+        qualquer::renderer::Renderer::record_vulkan(input);
 
         VK_CHECK(vkEndCommandBuffer(cmd));
     }
@@ -219,11 +243,20 @@ namespace qualquer::app {
             },
         };
 
-        // Per-swapchain-image (not per-frame-slot): see Swapchain::render_finished_semaphores.
-        const VkSemaphoreSubmitInfo signal_info{
-            .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-            .semaphore = swapchain_.render_finished_semaphores[image_index_],
-            .stageMask = VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT,
+        const VkSemaphoreSubmitInfo signal_infos[2]{
+            {
+                .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+                // Per-swapchain-image: see Swapchain::render_finished_semaphores.
+                .semaphore = swapchain_.render_finished_semaphores[image_index_],
+                .stageMask = VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT,
+            },
+            {
+                .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+                // Reverse interop: signaled when all transfer work (the blit) is done,
+                // allowing the next frame's CUDA tonemap to overwrite display_surface.
+                .semaphore = reverse_interop_semaphore_.semaphore,
+                .stageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+            },
         };
 
         const VkSubmitInfo2 submit_info{
@@ -232,8 +265,8 @@ namespace qualquer::app {
             .pWaitSemaphoreInfos = wait_infos,
             .commandBufferInfoCount = 1,
             .pCommandBufferInfos = &cmd_submit_info,
-            .signalSemaphoreInfoCount = 1,
-            .pSignalSemaphoreInfos = &signal_info,
+            .signalSemaphoreInfoCount = 2,
+            .pSignalSemaphoreInfos = signal_infos,
         };
 
         VK_CHECK(vkQueueSubmit2(context_.graphics_queue, 1, &submit_info, frame.render_fence));
@@ -305,6 +338,7 @@ namespace qualquer::app {
         for (auto &sem: interop_semaphores_) {
             sem.destroy(context_);
         }
+        reverse_interop_semaphore_.destroy(context_);
         display_buffer_.destroy(context_);
         swapchain_.destroy(context_);
         context_.destroy();

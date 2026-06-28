@@ -123,9 +123,11 @@ namespace qualquer::renderer {
          * @brief Submits raygen and tonemap on two CUDA streams, then signals the semaphore.
          *
          * compute_stream: waits previous tonemap done → params upload + optixLaunch →
-         * records raygen done. display_stream: waits previous raygen done → tonemap →
-         * records tonemap done → signals external semaphore. The two streams run in
-         * parallel; CUDA events enforce the ping-pong buffer dependencies across frames.
+         * records raygen done. display_stream: waits previous raygen done + waits
+         * reverse semaphore → tonemap → records tonemap done → signals forward
+         * semaphore. The two streams run in parallel; CUDA events enforce the
+         * ping-pong buffer dependencies, the reverse semaphore protects the display
+         * surface's write-after-read dependency (blit read before tonemap write).
          * @param cuda_context CUDA context (surface, streams, external semaphores).
          * @param width        Display buffer width in pixels.
          * @param height       Display buffer height in pixels.

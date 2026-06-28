@@ -64,6 +64,17 @@ namespace qualquer::optix {
         void import_semaphores(std::array<void *, kMaxFramesInFlight> win32_handles);
 
         /**
+         * @brief Imports the reverse Vulkan external semaphore.
+         *
+         * Reverse cross-API synchronization (Vulkan signal -> CUDA wait).
+         * Protects the display surface's write-after-read dependency (tonemap
+         * writes after blit reads). A single semaphore suffices: the forward
+         * semaphore chain structurally prevents double-signaling.
+         * @param win32_handle NT handle exported by vulkan::InteropSemaphore.
+         */
+        void import_reverse_semaphore(void *win32_handle);
+
+        /**
          * @brief Releases only the display-buffer import, keeping the semaphores.
          *
          * For swapchain resize: the display buffer is resolution-dependent and rebuilt,
@@ -98,9 +109,22 @@ namespace qualquer::optix {
         /**
          * @brief Imported external semaphores, one per frame-in-flight.
          *
-         * Indexed by frame-in-flight slot. Zero before import_semaphores and after destroy.
+         * CUDA signal → Vulkan wait direction. Indexed by frame-in-flight slot.
+         * Zero before import_semaphores and after destroy.
          */
         std::array<cudaExternalSemaphore_t, kMaxFramesInFlight> external_semaphores{};
+
+        /**
+         * @brief Imported reverse external semaphore (single, not per-frame).
+         *
+         * Vulkan signal → CUDA wait direction. Protects the display surface's
+         * write-after-read dependency: ensures the previous blit (read) finishes
+         * before the next tonemap (write). A single semaphore suffices because
+         * the forward semaphore chain (tonemap → forward signal → forward wait →
+         * blit → reverse signal) structurally prevents double-signaling. Zero
+         * before import_reverse_semaphore and after destroy.
+         */
+        cudaExternalSemaphore_t reverse_external_semaphore{};
 
         /**
          * @brief OptiX device context for pipeline and module creation.

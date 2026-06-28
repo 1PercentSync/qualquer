@@ -175,10 +175,19 @@ namespace qualquer::renderer {
 
         CUDA_CHECK(cudaEventRecord(event_raygen_done_[slot], cuda_context.compute_stream));
 
-        // --- display_stream: wait prev raygen → tonemap → record → signal ---
+        // --- display_stream: wait prev raygen + wait reverse sem → tonemap → record → signal ---
         // Wait until the previous frame's raygen finished writing the buffer
         // that this frame's tonemap is about to read.
         CUDA_CHECK(cudaStreamWaitEvent(cuda_context.display_stream, event_raygen_done_[prev_slot]));
+
+        // Wait for the previous frame's blit to finish reading display_surface
+        // before this frame's tonemap overwrites it (write-after-read). A single
+        // semaphore suffices: the forward chain (tonemap → forward signal → blit →
+        // reverse signal) structurally prevents double-signaling.
+        // ReSharper disable once CppLocalVariableMayBeConst
+        cudaExternalSemaphore_t reverse_sem = cuda_context.reverse_external_semaphore;
+        constexpr cudaExternalSemaphoreWaitParams reverse_wait_params{};
+        CUDA_CHECK(cudaWaitExternalSemaphoresAsync(&reverse_sem, &reverse_wait_params, 1, cuda_context.display_stream));
 
         launch_tonemap(accum_buffers_[accum_index_].data(),
                        cuda_context.display_surface,

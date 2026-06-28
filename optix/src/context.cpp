@@ -235,6 +235,14 @@ namespace qualquer::optix {
         spdlog::info("Imported {} external semaphores", kMaxFramesInFlight);
     }
 
+    void Context::import_reverse_semaphore(void *win32_handle) {
+        cudaExternalSemaphoreHandleDesc sem_handle_desc{};
+        sem_handle_desc.type = cudaExternalSemaphoreHandleTypeOpaqueWin32;
+        sem_handle_desc.handle.win32.handle = win32_handle;
+        CUDA_CHECK(cudaImportExternalSemaphore(&reverse_external_semaphore, &sem_handle_desc));
+        spdlog::info("Imported reverse external semaphore");
+    }
+
     void Context::release_display_buffer() {
         // Reverse creation order: the surface wraps array_, so it must go before
         // array_; array_ is a level of mipmap_array_, which is mapped onto
@@ -270,6 +278,10 @@ namespace qualquer::optix {
                 CUDA_CHECK(cudaDestroyExternalSemaphore(sem));
                 sem = nullptr;
             }
+        }
+        if (reverse_external_semaphore != nullptr) {
+            CUDA_CHECK(cudaDestroyExternalSemaphore(reverse_external_semaphore));
+            reverse_external_semaphore = nullptr;
         }
         if (device_context != nullptr) {
             OPTIX_CHECK(optixDeviceContextDestroy(device_context));
