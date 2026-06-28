@@ -111,13 +111,23 @@ namespace qualquer::optix {
         OptixDeviceContext device_context = nullptr;
 
         /**
-         * @brief CUDA stream for kernel launch and external semaphore signaling.
+         * @brief CUDA stream for path-tracing compute (optixLaunch).
          *
          * Explicit, not the default stream: the default stream implicitly
          * synchronizes with all explicit streams, serializing any concurrent work.
          * Null before init and after destroy.
          */
-        cudaStream_t stream = nullptr;
+        cudaStream_t compute_stream = nullptr;
+
+        /**
+         * @brief CUDA stream for display output (tonemap + semaphore signal).
+         *
+         * Runs in parallel with compute_stream: tonemap reads the previous frame's
+         * accumulation buffer while raygen writes the current frame's, with CUDA
+         * events enforcing the cross-stream dependencies.
+         * Null before init and after destroy.
+         */
+        cudaStream_t display_stream = nullptr;
 
     private:
         /** @brief Index of the selected CUDA device, for subsequent runtime calls. */

@@ -42,22 +42,22 @@ namespace qualquer::renderer {
         SbtRecord record{};
         OPTIX_CHECK(optixSbtRecordPackHeader(pipeline_.raygen_program, &record));
         sbt_raygen_.alloc(1);
-        sbt_raygen_.upload(&record, 1, cuda_context.stream);
+        sbt_raygen_.upload(&record, 1, cuda_context.compute_stream);
 
         OPTIX_CHECK(optixSbtRecordPackHeader(pipeline_.miss_program, &record));
         sbt_miss_.alloc(1);
-        sbt_miss_.upload(&record, 1, cuda_context.stream);
+        sbt_miss_.upload(&record, 1, cuda_context.compute_stream);
 
         OPTIX_CHECK(optixSbtRecordPackHeader(pipeline_.hitgroup_program, &record));
         sbt_hit_.alloc(1);
-        sbt_hit_.upload(&record, 1, cuda_context.stream);
+        sbt_hit_.upload(&record, 1, cuda_context.compute_stream);
 
         // Two accumulation buffers for ping-pong HDR accumulation, cleared so the
         // first frame reads a defined zero background.
         const std::size_t pixel_count = static_cast<std::size_t>(width) * height;
         for (auto &buffer : accum_buffers_) {
             buffer.alloc(pixel_count);
-            buffer.clear(cuda_context.stream);
+            buffer.clear(cuda_context.compute_stream);
         }
 
         params_buffer_.alloc(1);
@@ -77,7 +77,7 @@ namespace qualquer::renderer {
         const std::size_t pixel_count = static_cast<std::size_t>(width) * height;
         for (auto &buffer : accum_buffers_) {
             buffer.resize(pixel_count);
-            buffer.clear(cuda_context.stream);
+            buffer.clear(cuda_context.compute_stream);
         }
         accum_index_ = 0;
 
@@ -115,7 +115,7 @@ namespace qualquer::renderer {
             .height = height,
             .frame_index = frame_counter_,
         };
-        params_buffer_.upload(&params, 1, cuda_context.stream);
+        params_buffer_.upload(&params, 1, cuda_context.compute_stream);
 
         const OptixShaderBindingTable sbt{
             .raygenRecord = sbt_raygen_.device_ptr(),
@@ -134,7 +134,7 @@ namespace qualquer::renderer {
         // traversable=0 is valid: raygen does not call optixTrace, so no
         // acceleration structure is traversed.
         OPTIX_CHECK(optixLaunch(pipeline_.handle,
-                                cuda_context.stream,
+                                cuda_context.compute_stream,
                                 params_buffer_.device_ptr(),
                                 sizeof(LaunchParams),
                                 &sbt,
@@ -143,7 +143,7 @@ namespace qualquer::renderer {
         launch_tonemap(accum_buffers_[accum_index_].data(),
                        cuda_context.display_surface,
                        width, height,
-                       cuda_context.stream);
+                       cuda_context.compute_stream);
 
         // Signal on the same stream as optixLaunch + tonemap, so the signal is
         // posted after both complete (stream submission order). Binary OPAQUE_WIN32
@@ -151,7 +151,7 @@ namespace qualquer::renderer {
         // ReSharper disable once CppLocalVariableMayBeConst
         cudaExternalSemaphore_t sem = cuda_context.external_semaphores[frame_index];
         constexpr cudaExternalSemaphoreSignalParams signal_params{};
-        CUDA_CHECK(cudaSignalExternalSemaphoresAsync(&sem, &signal_params, 1, cuda_context.stream));
+        CUDA_CHECK(cudaSignalExternalSemaphoresAsync(&sem, &signal_params, 1, cuda_context.compute_stream));
 
         accum_index_ = 1 - accum_index_;
         ++frame_counter_;
