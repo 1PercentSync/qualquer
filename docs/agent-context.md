@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 2 — OptiX 基础（Pipeline/SBT，raygen 输出纯色，替换测试 kernel）
-- **进度**：Step 7 进行中（init 实现完成）
+- **进度**：Step 7 进行中（resize 实现完成）
 
 ### 下一个任务
 
-Step 7 第三项：`Renderer::resize` 实现 —— 累积 buffer resize + clear
+Step 7 第四项：`Renderer::destroy` 实现 —— 释放 Pipeline、SBT buffers、累积 buffers、LaunchParams buffer
 
 > Phase 1 全部完成并归档。Phase 2 文档集已创建，8 个 Step 覆盖 OptiX Pipeline 框架搭建。
 
