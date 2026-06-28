@@ -22,6 +22,17 @@ set(QUALQUER_OPTIX_IR_DIR "${CMAKE_BINARY_DIR}/optix_ir" CACHE INTERNAL "OptiX I
 function(compile_optix_ir target)
     set(_cu_files ${ARGN})
 
+    # -lineinfo (Debug only) embeds source line mapping so OptiX's MINIMAL debug
+    # level (requested for Debug builds in Pipeline::init) has line info to point
+    # at; line info carries no runtime cost, only a larger .optixir. Decided at
+    # configure time via CMAKE_BUILD_TYPE rather than a $<CONFIG:Debug> generator
+    # expression: under add_custom_command + VERBATIM, a false generator expansion
+    # is preserved as an empty argument, which nvcc treats as an input file.
+    set(_lineinfo_flag)
+    if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+        set(_lineinfo_flag -lineinfo)
+    endif()
+
     # Device programs include project and OptiX SDK headers, resolved from the
     # target's include directories and the SDK path.
     get_target_property(_target_includes ${target} INCLUDE_DIRECTORIES)
@@ -53,9 +64,6 @@ function(compile_optix_ir target)
         # -Xcompiler=/utf-8 mirrors the top-level add_compile_options for CUDA:
         # this custom command bypasses it, and without it MSVC under code page
         # 936 spams C4819 on non-ASCII bytes inside NVIDIA's own CUDA headers.
-        # -lineinfo (Debug only) embeds source line mapping so OptiX's MINIMAL
-        # debug level (requested for Debug builds in Pipeline::init) has line info
-        # to point at; line info carries no runtime cost, only a larger .optixir.
         add_custom_command(
             OUTPUT "${_out}"
             COMMAND ${CMAKE_COMMAND} -E make_directory "${QUALQUER_OPTIX_IR_DIR}"
@@ -64,7 +72,7 @@ function(compile_optix_ir target)
                     --gpu-architecture=compute_89
                     -std=c++20
                     -Xcompiler=/utf-8
-                    $<$<CONFIG:Debug>:-lineinfo>
+                    ${_lineinfo_flag}
                     ${_include_flags}
                     -o "${_out}"
                     "${_cu_abs}"
