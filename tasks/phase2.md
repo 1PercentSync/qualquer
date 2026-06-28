@@ -37,7 +37,7 @@ MUSTREAD:4
 ## Step 5：Pipeline 类
 
 - [x] 创建 `optix/include/qualquer/optix/pipeline.h`（Pipeline 类：init / destroy，持有 Module + ProgramGroup[] + Pipeline handle，ProgramGroup 公开暴露）
-- [ ] 创建 `optix/src/pipeline.cpp`（读 .optixir 文件创建 Module、ProgramGroup 创建、Pipeline 链接、stack size 配置）
+- [x] 创建 `optix/src/pipeline.cpp`（读 .optixir 文件创建 Module、ProgramGroup 创建、Pipeline 链接、stack size 配置）
 - [ ] 更新 `optix/CMakeLists.txt`（新增 pipeline.cpp）
 - [ ] 请求用户在 CLion 中编译验证
 

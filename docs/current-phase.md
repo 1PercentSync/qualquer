@@ -87,6 +87,15 @@ MUSTREAD:8
 - **PipelineLinkOptions**：`maxTraceDepth=0`。`optix_types.h` 注释明确 0 合法（"raygen 能 launch 但不能 trace any rays"），正好精确描述 Phase 2；原预设 1 的理由"Pipeline 要求 ≥1"不成立，已纠正
 - **Stack size**：`optixPipelineSetStackSizeFromCallDepths`（语义参数版，内部自动计算，比手动 `optixPipelineSetStackSize` 不易出错）。参数：`maxTraceDepth=0`、callable depths=0、`maxTraversableGraphDepth=0`（设 0 则据 traversableGraphFlags 自动取默认：ALLOW_SINGLE_LEVEL_INSTANCING → 2，匹配 Phase 3 的 TLAS→BLAS 深度）
 
+### OptiX Validation overlay（构建配置）
+
+独立 CMake option `QUALQUER_OPTIX_VALIDATE`（默认 OFF），ON 时注入同名宏，使 `optix::Context` 创建 device context 时 `validationMode = ALL`。叠加在标准 Debug/Release build type 上、**不新建 build type**——避免所有按 NDEBUG 分流的配置点改成三路判定，validation 作为独立叠加层。
+
+- **目的**：让 OptiX 达到与 Vulkan validation layers 同级的用法错误 log 诊断（SBT 布局、句柄有效性、参数边界、builtin exceptions 等经 log callback 输出）
+- **使用**：CLion 新建 CMake profile「OptixValidate」= Debug build type + CMake Options 加 `-DQUALQUER_OPTIX_VALIDATE=ON`
+- **性能**：validation 有 device 侧开销（debug exceptions + launch 同步），拖慢 PT 计算主线；仅排查问题时临时开，日常用 Debug（validation 关）
+- **配置原则**：OptixValidate 只开 validation。debugLevel 继承 Debug 的 MINIMAL、optLevel 保持 DEFAULT、exception flags 不开——FULL debugLevel 的增量不进 log；exception STACK_OVERFLOW/TRACE_DEPTH 已被 validation 覆盖（头文件明确「validation should be used instead」）
+
 ### SBT（renderer 层）
 
 renderer 用 Pipeline 暴露的 ProgramGroup handle 构建 SBT records。OptiX API `optixSbtRecordPackHeader` 出现在 renderer 层——与 Vulkan/CUDA API 出现在任意层同理（项目原则：不为隔离原始类型做无收益 wrapper）。
