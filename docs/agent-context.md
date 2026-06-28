@@ -15,7 +15,7 @@
 
 ### 下一个任务
 
-Step 6 第二项：创建 `renderer/src/tonemap.cu`（读 float4 累积 buffer → clamp → 写 uchar4 到 display surface）
+Step 6 第二项：创建 `renderer/src/tonemap.cu`（读 float4 累积 buffer → clamp → 写 uchar4 到 display surface）并更新 `renderer/CMakeLists.txt`——已写，待在 CLion 中编译验证
 
 > Phase 1 全部完成并归档。Phase 2 文档集已创建，8 个 Step 覆盖 OptiX Pipeline 框架搭建。
 
