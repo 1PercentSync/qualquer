@@ -3,6 +3,7 @@ add_library(qualquer_optix STATIC)
 target_sources(qualquer_optix PRIVATE
     src/context.cpp
     src/optix_stubs_impl.cpp
+    src/pipeline.cpp
 )
 
 target_include_directories(qualquer_optix
