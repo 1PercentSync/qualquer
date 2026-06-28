@@ -11,13 +11,13 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 2 — OptiX 基础（Pipeline/SBT，raygen 输出纯色，替换测试 kernel）
-- **进度**：Step 8 第三项完成
+- **进度**：Phase 2 完成（Step 1-8 全部完成）
 
 ### 下一个任务
 
-Step 8 第四项：更新 `renderer/CMakeLists.txt`（移除 test_kernel.cu）
+Phase 2 全部完成。下一步进入 Phase 3（场景加载 + AS：glTF、BLAS/TLAS、primary ray），需先创建 Phase 3 文档集（current-phase.md / tasks/phase3.md）。
 
-> Phase 1 全部完成并归档。Phase 2 文档集已创建，8 个 Step 覆盖 OptiX Pipeline 框架搭建。
+> Phase 1 全部完成并归档。Phase 2 全部完成。
 
 ---
 

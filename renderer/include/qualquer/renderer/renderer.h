@@ -90,8 +90,8 @@ namespace qualquer::renderer {
          * @param width          Output width in pixels.
          * @param height         Output height in pixels.
          * @param optixir_path   Path to the compiled .optixir file (passed to the
-         *                       pipeline; resolved relative to the executable, not the
-         *                       working directory).
+         *                       pipeline; resolved relative to the process working
+         *                       directory, so the build must deploy the file there).
          */
         void init(const optix::Context &cuda_context,
                   uint32_t width,

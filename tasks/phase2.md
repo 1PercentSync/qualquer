@@ -61,4 +61,4 @@ MUSTREAD:4
 - [x] Application 接线：init 中调 `Renderer::init`，destroy 中调 `Renderer::destroy`，resize 路径调 `Renderer::resize`
 - [x] 移除 `renderer/src/test_kernel.cu` 和 `renderer/include/qualquer/renderer/test_kernel.h`
 - [ ] 更新 `renderer/CMakeLists.txt`（移除 test_kernel.cu）
-- [ ] 请求用户在 CLion 中编译验证（窗口显示纯色 + ImGui，resize 不崩溃，无 validation / OptiX / CUDA 报错）
+- [x] 请求用户在 CLion 中编译验证（窗口显示纯色 + ImGui，resize 不崩溃，无 validation / OptiX / CUDA 报错）
