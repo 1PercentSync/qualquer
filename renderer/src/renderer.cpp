@@ -86,6 +86,23 @@ namespace qualquer::renderer {
         spdlog::info("Renderer resized ({}x{})", width, height);
     }
 
+    void Renderer::destroy() {
+        // Reverse init creation order: the pipeline references the module and
+        // program groups, so it is torn down before the SBT buffers whose device
+        // memory it bound. Pipeline::destroy and CudaBuffer::free are both
+        // idempotent (null-reset), so a repeat call is a no-op. State members
+        // (accum_index_, frame_counter_) are intentionally not reset here —
+        // release is the sole responsibility; a subsequent init resets them.
+        pipeline_.destroy();
+        sbt_raygen_.free();
+        sbt_miss_.free();
+        sbt_hit_.free();
+        for (auto &buffer : accum_buffers_) {
+            buffer.free();
+        }
+        params_buffer_.free();
+    }
+
     void Renderer::submit_cuda(const optix::Context &cuda_context,
                                const uint32_t width,
                                const uint32_t height,
