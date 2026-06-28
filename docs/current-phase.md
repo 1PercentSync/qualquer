@@ -164,8 +164,10 @@ Vulkan queue:    wait forward_sem → [blit] → signal reverse_sem → [ImGui] 
 
 **display_surface 反向同步**：
 
-显示 buffer 只有一份，CUDA tonemap 写、Vulkan blit 读，存在 write-after-read 依赖。新增 per-frame-slot 反向 interop semaphore（Vulkan signal after blit → CUDA wait before tonemap）闭合同步环。
+显示 buffer 只有一份，CUDA tonemap 写、Vulkan blit 读，存在 write-after-read 依赖。新增单个反向 interop semaphore（Vulkan signal after blit → CUDA wait before tonemap）闭合同步环。
 
+- 单个即够：reverse 的每次 signal 都在 submit2 的「wait forward_sem → blit → signal reverse_sem」序列中，而 forward 是 per-frame 的，这条链把 reverse 的 signal/wait 强制成严格交替（详见 `technical-decisions.md` 同步节）
+- 首帧闭合：init 中 pre-signal reverse_sem，使首帧 CUDA wait 立即通过
 - 正常帧：Vulkan submit 在 blit 完成后 signal 反向 sem（stage = `TRANSFER_BIT`）
 - acquire 失败帧：Vulkan submit 被跳过，drain submit 代为 signal 反向 sem（无 blit 发生，display_surface 未被读，signal 允许 CUDA 侧继续）
 - T_blit << T_raygen 时无并行度损失：blit 在 raygen 期间完成，反向 sem 远早于 raygen_done event 被 signal，tonemap 启动时机仍由 raygen_done 决定

@@ -116,20 +116,21 @@ CUDA 侧通过 `cudaExternalMemoryGetMappedMipmappedArray` → `cudaArray_t` →
 
 ### 同步
 
-**决策**：Binary semaphore 双向，per-frame-in-flight 各一对（共 4 个）。
+**决策**：Binary semaphore，forward 方向 per-frame-in-flight（2 个），reverse 方向单个（共 3 个）。
 
-| 方向 | CUDA 侧 | Vulkan 侧 | 保护的依赖 |
-|------|---------|-----------|-----------|
-| CUDA→Vulkan（forward） | signal（display_stream，tonemap 后） | wait（submit，blit 前） | blit 读 display_surface 前 tonemap 写完 |
-| Vulkan→CUDA（reverse） | wait（display_stream，tonemap 前） | signal（submit，blit 后） | tonemap 写 display_surface 前 blit 读完 |
+| 方向 | 数量 | CUDA 侧 | Vulkan 侧 | 保护的依赖 |
+|------|------|---------|-----------|-----------|
+| CUDA→Vulkan（forward） | per-frame（2） | signal（display_stream，tonemap 后） | wait（submit，blit 前） | blit 读 display_surface 前 tonemap 写完 |
+| Vulkan→CUDA（reverse） | 单个（1） | wait（display_stream，tonemap 前） | signal（submit，blit 后） | tonemap 写 display_surface 前 blit 读完 |
 
 **理由**：
-- 显示 buffer 只有一份，CUDA tonemap 写、Vulkan blit 读，存在 write-after-read 依赖
+- 显示 buffer 只有一份，CUDA tonemap 写、Vulkan blit 读，存在 write-after-read 依赖，reverse 不可或缺
+- forward 必须 per-frame：signal 端在 CUDA display_stream、wait 端在 Vulkan submit2，分属两个独立 engine；2 frames in flight 下共用单个 forward semaphore 时，GPU 上两次 CUDA signal 之间无法保证夹着一次 Vulkan wait，会违反 binary semaphore 约束。Per-frame 分开后，同一 slot 的 fence wait 保证上一次 wait 完成才允许下一次 signal
+- reverse 可单个：reverse 的每次 signal 都在 submit2 的「wait forward_sem → blit → signal reverse_sem」序列中，而 forward 是 per-frame 的，这条链把 reverse 的 signal/wait 强制成严格交替——每个 reverse signal 之前必有一个 reverse wait（上帧消费），不会连续 signal。因此 reverse 无需 per-frame
 - 单向（仅 forward）时，display_surface 的 write-after-read 靠 T_blit << T_raygen 的隐式间隙——形式上不正确
-- 反向 semaphore 在 T_blit << T_raygen 时不损失并行度：blit 在 raygen 期间完成，反向 signal 远早于 raygen_done event，tonemap 启动时机仍由 raygen_done 决定
-- Binary 仍然足够：每方向每帧恰好一次 signal/wait
-- Per-frame 分开避免 2 frames in flight 下 binary semaphore 连续 signal
-- acquire 失败时 Vulkan submit 被跳过，drain submit 需代为 signal 反向 semaphore（否则 CUDA wait 挂起）
+- reverse 在 T_blit << T_raygen 时不损失并行度：blit 在 raygen 期间完成，reverse signal 远早于 raygen_done event，tonemap 启动时机仍由 raygen_done 决定
+- 首帧由 init 中的 pre-signal 闭合（reverse_sem 预先 signal，使首帧 CUDA wait 立即通过）
+- acquire 失败时 Vulkan submit 被跳过，drain submit 需代为 signal reverse semaphore（否则下一帧 CUDA wait 挂起）
 
 ### 测试 Kernel 归属
 
