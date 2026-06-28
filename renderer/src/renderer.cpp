@@ -15,7 +15,7 @@
 #include <qualquer/optix/pipeline.h>
 #include <qualquer/renderer/imgui_backend.h>
 #include <qualquer/renderer/launch_params.h>
-#include <qualquer/renderer/test_kernel.h>
+#include <qualquer/renderer/tonemap.h>
 #include <qualquer/vulkan/context.h>
 #include <qualquer/vulkan/interop.h>
 #include <qualquer/vulkan/swapchain.h>
@@ -105,19 +105,55 @@ namespace qualquer::renderer {
                                const uint32_t width,
                                const uint32_t height,
                                const uint32_t frame_index) {
-        launch_test_kernel(cuda_context.display_surface,
-                           width,
-                           height,
-                           frame_counter_,
-                           cuda_context.stream);
+        // raygen writes [1 - accum_index_] (new accumulation); tonemap reads
+        // [accum_index_] (previous frame's result). The one-frame display lag is
+        // intentional (see technical-decisions.md): write and read target distinct
+        // buffers, the precondition for overlapping them on separate streams.
+        const LaunchParams params{
+            .accumulation_buffer = accum_buffers_[1 - accum_index_].data(),
+            .width = width,
+            .height = height,
+            .frame_index = frame_counter_,
+        };
+        params_buffer_.upload(&params, 1, cuda_context.stream);
 
-        // Signal the frame's external semaphore on the same stream as the kernel, so
-        // the signal is posted after the kernel completes (stream submission order).
-        // Binary OPAQUE_WIN32 needs no fence value — params stays zeroed.
+        const OptixShaderBindingTable sbt{
+            .raygenRecord = sbt_raygen_.device_ptr(),
+            .exceptionRecord = 0,
+            .missRecordBase = sbt_miss_.device_ptr(),
+            .missRecordStrideInBytes = sizeof(SbtRecord),
+            .missRecordCount = 1,
+            .hitgroupRecordBase = sbt_hit_.device_ptr(),
+            .hitgroupRecordStrideInBytes = sizeof(SbtRecord),
+            .hitgroupRecordCount = 1,
+            .callablesRecordBase = 0,
+            .callablesRecordStrideInBytes = 0,
+            .callablesRecordCount = 0,
+        };
+
+        // traversable=0 is valid: raygen does not call optixTrace, so no
+        // acceleration structure is traversed.
+        OPTIX_CHECK(optixLaunch(pipeline_.handle,
+                                cuda_context.stream,
+                                params_buffer_.device_ptr(),
+                                sizeof(LaunchParams),
+                                &sbt,
+                                width, height, 1));
+
+        launch_tonemap(accum_buffers_[accum_index_].data(),
+                       cuda_context.display_surface,
+                       width, height,
+                       cuda_context.stream);
+
+        // Signal on the same stream as optixLaunch + tonemap, so the signal is
+        // posted after both complete (stream submission order). Binary OPAQUE_WIN32
+        // needs no fence value — signal_params stays zeroed.
+        // ReSharper disable once CppLocalVariableMayBeConst
         cudaExternalSemaphore_t sem = cuda_context.external_semaphores[frame_index];
-        cudaExternalSemaphoreSignalParams params{};
-        CUDA_CHECK(cudaSignalExternalSemaphoresAsync(&sem, &params, 1, cuda_context.stream));
+        constexpr cudaExternalSemaphoreSignalParams signal_params{};
+        CUDA_CHECK(cudaSignalExternalSemaphoresAsync(&sem, &signal_params, 1, cuda_context.stream));
 
+        accum_index_ = 1 - accum_index_;
         ++frame_counter_;
     }
 
