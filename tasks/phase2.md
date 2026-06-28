@@ -52,6 +52,7 @@ MUSTREAD:4
 - [x] `Renderer` 新增 init / destroy / resize 声明（init 接收 OptixDeviceContext + 宽高；destroy 释放所有资源；resize 重建累积 buffer）
 - [x] `Renderer::init` 实现：创建 Pipeline（读 .optixir 文件）、构建 SBT records（pack header + upload 三块 CudaBuffer）、分配累积 buffers（2 × CudaBuffer\<float4\>）和 LaunchParams buffer
 - [ ] `Renderer::resize` 实现：累积 buffer resize + clear
+- [ ] `Renderer::destroy` 实现：释放 Pipeline、SBT buffers、累积 buffers、LaunchParams buffer
 - [ ] 请求用户在 CLion 中编译验证
 
 ## Step 8：optixLaunch + 帧循环集成 + 清理
