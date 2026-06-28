@@ -68,8 +68,7 @@ namespace qualquer::optix {
         /**
          * @brief Allocates device memory for count elements, freeing any prior allocation.
          *
-         * Unconditional: previously held memory is released first, so callers
-         * need not track prior state. A count of 0 leaves the buffer empty.
+         * Callers need not track prior state, and a count of 0 leaves the buffer empty.
          * @param count Number of elements to allocate.
          */
         void alloc(const std::size_t count) {
@@ -98,8 +97,7 @@ namespace qualquer::optix {
         /**
          * @brief Ensures the buffer holds exactly count elements.
          *
-         * Skips reallocation when the current count already matches, avoiding
-         * churn when a resize request lands on the same size as before.
+         * No-op when count already matches.
          * @param count Desired element count.
          */
         void resize(const std::size_t count) {

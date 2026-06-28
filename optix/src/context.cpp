@@ -88,15 +88,12 @@ namespace qualquer::optix {
         }
 
         /**
-         * @brief OptiX device-context validation mode, toggled by an overlay flag.
+         * @brief OptiX validation mode, an overlay on the standard build types.
          *
-         * Validation is enabled only when the QUALQUER_OPTIX_VALIDATE CMake option
-         * is ON; it is an overlay on the standard build types rather than a build
-         * type of its own, so it composes with Debug/Release without touching
-         * NDEBUG-based switches. When on, OptiX actively checks API usage (SBT
-         * layout, handles, parameters, caught builtin exceptions) and routes the
-         * findings through the log callback above, turning silent misuse into
-         * explicit diagnostic messages at a notable runtime cost.
+         * Enabled only by the QUALQUER_OPTIX_VALIDATE CMake option, so it composes
+         * with Debug/Release without a separate build type. When on, OptiX checks
+         * SBT layout, handles, params, and builtin exceptions through the log
+         * callback at a notable runtime cost.
          */
 #ifdef QUALQUER_OPTIX_VALIDATE
         constexpr OptixDeviceContextValidationMode kValidationMode = OPTIX_DEVICE_CONTEXT_VALIDATION_MODE_ALL;
@@ -113,17 +110,12 @@ namespace qualquer::optix {
             std::abort();
         }
 
-        // Select the best device among those the Vulkan layer confirmed
-        // presentable. Restricting to presentable_uuids excludes compute-only
-        // devices (e.g. a TCC GPU) that Vulkan could not match for presentation.
-        // Within that set, compute capability is the primary key (major then
-        // minor, both strictly greater); among devices sharing a compute
-        // capability, rate_device breaks the tie (discrete + VRAM), mirroring
-        // the Vulkan layer's heuristic. Skips cudaComputeModeProhibited (device
-        // locked for CUDA by another process or WDDM display mode without
-        // compute) — matches NVIDIA's simpleVulkan interop example's eligibility
-        // filter. cudaDeviceProp is fetched once per device to serve UUID
-        // filtering and VRAM scoring from a single query.
+        // Restrict to presentable_uuids to exclude compute-only devices (e.g. a
+        // TCC GPU) that Vulkan could not match for presentation. Compute
+        // capability is the primary key; rate_device breaks ties among equal
+        // capability, mirroring the Vulkan layer's heuristic.
+        // cudaComputeModeProhibited devices are skipped — matches NVIDIA's
+        // simpleVulkan interop example's eligibility filter.
         int best_device = -1;
         int best_major = 0;
         int best_minor = 0;

@@ -31,9 +31,8 @@ namespace qualquer::renderer {
                 }                                                                         \
             } while (0)
 
-        // Hard clamp to [0,1] is the placeholder transform; ACES + exposure replace
-        // it once the PT path lights up (progressive implementation). fminf/fmaxf,
-        // not a clamp() template, to avoid pulling <algorithm> into device code.
+        // Hard clamp to [0,1] as the current LDR transform. fminf/fmaxf, not a
+        // clamp() template, to avoid pulling <algorithm> into device code.
         __device__ __forceinline__ float clamp01(const float v) {
             return fminf(1.0f, fmaxf(0.0f, v));
         }

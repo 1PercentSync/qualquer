@@ -13,8 +13,7 @@
 /**
  * @brief Checks an OptixResult and aborts on failure with diagnostic output.
  *
- * Mirrors CUDA_CHECK / VK_CHECK: OptiX API errors during pipeline setup are
- * unrecoverable configuration failures.
+ * Mirrors CUDA_CHECK / VK_CHECK: OptiX API errors are unrecoverable configuration failures.
  */
 #define OPTIX_CHECK(x)                                                            \
     do {                                                                          \
