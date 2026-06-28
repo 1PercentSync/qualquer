@@ -5,13 +5,20 @@
 
 ## compile_optix_ir(target file1.cu [file2.cu ...])
 #
-# Compiles each .cu source with nvcc --optix-ir into
-# ${CMAKE_BINARY_DIR}/optix_ir/, then deploys all generated .optixir files into
-# <target runtime dir>/shaders/ at POST_BUILD.
+# Compiles each .cu source with nvcc --optix-ir into ${QUALQUER_OPTIX_IR_DIR}.
+# Deployment to a runtime directory is the consumer's responsibility: the app
+# target POST_BUILD-copies the whole directory to its executable's shaders/ so
+# Pipeline::init can load the .optixir via a CWD-relative path.
 #
 # Prerequisites at the call site:
 #   - CUDA language enabled (defines CMAKE_CUDA_COMPILER)
 #   - OptiX_INCLUDE_DIR defined (via find_package(OptiX))
+
+# Directory where compiled .optixir artifacts land; exported as a global
+# variable so consumers (e.g. the app target's POST_BUILD copy) can reference
+# it without hardcoding this module's internal layout.
+set(QUALQUER_OPTIX_IR_DIR "${CMAKE_BINARY_DIR}/optix_ir" CACHE INTERNAL "OptiX IR output directory")
+
 function(compile_optix_ir target)
     set(_cu_files ${ARGN})
 
@@ -37,7 +44,7 @@ function(compile_optix_ir target)
         endif()
 
         get_filename_component(_name "${_cu_abs}" NAME_WE)
-        set(_out "${CMAKE_BINARY_DIR}/optix_ir/${_name}.optixir")
+        set(_out "${QUALQUER_OPTIX_IR_DIR}/${_name}.optixir")
 
         # --optix-ir cannot combine with --compile: nvcc emits the .optixir
         # directly as a single phase. compute_89 is the virtual architecture
@@ -46,14 +53,18 @@ function(compile_optix_ir target)
         # -Xcompiler=/utf-8 mirrors the top-level add_compile_options for CUDA:
         # this custom command bypasses it, and without it MSVC under code page
         # 936 spams C4819 on non-ASCII bytes inside NVIDIA's own CUDA headers.
+        # -lineinfo (Debug only) embeds source line mapping so OptiX's MINIMAL
+        # debug level (requested for Debug builds in Pipeline::init) has line info
+        # to point at; line info carries no runtime cost, only a larger .optixir.
         add_custom_command(
             OUTPUT "${_out}"
-            COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/optix_ir"
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${QUALQUER_OPTIX_IR_DIR}"
             COMMAND "${CMAKE_CUDA_COMPILER}"
                     --optix-ir
                     --gpu-architecture=compute_89
                     -std=c++20
                     -Xcompiler=/utf-8
+                    $<$<CONFIG:Debug>:-lineinfo>
                     ${_include_flags}
                     -o "${_out}"
                     "${_cu_abs}"
@@ -64,16 +75,6 @@ function(compile_optix_ir target)
 
         list(APPEND _optixir_files "${_out}")
     endforeach()
-
-    # Deploy compiled artifacts to the target's runtime shader directory.
-    add_custom_command(TARGET ${target} POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:${target}>/shaders"
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                ${_optixir_files}
-                "$<TARGET_FILE_DIR:${target}>/shaders"
-        COMMENT "Deploying OptiX IR to $<TARGET_FILE_DIR:${target}>/shaders"
-        VERBATIM
-    )
 
     # Wire the generated files as sources so the target depends on them. CMake
     # has no rule to compile .optixir, so this only drives the custom command

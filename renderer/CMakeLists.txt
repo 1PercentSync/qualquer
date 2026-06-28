@@ -9,7 +9,6 @@ target_sources(qualquer_renderer PRIVATE
     src/imgui_backend.cpp
     src/debug_ui.cpp
     src/renderer.cpp
-    src/test_kernel.cu
     src/tonemap.cu
 )
 
