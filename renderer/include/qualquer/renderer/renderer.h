@@ -5,6 +5,7 @@
  * @brief Renderer: single-frame render content (CUDA submit + Vulkan recording).
  */
 
+#include <cuda_runtime.h>
 #include <optix.h>
 #include <vulkan/vulkan.h>
 
@@ -165,5 +166,23 @@ namespace qualquer::renderer {
 
         /** @brief Monotonic frame counter driving temporal animation. */
         uint32_t frame_counter_ = 0;
+
+        /**
+         * @brief Recorded after raygen completes on compute_stream.
+         *
+         * The next frame's tonemap waits on the previous slot's event to ensure the
+         * accumulation buffer it reads has been fully written.
+         * Double-buffered by frame_counter_ % 2.
+         */
+        std::array<cudaEvent_t, 2> event_raygen_done_{};
+
+        /**
+         * @brief Recorded after tonemap completes on display_stream.
+         *
+         * The next frame's raygen waits on the previous slot's event to ensure the
+         * accumulation buffer it writes is no longer being read by tonemap.
+         * Double-buffered by frame_counter_ % 2.
+         */
+        std::array<cudaEvent_t, 2> event_tonemap_done_{};
     };
 } // namespace qualquer::renderer

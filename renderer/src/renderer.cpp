@@ -63,6 +63,18 @@ namespace qualquer::renderer {
         params_buffer_.alloc(1);
         accum_index_ = 0;
 
+        // Events start recorded on compute_stream so the first frame's waits
+        // (on slot 1, the "previous" slot) pass immediately — the stream ordering
+        // guarantees the records complete after the buffer clears above.
+        for (auto &event : event_raygen_done_) {
+            CUDA_CHECK(cudaEventCreate(&event));
+            CUDA_CHECK(cudaEventRecord(event, cuda_context.compute_stream));
+        }
+        for (auto &event : event_tonemap_done_) {
+            CUDA_CHECK(cudaEventCreate(&event));
+            CUDA_CHECK(cudaEventRecord(event, cuda_context.compute_stream));
+        }
+
         spdlog::info("Renderer initialized ({}x{}, {} SBT records)",
                      width,
                      height,
@@ -99,6 +111,18 @@ namespace qualquer::renderer {
             buffer.free();
         }
         params_buffer_.free();
+        for (auto &event : event_raygen_done_) {
+            if (event != nullptr) {
+                CUDA_CHECK(cudaEventDestroy(event));
+                event = nullptr;
+            }
+        }
+        for (auto &event : event_tonemap_done_) {
+            if (event != nullptr) {
+                CUDA_CHECK(cudaEventDestroy(event));
+                event = nullptr;
+            }
+        }
     }
 
     void Renderer::submit_cuda(const optix::Context &cuda_context,
