@@ -5,7 +5,6 @@
  * @brief CudaBuffer<T> device-memory RAII template.
  */
 
-#include <cstddef>
 #include <type_traits>
 
 #include <cuda.h>
@@ -116,7 +115,8 @@ namespace qualquer::optix {
          * @param count  Number of elements to copy.
          * @param stream CUDA stream the copy is enqueued on.
          */
-        void upload(const T *src, const std::size_t count, const cudaStream_t stream) {
+        // ReSharper disable once CppParameterMayBeConst
+        void upload(const T *src, const std::size_t count, cudaStream_t stream) {
             if (count == 0) {
                 return;
             }
@@ -131,7 +131,8 @@ namespace qualquer::optix {
          * without a typed fill. No-op when the buffer is empty.
          * @param stream CUDA stream the memset is enqueued on.
          */
-        void clear(const cudaStream_t stream) const {
+        // ReSharper disable once CppParameterMayBeConst
+        void clear(cudaStream_t stream) const {
             if (count_ == 0) {
                 return;
             }
@@ -159,15 +160,15 @@ namespace qualquer::optix {
          * OptiX handle form.
          * @return Device pointer in OptiX's integer-handle form; 0 when empty.
          */
-        CUdeviceptr device_ptr() const {
+        [[nodiscard]] CUdeviceptr device_ptr() const {
             return reinterpret_cast<CUdeviceptr>(data_);
         }
 
         /** @return Number of elements currently allocated (0 when empty). */
-        std::size_t count() const { return count_; }
+        [[nodiscard]] std::size_t count() const { return count_; }
 
         /** @return Allocated size in bytes (count() * sizeof(T)). */
-        std::size_t size_bytes() const { return count_ * sizeof(T); }
+        [[nodiscard]] std::size_t size_bytes() const { return count_ * sizeof(T); }
 
     private:
         /** @brief Device pointer to the first element; null when empty. */
