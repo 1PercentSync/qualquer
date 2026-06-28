@@ -158,7 +158,7 @@ renderer 用 Pipeline 暴露的 ProgramGroup handle 构建 SBT records。OptiX A
 
 ## OptiX 9.1 API 参考
 
-> Phase 2 涉及的 API 函数和结构体速查。来源：[OptiX 9.1 API Reference](https://raytracing-docs.nvidia.com/optix9/api/OptiX_API_Reference.pdf)、[Programming Guide](https://raytracing-docs.nvidia.com/optix9/guide/optix_guide.251118.A4.pdf)。
+> Phase 2 涉及的 API 函数和结构体速查。来源：[OptiX 9.1 API Reference](https://raytracing-docs.nvidia.com/optix9/api/OptiX_API_Reference.pdf)、[Programming Guide](https://raytracing-docs.nvidia.com/optix9/guide/optix_guide.251118.A4.pdf)。SDK 头文件本地路径（`cmake/FindOptiX.cmake` 中 `OptiX_INCLUDE_DIR`）：`/mnt/c/ProgramData/NVIDIA Corporation/OptiX SDK 9.1.0/include`。
 
 ### 初始化
 
