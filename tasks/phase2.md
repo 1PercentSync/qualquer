@@ -44,8 +44,8 @@ MUSTREAD:4
 ## Step 6：累积 buffer + Tone mapping
 
 - [x] 创建 `renderer/include/qualquer/renderer/tonemap.h`（tone map kernel launch 入口声明）
-- [ ] 创建 `renderer/src/tonemap.cu`（读 float4 累积 buffer → clamp → 写 uchar4 到 display surface）并更新 `renderer/CMakeLists.txt`（新增 tonemap.cu）
-- [ ] 请求用户在 CLion 中编译验证
+- [x] 创建 `renderer/src/tonemap.cu`（读 float4 累积 buffer → clamp → 写 uchar4 到 display surface）并更新 `renderer/CMakeLists.txt`（新增 tonemap.cu）
+- [x] 请求用户在 CLion 中编译验证
 
 ## Step 7：Renderer 状态化重构
 

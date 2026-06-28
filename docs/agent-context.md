@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 2 — OptiX 基础（Pipeline/SBT，raygen 输出纯色，替换测试 kernel）
-- **进度**：Step 5 完成
+- **进度**：Step 6 完成
 
 ### 下一个任务
 
-Step 6 第二项：创建 `renderer/src/tonemap.cu`（读 float4 累积 buffer → clamp → 写 uchar4 到 display surface）并更新 `renderer/CMakeLists.txt`——已写，待在 CLion 中编译验证
+Step 7 第一项：Renderer 新增 init / destroy / resize 声明（init 接收 OptixDeviceContext + 宽高；destroy 释放所有资源；resize 重建累积 buffer）
 
 > Phase 1 全部完成并归档。Phase 2 文档集已创建，8 个 Step 覆盖 OptiX Pipeline 框架搭建。
 
