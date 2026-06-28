@@ -83,14 +83,17 @@ namespace qualquer::renderer {
         /**
          * @brief Creates all OptiX render resources sized for the given output.
          *
-         * @param device_context OptiX device context the pipeline builds against.
+         * @param cuda_context CUDA context owning the stream and device context the
+         *                      pipeline builds against; the stream sequences SBT
+         *                      uploads and accumulation-buffer clears before the first
+         *                      frame's optixLaunch on the same stream.
          * @param width          Output width in pixels.
          * @param height         Output height in pixels.
          * @param optixir_path   Path to the compiled .optixir file (passed to the
          *                       pipeline; resolved relative to the executable, not the
          *                       working directory).
          */
-        void init(OptixDeviceContext device_context,
+        void init(const optix::Context &cuda_context,
                   uint32_t width,
                   uint32_t height,
                   const std::string &optixir_path);
@@ -106,12 +109,14 @@ namespace qualquer::renderer {
         /**
          * @brief Rebuilds resolution-dependent resources after a swapchain resize.
          *
-         * Resizes and clears the accumulation buffers; the pipeline and SBT records
-         * are resolution-independent and stay.
+         * Resizes and clears the accumulation buffers on the context's stream so the
+         * clear completes before the next frame's optixLaunch; the pipeline and SBT
+         * records are resolution-independent and stay.
+         * @param cuda_context CUDA context owning the stream the clears run on.
          * @param width  New output width in pixels.
          * @param height New output height in pixels.
          */
-        void resize(uint32_t width, uint32_t height);
+        void resize(const optix::Context &cuda_context, uint32_t width, uint32_t height);
 
         /**
          * @brief Launches the test kernel and signals the frame's external semaphore.
@@ -131,7 +136,7 @@ namespace qualquer::renderer {
          * @brief Records the Vulkan command sequence (blit, ImGui, layout transitions).
          * @param input Per-frame handles (see RenderInput). cmd must be begun by caller.
          */
-        void record_vulkan(const RenderInput &input);
+        static void record_vulkan(const RenderInput &input);
 
     private:
         /** @brief OptiX pipeline (module, program groups, linked handle). */

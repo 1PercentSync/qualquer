@@ -11,13 +11,64 @@
 
 #include <qualquer/optix/context.h>
 #include <qualquer/optix/cuda_check.h>
+#include <qualquer/optix/optix_check.h>
+#include <qualquer/optix/pipeline.h>
 #include <qualquer/renderer/imgui_backend.h>
+#include <qualquer/renderer/launch_params.h>
 #include <qualquer/renderer/test_kernel.h>
 #include <qualquer/vulkan/context.h>
 #include <qualquer/vulkan/interop.h>
 #include <qualquer/vulkan/swapchain.h>
 
+#include <optix_stubs.h>
+#include <spdlog/spdlog.h>
+
 namespace qualquer::renderer {
+    void Renderer::init(const optix::Context &cuda_context,
+                        const uint32_t width,
+                        const uint32_t height,
+                        const std::string &optixir_path) {
+        // The launch-params constant name ("params") and its size are device-side
+        // facts this layer cannot take from the renderer header (single-direction
+        // dependency), so they are passed to the pipeline as opaque values.
+        pipeline_.init(cuda_context.device_context,
+                       optixir_path,
+                       sizeof(LaunchParams),
+                       "params");
+
+        // One SBT record per program group, header-only. Packing reuses one host
+        // record since only the opaque header (written by the API) differs between
+        // groups; the record body carries no user data.
+        SbtRecord record{};
+        OPTIX_CHECK(optixSbtRecordPackHeader(pipeline_.raygen_program, &record));
+        sbt_raygen_.alloc(1);
+        sbt_raygen_.upload(&record, 1, cuda_context.stream);
+
+        OPTIX_CHECK(optixSbtRecordPackHeader(pipeline_.miss_program, &record));
+        sbt_miss_.alloc(1);
+        sbt_miss_.upload(&record, 1, cuda_context.stream);
+
+        OPTIX_CHECK(optixSbtRecordPackHeader(pipeline_.hitgroup_program, &record));
+        sbt_hit_.alloc(1);
+        sbt_hit_.upload(&record, 1, cuda_context.stream);
+
+        // Two accumulation buffers for ping-pong HDR accumulation, cleared so the
+        // first frame reads a defined zero background before any write.
+        const std::size_t pixel_count = static_cast<std::size_t>(width) * height;
+        for (auto &buffer : accum_buffers_) {
+            buffer.alloc(pixel_count);
+            buffer.clear(cuda_context.stream);
+        }
+
+        params_buffer_.alloc(1);
+        accum_index_ = 0;
+
+        spdlog::info("Renderer initialized ({}x{}, {} SBT records)",
+                     width,
+                     height,
+                     3);
+    }
+
     void Renderer::submit_cuda(const optix::Context &cuda_context,
                                const uint32_t width,
                                const uint32_t height,
