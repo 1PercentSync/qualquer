@@ -212,10 +212,10 @@ namespace qualquer::app {
             {
                 .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
                 // External semaphore signaled by CUDA after writing the display buffer.
-                // Waits the CUDA write before Vulkan reads the buffer (blit). ALL_COMMANDS
-                // is conservative; the actual first read is the blit in record_vulkan.
+                // Waits the CUDA write before Vulkan reads the buffer (blit in
+                // record_vulkan). TRANSFER is the exact first-read stage.
                 .semaphore = interop_semaphores_[context_.frame_index].semaphore,
-                .stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+                .stageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
             },
         };
 
