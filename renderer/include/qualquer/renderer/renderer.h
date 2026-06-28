@@ -5,7 +5,15 @@
  * @brief Renderer: single-frame render content (CUDA submit + Vulkan recording).
  */
 
+#include <optix.h>
 #include <vulkan/vulkan.h>
+
+#include <array>
+#include <string>
+
+#include <qualquer/optix/cuda_buffer.h>
+#include <qualquer/optix/pipeline.h>
+#include <qualquer/renderer/launch_params.h>
 
 namespace qualquer::optix {
     class Context;
@@ -19,6 +27,19 @@ namespace qualquer::vulkan {
 
 namespace qualquer::renderer {
     class ImGuiBackend;
+
+    /**
+     * @brief OptiX SBT record carrying only the opaque program header.
+     *
+     * The raygen/miss/hit records carry no user data, so the record is the
+     * 32-byte header alone. Defined at namespace scope because it appears as a
+     * CudaBuffer template argument in the Renderer members. An explicit
+     * alignment replaces the OptiX example's @c __align__ compiler extension so
+     * the same record type is well-formed in host C++20.
+     */
+    struct SbtRecord {
+        alignas(OPTIX_SBT_RECORD_ALIGNMENT) char header[OPTIX_SBT_RECORD_HEADER_SIZE];
+    };
 
     /**
      * @brief Per-frame handles passed to Renderer::record_vulkan.
@@ -52,19 +73,53 @@ namespace qualquer::renderer {
      *
      * Encapsulates what one frame draws — the CUDA write into the display buffer,
      * the Vulkan blit to the swapchain image, and the ImGui overlay — so the
-     * Application keeps only the frame-loop timing skeleton. Owns no handles it
-     * does not create; the frame counter driving temporal animation is the sole
-     * owned state.
+     * Application keeps only the frame-loop timing skeleton. Owns the OptiX
+     * pipeline, SBT record buffers, ping-pong HDR accumulation buffers, and the
+     * device-side launch-params buffer; the frame counter driving temporal
+     * animation is likewise owned state.
      */
     class Renderer {
     public:
+        /**
+         * @brief Creates all OptiX render resources sized for the given output.
+         *
+         * @param device_context OptiX device context the pipeline builds against.
+         * @param width          Output width in pixels.
+         * @param height         Output height in pixels.
+         * @param optixir_path   Path to the compiled .optixir file (passed to the
+         *                       pipeline; resolved relative to the executable, not the
+         *                       working directory).
+         */
+        void init(OptixDeviceContext device_context,
+                  uint32_t width,
+                  uint32_t height,
+                  const std::string &optixir_path);
+
+        /**
+         * @brief Releases all OptiX render resources.
+         *
+         * Idempotent: owned handles are reset, so a repeat call is a no-op (matches
+         * the optix layer's destroy convention).
+         */
+        void destroy();
+
+        /**
+         * @brief Rebuilds resolution-dependent resources after a swapchain resize.
+         *
+         * Resizes and clears the accumulation buffers; the pipeline and SBT records
+         * are resolution-independent and stay.
+         * @param width  New output width in pixels.
+         * @param height New output height in pixels.
+         */
+        void resize(uint32_t width, uint32_t height);
+
         /**
          * @brief Launches the test kernel and signals the frame's external semaphore.
          *
          * Both run on the CUDA context's explicit stream, in submission order, so the
          * signal is posted after the kernel completes. Intended to be called before
-         * acquiring the swapchain image so the CUDA engine starts computing while
-         * the CPU waits on acquire.
+         * acquiring the swapchain image so the CUDA engine starts computing while the
+         * CPU waits on acquire.
          * @param cuda_context CUDA context (surface, stream, external semaphores).
          * @param width        Display buffer width in pixels.
          * @param height       Display buffer height in pixels.
@@ -79,6 +134,30 @@ namespace qualquer::renderer {
         void record_vulkan(const RenderInput &input);
 
     private:
+        /** @brief OptiX pipeline (module, program groups, linked handle). */
+        optix::Pipeline pipeline_;
+
+        /** @brief Raygen SBT record buffer (single record, no user data). */
+        optix::CudaBuffer<SbtRecord> sbt_raygen_;
+        /** @brief Miss SBT record buffer (single record, no user data). */
+        optix::CudaBuffer<SbtRecord> sbt_miss_;
+        /** @brief Hit-group SBT record buffer (single record, no user data). */
+        optix::CudaBuffer<SbtRecord> sbt_hit_;
+
+        /**
+         * @brief Ping-pong HDR accumulation buffers (RGBA32F, CUDA-owned).
+         *
+         * Frame N reads buffer [accum_index_] and writes [1 - accum_index_], then
+         * flips the index for the next frame; see technical-decisions.md.
+         */
+        std::array<optix::CudaBuffer<float4>, 2> accum_buffers_;
+
+        /** @brief Device-side launch-params buffer (one LaunchParams). */
+        optix::CudaBuffer<LaunchParams> params_buffer_;
+
+        /** @brief Index into accum_buffers_ of the buffer read this frame; flipped per frame. */
+        uint32_t accum_index_ = 0;
+
         /** @brief Monotonic frame counter driving temporal animation. */
         uint32_t frame_counter_ = 0;
     };
