@@ -30,7 +30,7 @@ namespace qualquer::renderer {
                         const std::string &optixir_path) {
         // The launch-params constant name ("params") and its size are device-side
         // facts this layer cannot take from the renderer header (single-direction
-        // dependency), so they are passed to the pipeline as opaque values.
+        // dependency).
         pipeline_.init(cuda_context.device_context,
                        optixir_path,
                        sizeof(LaunchParams),
@@ -38,7 +38,7 @@ namespace qualquer::renderer {
 
         // One SBT record per program group, header-only. Packing reuses one host
         // record since only the opaque header (written by the API) differs between
-        // groups; the record body carries no user data.
+        // groups.
         SbtRecord record{};
         OPTIX_CHECK(optixSbtRecordPackHeader(pipeline_.raygen_program, &record));
         sbt_raygen_.alloc(1);
@@ -53,7 +53,7 @@ namespace qualquer::renderer {
         sbt_hit_.upload(&record, 1, cuda_context.stream);
 
         // Two accumulation buffers for ping-pong HDR accumulation, cleared so the
-        // first frame reads a defined zero background before any write.
+        // first frame reads a defined zero background.
         const std::size_t pixel_count = static_cast<std::size_t>(width) * height;
         for (auto &buffer : accum_buffers_) {
             buffer.alloc(pixel_count);
@@ -72,10 +72,8 @@ namespace qualquer::renderer {
     void Renderer::resize(const optix::Context &cuda_context,
                           const uint32_t width,
                           const uint32_t height) {
-        // A size change invalidates prior HDR accumulation, so both buffers are
-        // reallocated to the new pixel count and cleared, and the ping-pong index
-        // restarts from zero. Pipeline, SBT records, and the params buffer are
-        // resolution-independent and stay.
+        // A size change invalidates prior HDR accumulation. Pipeline, SBT records,
+        // and the params buffer are resolution-independent and stay.
         const std::size_t pixel_count = static_cast<std::size_t>(width) * height;
         for (auto &buffer : accum_buffers_) {
             buffer.resize(pixel_count);
