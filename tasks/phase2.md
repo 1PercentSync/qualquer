@@ -1,6 +1,6 @@
 # Phase 2 任务清单
 
-> 目标：OptiX Pipeline 框架（Pipeline/SBT，raygen 输出纯色，累积 buffer ping-pong，替换测试 kernel）
+> 目标：OptiX Pipeline 框架（Pipeline/SBT，raygen 输出纯色，累积 buffer ping-pong，双 Stream 流水线，替换测试 kernel）
 > 详细设计见 `docs/current-phase.md`，技术决策见 `docs/technical-decisions.md`。
 >
 > 每完成一个复选框暂停等待审查。一个 Step 结束时应请求用户在 CLion 中编译验证。
@@ -62,3 +62,10 @@ MUSTREAD:4
 - [x] 移除 `renderer/src/test_kernel.cu` 和 `renderer/include/qualquer/renderer/test_kernel.h`
 - [x] 更新 `renderer/CMakeLists.txt`（移除 test_kernel.cu）
 - [x] 请求用户在 CLion 中编译验证（窗口显示纯色 + ImGui，resize 不崩溃，无 validation / OptiX / CUDA 报错）
+
+## Step 9：双 Stream 流水线
+
+- [ ] `optix::Context`：`stream` 重命名为 `compute_stream`，新增 `display_stream`；init/destroy 中创建/销毁
+- [ ] `renderer::Renderer`：新增 `cudaEvent_t event_raygen_done_[2]`、`event_tonemap_done_[2]`；init 中创建并初始记录，destroy 中销毁
+- [ ] `renderer::Renderer::submit_cuda`：拆分双 stream 提交（compute_stream: wait + upload + raygen + record; display_stream: wait + tonemap + record + signal）
+- [ ] 请求用户在 CLion 中编译验证（窗口显示纯色 + ImGui，功能不变，无 validation / OptiX / CUDA 报错）

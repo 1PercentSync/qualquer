@@ -60,19 +60,19 @@ MUSTREAD:8
 
 **帧流程**：
 
-| 帧 | 累积 | Tone mapping | Vulkan |
+| 帧 | 累积（compute_stream） | Tone mapping（display_stream） | Vulkan |
 |----|------|--------------|--------|
 | N | 读 A，写 B | 读 A → 显示 buffer | blit 显示 buffer |
 | N+1 | 读 B，写 A | 读 B → 显示 buffer | blit 显示 buffer |
 
 - Tone mapping 读取上一帧的累积结果（显示延迟一帧）
-- 累积写入和 tone mapping 读取可并行（操作不同 buffer）
+- 累积写入和 tone mapping 读取在不同 stream 上并行（操作不同 buffer，CUDA event 同步）
 - Tone mapping 在 CUDA 侧完成（HDR→LDR），Vulkan 只做 blit
 
 **帧循环顺序**：
 
 ```
-1. CUDA：累积 + tone map（submit 在最前，GPU CUDA 引擎立即启动）
+1. CUDA：submit_cuda 向两条 stream 提交工作（compute_stream: raygen, display_stream: tonemap + signal）
 2. Vulkan：acquire + blit + ImGui + present
 ```
 
@@ -84,11 +84,12 @@ MUSTREAD:8
 
 ```
 T_呈现 = T_acquire + T_blit + T_ImGui + T_present
-每帧时间 = max(T_累积, T_tonemap + T_呈现)
+每帧时间 = max(T_raygen, T_tonemap + T_呈现)
 ```
 
-- 若 T_累积 > T_tonemap + T_呈现：瓶颈在累积，其余全部被隐藏
-- 若 T_累积 < T_tonemap + T_呈现：瓶颈在呈现侧，无法完全隐藏
+- 双 stream 下 T_raygen 与 T_tonemap 重叠（不相加），瓶颈判断基于 raygen 单项
+- 若 T_raygen > T_tonemap + T_呈现：瓶颈在累积，其余全部被隐藏
+- 若 T_raygen < T_tonemap + T_呈现：瓶颈在呈现侧，无法完全隐藏
 
 **理由**：
 - 累积 buffer 不需要 interop，简化同步
@@ -135,13 +136,21 @@ CUDA 侧通过 `cudaExternalMemoryGetMappedMipmappedArray` → `cudaArray_t` →
 - optix 层不包含渲染逻辑是硬约束（编译期单向依赖的语义边界）
 - 帧号计数器是渲染状态（时间累积/噪声变化用途），天然归 renderer 层，与 Himalaya `Renderer::frame_counter_` 一致
 
-### 显式 CUDA Stream
+### CUDA Stream 架构
 
-**决策**：kernel launch 与 external semaphore signal 提交到显式 `cudaStream_t`（由 `optix::Context` 持有），不用默认流。
+**决策**：双显式 stream（`compute_stream` + `display_stream`），均由 `optix::Context` 持有。
+
+| Stream | 每帧工作 |
+|--------|---------|
+| `compute_stream` | params upload + optixLaunch（raygen） |
+| `display_stream` | tonemap + signal interop semaphore |
 
 **理由**：
 - 默认流会与所有显式流隐式同步，等于全局序列化点，堵死重叠空间
-- 显式 stream 是重叠前置条件：累积 buffer ping-pong 下“累积写入”与“tone map 读上一帧”可并行（见 Buffer 架构），没有显式 stream 就无从谈起
+- raygen 写 buf[X] 而 tonemap 读 buf[Y]（ping-pong），无数据依赖，可并行
+- 单 stream 下 tonemap 被迫串行等 raygen 完成，raygen 连续执行的间隙 = T_tonemap；双 stream 下间隙 ≈ 0
+
+**跨 stream 同步**：4 个 CUDA event（`renderer::Renderer` 持有，按 `frame_counter_ % 2` 双缓冲），保护 ping-pong buffer 的跨帧读写依赖（详见 `current-phase.md` 双 Stream 流水线节）。
 
 ### Renderer 内拆分
 

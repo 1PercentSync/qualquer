@@ -1,6 +1,6 @@
 # 当前阶段
 
-> 目标：OptiX Pipeline 框架（Pipeline/SBT，raygen 输出纯色，累积 buffer ping-pong，替换测试 kernel）
+> 目标：OptiX Pipeline 框架（Pipeline/SBT，raygen 输出纯色，累积 buffer ping-pong，双 Stream 流水线，替换测试 kernel）
 > 任务清单见 `tasks/phase2.md`。
 
 ---
@@ -10,7 +10,7 @@
 ### 依赖关系
 
 ```
-Step 1 → Step 2 → Step 3 → Step 4 → Step 5 → Step 6 → Step 7 → Step 8
+Step 1 → Step 2 → Step 3 → Step 4 → Step 5 → Step 6 → Step 7 → Step 8 → Step 9
 ```
 
 ### 总览
@@ -25,6 +25,7 @@ Step 1 → Step 2 → Step 3 → Step 4 → Step 5 → Step 6 → Step 7 → Ste
 | 6 | 累积 buffer + Tone mapping | 编译通过 |
 | 7 | Renderer 状态化重构 | 编译通过 |
 | 8 | optixLaunch + 帧循环集成 + 清理 | 窗口显示纯色 + ImGui，resize 不崩溃 |
+| 9 | 双 Stream 流水线 | 编译通过，功能不变（窗口显示纯色 + ImGui） |
 
 ---
 
@@ -117,15 +118,48 @@ renderer 用 Pipeline 暴露的 ProgramGroup handle 构建 SBT records。OptiX A
 
 读当前帧累积 buffer（`float4`）→ 写 display surface（`cudaSurfaceObject_t`，R8G8B8A8_UNORM）。Phase 2 采用简单 clamp（值域截断到 [0,1]），后续替换。
 
-执行时序：optixLaunch 之后、semaphore signal 之前（同一 stream）。
+执行时序：display_stream 上执行，与 compute_stream 上的 raygen 并行（通过 CUDA event 同步，见双 Stream 流水线节）。
 
 ### Renderer 变化
 
 - **新增 init / destroy / resize**：创建/销毁 Pipeline、SBT、累积 buffer、LaunchParams buffer；resize 重建累积 buffer
-- **内部状态**：Pipeline、SBT buffers、累积 buffers、params buffer、ping-pong 索引、frame_counter_
-- **submit_cuda 流程**：LaunchParams 上传 → `optixLaunch`（traversable=0，无 AS）→ tone map → signal
+- **内部状态**：Pipeline、SBT buffers、累积 buffers、params buffer、ping-pong 索引、frame_counter_、CUDA events（4 个，双缓冲同步）
+- **submit_cuda 流程**：compute_stream 上 LaunchParams 上传 + `optixLaunch`（traversable=0，无 AS）；display_stream 上 tone map + signal；双 stream 通过 CUDA event 同步
 - **record_vulkan**：不变（blit + ImGui）
 - **optixLaunch 的 traversable=0**：Phase 2 无加速结构，raygen 不调 `optixTrace`，合法
+
+### 双 Stream CUDA 流水线
+
+将单 CUDA stream 拆分为 compute_stream（raygen）和 display_stream（tonemap + semaphore signal），使 PT 累积与呈现输出并行。
+
+**Stream 职责**：
+
+| Stream | 归属 | 每帧工作 |
+|--------|------|---------|
+| `compute_stream` | `optix::Context` | params upload + optixLaunch（raygen） |
+| `display_stream` | `optix::Context` | tonemap + signal interop semaphore |
+
+原 `stream` 重命名为 `compute_stream`，新增 `display_stream`。
+
+**跨 Stream 同步**：
+
+ping-pong buffer 的跨帧依赖通过 4 个 CUDA event（`renderer::Renderer` 持有，按 `frame_counter_ % 2` 双缓冲）解决：
+
+| Event | 录制位置 | 等待位置 | 保护的依赖 |
+|-------|---------|---------|-----------|
+| `event_raygen_done[slot]` | compute_stream，raygen 后 | display_stream，下帧 tonemap 前 | tonemap 读的 buffer 已被上帧 raygen 写完 |
+| `event_tonemap_done[slot]` | display_stream，tonemap 后 | compute_stream，下帧 raygen 前 | raygen 写的 buffer 已被上帧 tonemap 读完 |
+
+每帧时序（slot = frame_counter_ % 2，A = accum_index_）：
+
+```
+compute_stream:  wait tonemap_done[1-slot] → [upload + raygen → buf[1-A]] → record raygen_done[slot]
+display_stream:  wait raygen_done[1-slot]  → [tonemap ← buf[A]]          → record tonemap_done[slot] → signal sem
+```
+
+- `[1-slot]` 是上帧的 slot，与当前帧的 `[slot]` 不同，互不覆盖
+- Vulkan fence（kMaxFramesInFlight=2）保证 N-2 帧完成，slot 复用安全
+- Events 在 init 中创建并初始记录（buffers 已 clear），首帧 wait 立即通过
 
 ### 文件结构变化
 
@@ -371,6 +405,7 @@ extern "C" __constant__ LaunchParams params;
 - optixLaunch 输出纯色到累积 buffer
 - Tone mapping 正确转换 HDR → LDR 到显示 buffer
 - 累积 buffer ping-pong 机制就位（交替读写）
+- 双 Stream 流水线：raygen（compute_stream）与 tonemap（display_stream）并行，CUDA event 同步
 - 窗口显示纯色 + ImGui 面板
 - Resize 正常（累积 buffer + 显示 buffer 重建）
 - 无 validation / OptiX / CUDA 报错
