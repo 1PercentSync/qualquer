@@ -22,7 +22,7 @@ namespace qualquer::renderer {
                 cudaError_t cuda_check_result_ = (x);                                     \
                 if (cuda_check_result_ != cudaSuccess) {                                  \
                     std::fprintf(stderr,                                                 \
-                                 "CUDA_CHECK failed: {} returned {} at {}:{}\n",         \
+                                 "CUDA_CHECK failed: %s returned %s at %s:%d\n",         \
                                  #x,                                                      \
                                  cudaGetErrorString(cuda_check_result_),                  \
                                  __FILE__,                                                \

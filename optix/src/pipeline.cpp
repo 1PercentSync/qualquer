@@ -113,10 +113,11 @@ namespace qualquer::optix {
         }};
 
         std::array<OptixProgramGroup, 3> program_groups{};
+        constexpr OptixProgramGroupOptions program_options{};
         OPTIX_CHECK(optixProgramGroupCreate(device_context,
                                             program_descs.data(),
                                             program_descs.size(),
-                                            nullptr,
+                                            &program_options,
                                             nullptr,
                                             nullptr,
                                             program_groups.data()));
