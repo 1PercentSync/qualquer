@@ -55,6 +55,10 @@ namespace qualquer::app {
         }
         cuda_context_.import_semaphores(semaphore_handles);
         imgui_backend_.init(context_, swapchain_, window_);
+        renderer_.init(cuda_context_,
+                       swapchain_.extent.width,
+                       swapchain_.extent.height,
+                       "shaders/programs.optixir");
     }
 
     void Application::run() {
@@ -273,6 +277,9 @@ namespace qualquer::app {
         // resolution-independent and stay.
         cuda_context_.release_display_buffer();
         swapchain_.recreate(context_);
+        renderer_.resize(cuda_context_,
+                         swapchain_.extent.width,
+                         swapchain_.extent.height);
         display_buffer_.destroy(context_);
         display_buffer_.init(context_,
                              VK_FORMAT_R8G8B8A8_UNORM,
@@ -288,6 +295,9 @@ namespace qualquer::app {
         vkQueueWaitIdle(context_.graphics_queue);
 
         imgui_backend_.destroy();
+        // Renderer's OptiX pipeline and CUDA buffers are torn down before the CUDA
+        // context they were created against.
+        renderer_.destroy();
         // CUDA releases its imported surface/semaphores before the Vulkan resources
         // they wrap: the surface backs the display-buffer image memory, and the
         // imported semaphores back the Vulkan external semaphores.
