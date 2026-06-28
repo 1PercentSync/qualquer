@@ -7,8 +7,6 @@
 #include <qualquer/optix/optix_check.h>
 
 #include <array>
-#include <cstddef>
-#include <cstdlib>
 #include <fstream>
 #include <sstream>
 #include <string>
