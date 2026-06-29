@@ -12,7 +12,7 @@
 - [x] `vcpkg.json` 新增依赖：fastgltf、stb、glm、mikktspace、xxhash
 - [x] 从 Himalaya 复制 `third_party/bc7enc/`，适配 include 路径（`himalaya/bc7enc/` → `qualquer/bc7enc/`）、创建 `CMakeLists.txt`
 - [x] 顶层 `CMakeLists.txt` 新增 ISPC 语言支持 + `add_subdirectory(third_party/bc7enc)`
-- [ ] 请求用户在 CLion 中编译验证
+- [x] 请求用户在 CLion 中编译验证
 
 ## Step 2：数据结构 + Camera
 
@@ -34,6 +34,8 @@
 - [ ] Default textures：实现 `create_default_textures`（1×1 white/flat_normal/black，R8G8B8A8 非压缩 CUDA 纹理）
 - [ ] 更新 `renderer/CMakeLists.txt`（新增 cache.cpp、ktx2.cpp、texture.cpp，链接 stb、xxhash、bc7enc）、`optix/CMakeLists.txt`（如有变化）
 - [ ] 请求用户在 CLion 中编译验证
+- [ ] 验证 bc7enc/ISPC 运行时正确（Step 1 仅编译通过，此处首次实际调用 BC 压缩，确认 ISPC dispatch 与压缩产出正常）
+- [ ] 检查 bc7enc 使用是否最优（压缩 preset/参数、并行策略等）
 
 ## Step 4：材质系统 + 场景加载
 
