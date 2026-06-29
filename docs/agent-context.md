@@ -10,14 +10,14 @@
 
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
-- **Phase**：M1 Phase 2 — OptiX 基础（Pipeline/SBT，raygen 输出纯色，替换测试 kernel）
-- **进度**：Phase 2 全部完成，待归档
+- **Phase**：M1 Phase 3 — 场景加载 + 完整材质系统 + 加速结构 + Primary Ray
+- **进度**：Phase 3 文档已创建，未开始实现
 
 ### 下一个任务
 
-Phase 2 归档，准备 Phase 3。
+Step 1 第一项：`vcpkg.json` 新增依赖。
 
-> Phase 1 全部完成并归档。
+> Phase 1、Phase 2 全部完成并归档。
 
 ---
 
@@ -28,8 +28,8 @@ Phase 2 归档，准备 Phase 3。
 | 文档 | 说明 |
 |------|------|
 | `docs/roadmap.md` | Phase 概览与顺序 |
-| `docs/current-phase.md` | 当前阶段目标、范围、实现指南（Phase 2） |
-| `tasks/phase2.md` | Phase 2 可执行任务清单 |
+| `docs/current-phase.md` | 当前阶段目标、范围、实现指南（Phase 3） |
+| `tasks/phase3.md` | Phase 3 可执行任务清单 |
 | `docs/architecture.md` | 渲染器架构与设计理念 |
 | `docs/technical-decisions.md` | 技术选型与决策 |
 
