@@ -230,8 +230,13 @@ namespace qualquer::app {
         const VkSemaphoreSubmitInfo wait_infos[2]{
             {
                 .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+                // Presentation engine signals this after finishing its read of the
+                // swapchain image. The first Vulkan stage that touches the image is
+                // the blit (TRANSFER_DST transition + write), so the wait must
+                // cover BLIT — anything earlier would let the blit race with the
+                // presentation engine's read.
                 .semaphore = frame.image_available_semaphore,
-                .stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                .stageMask = VK_PIPELINE_STAGE_2_BLIT_BIT,
             },
             {
                 .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
