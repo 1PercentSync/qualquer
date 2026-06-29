@@ -54,12 +54,11 @@ MUSTREAD:5
 | Phase | 目标 |
 |-------|------|
 | 1 | 基础设施 + 窗口 + CUDA Interop（vulkan/optix，swapchain，ImGui，CUDA 测试图案） |
-| 2 | OptiX 基础（Pipeline/SBT，raygen 输出纯色，替换测试 kernel） |
-| 3 | 场景加载 + AS（glTF，BLAS/TLAS，primary ray） |
-| 4 | 材质 + 纹理（PBR，纹理加载，bindless） |
-| 5 | PT 着色（BRDF，多 bounce，采样） |
-| 6 | 光源（IBL，emissive NEE，MIS） |
-| 7 | 降噪 + 累积（OptiX Denoiser，accumulation）|
+| 2 | OptiX 基础（Pipeline/SBT，raygen 输出纯色，累积 buffer ping-pong，双 Stream 流水线，替换测试 kernel） |
+| 3 | 场景 + 材质（glTF，BC 纹理，PBR 材质，BLAS/TLAS，交互式相机，ambient 着色） |
+| 4 | PT 核心 + IBL（BRDF，多 bounce，Russian Roulette，IBL 环境光，采样，sample 累积） |
+| 5 | NEE + MIS + 高级采样（emissive 三角形 NEE，alias table，MIS，Sobol + blue noise） |
+| 6 | 降噪（OptiX Denoiser，auxiliary buffers）|
 
 ---
 
