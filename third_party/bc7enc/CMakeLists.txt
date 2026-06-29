@@ -16,11 +16,7 @@ target_include_directories(bc7enc PRIVATE include/qualquer/bc7enc)
 set_source_files_properties(src/bc7e.ispc PROPERTIES
         COMPILE_OPTIONS "--opt=fast-math;--opt=disable-assertions"
 )
-set_property(TARGET bc7enc PROPERTY ISPC_INSTRUCTION_SETS sse2-i32x4;sse4-i32x4;avx2-i32x8;avx512skx-i32x16)
+set_property(TARGET bc7enc PROPERTY ISPC_INSTRUCTION_SETS sse2-i32x4;sse4.2-i32x4;avx2-i32x8;avx512icl-x16)
 
 # Suppress warnings in third-party code (CXX only; ISPC has its own flags)
-if(MSVC)
-    target_compile_options(bc7enc PRIVATE $<$<COMPILE_LANGUAGE:CXX>:/W0>)
-else()
-    target_compile_options(bc7enc PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-w>)
-endif()
+target_compile_options(bc7enc PRIVATE $<$<COMPILE_LANGUAGE:CXX>:/W0>)
