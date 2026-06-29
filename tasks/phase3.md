@@ -11,7 +11,7 @@
 
 - [x] `vcpkg.json` 新增依赖：fastgltf、stb、glm、mikktspace、xxhash
 - [x] 从 Himalaya 复制 `third_party/bc7enc/`，适配 include 路径（`himalaya/bc7enc/` → `qualquer/bc7enc/`）、创建 `CMakeLists.txt`
-- [ ] 顶层 `CMakeLists.txt` 新增 ISPC 语言支持 + `add_subdirectory(third_party/bc7enc)`
+- [x] 顶层 `CMakeLists.txt` 新增 ISPC 语言支持 + `add_subdirectory(third_party/bc7enc)`
 - [ ] 请求用户在 CLion 中编译验证
 
 ## Step 2：数据结构 + Camera

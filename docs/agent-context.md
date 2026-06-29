@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 3 — 场景加载 + 完整材质系统 + 加速结构 + Primary Ray
-- **进度**：Phase 3 Step 1 进行中（第二项完成：bc7enc 库复制 + CMakeLists.txt）
+- **进度**：Phase 3 Step 1 进行中（第三项完成：顶层 CMakeLists ISPC 集成）
 
 ### 下一个任务
 
-Step 1 第三项：顶层 `CMakeLists.txt` 新增 ISPC 语言支持 + `add_subdirectory(third_party/bc7enc)`。
+Step 1 第四项：请求用户在 CLion 中编译验证（Step 1 三项代码改动已全部完成）。
 
 > Phase 1、Phase 2 全部完成并归档。
 
