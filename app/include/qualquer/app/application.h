@@ -66,6 +66,16 @@ namespace qualquer::app {
         void end_frame();
 
         /**
+         * @brief Transitions the display buffer from UNDEFINED to GENERAL and
+         *        releases queue family ownership to VK_QUEUE_FAMILY_EXTERNAL.
+         *
+         * Called after display_buffer_.init() (both init and recreate paths)
+         * so CUDA's first write finds the image in GENERAL layout with external
+         * ownership, matching the acquire barrier's oldLayout expectation.
+         */
+        void release_display_buffer_to_external();
+
+        /**
          * @brief Recreates the swapchain after a size change, driver-reported
          *        staleness, or a present-mode change.
          *

@@ -42,6 +42,7 @@ namespace qualquer::app {
                              VK_FORMAT_R8G8B8A8_UNORM,
                              swapchain_.extent,
                              VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
+        release_display_buffer_to_external();
         for (auto &sem: interop_semaphores_) {
             sem.init(context_);
         }
@@ -331,10 +332,64 @@ namespace qualquer::app {
                              VK_FORMAT_R8G8B8A8_UNORM,
                              swapchain_.extent,
                              VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
+        release_display_buffer_to_external();
         cuda_context_.import_display_buffer(display_buffer_.win32_handle,
                                             swapchain_.extent.width,
                                             swapchain_.extent.height,
                                             display_buffer_.size);
+    }
+
+    void Application::release_display_buffer_to_external() {
+        const auto &frame = context_.current_frame();
+        // ReSharper disable once CppLocalVariableMayBeConst
+        VkCommandBuffer cmd = frame.command_buffer;
+
+        VK_CHECK(vkResetCommandPool(context_.device, frame.command_pool, 0));
+        constexpr VkCommandBufferBeginInfo begin_info{
+            .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+            .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+        };
+        VK_CHECK(vkBeginCommandBuffer(cmd, &begin_info));
+
+        const VkImageMemoryBarrier2 release{
+            .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+            .srcStageMask = VK_PIPELINE_STAGE_2_NONE,
+            .srcAccessMask = 0,
+            .dstStageMask = VK_PIPELINE_STAGE_2_NONE,
+            .dstAccessMask = 0,
+            .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+            .newLayout = VK_IMAGE_LAYOUT_GENERAL,
+            .srcQueueFamilyIndex = context_.graphics_queue_family,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_EXTERNAL,
+            .image = display_buffer_.image,
+            .subresourceRange =
+            {
+                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                .baseMipLevel = 0,
+                .levelCount = 1,
+                .baseArrayLayer = 0,
+                .layerCount = 1,
+            },
+        };
+        const VkDependencyInfo dep{
+            .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+            .imageMemoryBarrierCount = 1,
+            .pImageMemoryBarriers = &release,
+        };
+        vkCmdPipelineBarrier2(cmd, &dep);
+        VK_CHECK(vkEndCommandBuffer(cmd));
+
+        const VkCommandBufferSubmitInfo cmd_info{
+            .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
+            .commandBuffer = cmd,
+        };
+        const VkSubmitInfo2 submit{
+            .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
+            .commandBufferInfoCount = 1,
+            .pCommandBufferInfos = &cmd_info,
+        };
+        VK_CHECK(vkQueueSubmit2(context_.graphics_queue, 1, &submit, VK_NULL_HANDLE));
+        VK_CHECK(vkQueueWaitIdle(context_.graphics_queue));
     }
 
     void Application::destroy() {
