@@ -156,8 +156,8 @@ namespace qualquer::optix {
         device_id_ = best_device;
         device_uuid = get_device_uuid(prop);
 
-        CUDA_CHECK(cudaStreamCreate(&compute_stream));
-        CUDA_CHECK(cudaStreamCreate(&display_stream));
+        CUDA_CHECK(cudaStreamCreateWithFlags(&compute_stream, cudaStreamNonBlocking));
+        CUDA_CHECK(cudaStreamCreateWithFlags(&display_stream, cudaStreamNonBlocking));
 
         spdlog::info("CUDA device {}: \"{}\" with compute capability {}.{}",
                      best_device, prop.name, best_major, best_minor);
