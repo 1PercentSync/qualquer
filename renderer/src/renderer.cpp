@@ -92,6 +92,17 @@ namespace qualquer::renderer {
         }
         accum_index_ = 0;
 
+        // Re-record events so the next frame's display_stream wait covers the
+        // clears above. Without this, the wait would see the stale event from
+        // the last pre-resize raygen (recorded before the clears) and start
+        // tonemap before the clears finish.
+        for (auto &event : event_raygen_done_) {
+            CUDA_CHECK(cudaEventRecord(event, cuda_context.compute_stream));
+        }
+        for (auto &event : event_tonemap_done_) {
+            CUDA_CHECK(cudaEventRecord(event, cuda_context.compute_stream));
+        }
+
         spdlog::info("Renderer resized ({}x{})", width, height);
     }
 
