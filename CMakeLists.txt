@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 4.2)
-project(qualquer LANGUAGES CXX CUDA)
+project(qualquer LANGUAGES CXX CUDA ISPC)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -25,6 +25,7 @@ endif()
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 
+add_subdirectory(third_party/bc7enc)
 add_subdirectory(vulkan)
 add_subdirectory(optix)
 add_subdirectory(renderer)
