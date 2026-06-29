@@ -66,11 +66,11 @@ namespace qualquer::renderer {
         // (on slot 1, the "previous" slot) pass immediately — the stream ordering
         // guarantees the records complete after the buffer clears above.
         for (auto &event : event_raygen_done_) {
-            CUDA_CHECK(cudaEventCreate(&event));
+            CUDA_CHECK(cudaEventCreateWithFlags(&event, cudaEventDisableTiming));
             CUDA_CHECK(cudaEventRecord(event, cuda_context.compute_stream));
         }
         for (auto &event : event_tonemap_done_) {
-            CUDA_CHECK(cudaEventCreate(&event));
+            CUDA_CHECK(cudaEventCreateWithFlags(&event, cudaEventDisableTiming));
             CUDA_CHECK(cudaEventRecord(event, cuda_context.compute_stream));
         }
 
