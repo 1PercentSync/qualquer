@@ -61,7 +61,7 @@ namespace qualquer::app {
         const VkSemaphoreSubmitInfo presignal_info{
             .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
             .semaphore = reverse_interop_semaphore_.semaphore,
-            .stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+            .stageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
         };
         const VkSubmitInfo2 presignal_submit{
             .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
@@ -162,12 +162,12 @@ namespace qualquer::app {
             const VkSemaphoreSubmitInfo drain_wait{
                 .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
                 .semaphore = forward_sem,
-                .stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+                .stageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
             };
             const VkSemaphoreSubmitInfo drain_signal{
                 .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
                 .semaphore = reverse_interop_semaphore_.semaphore,
-                .stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+                .stageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
             };
             const VkSubmitInfo2 drain_submit{
                 .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
