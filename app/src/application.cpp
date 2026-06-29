@@ -212,6 +212,7 @@ namespace qualquer::app {
             .display_buffer = display_buffer_,
             .swapchain = swapchain_,
             .image_index = image_index_,
+            .graphics_queue_family = context_.graphics_queue_family,
             .imgui = imgui_backend_,
         };
         qualquer::renderer::Renderer::record_vulkan(input);

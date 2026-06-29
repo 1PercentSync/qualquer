@@ -226,19 +226,21 @@ namespace qualquer::renderer {
         const VkExtent2D extent = input.swapchain.extent;
 
         // --- Layout transitions before the blit ---
-        // Display buffer: UNDEFINED -> TRANSFER_SRC_OPTIMAL. CUDA just wrote it; the
-        // external semaphore wait in end_frame made those writes visible, so the src
-        // stage is NONE (no prior Vulkan stage produced this content).
-        const VkImageMemoryBarrier2 display_to_src{
+        // Display buffer acquire: CUDA just wrote it via a surface object (external
+        // access). The queue family ownership transfer from EXTERNAL makes the CUDA
+        // writes visible to Vulkan. GENERAL is the layout compatible with external
+        // access; the transition to TRANSFER_SRC_OPTIMAL prepares for the blit read.
+        // The external semaphore wait in end_frame provides the execution dependency.
+        const VkImageMemoryBarrier2 display_acquire{
             .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
             .srcStageMask = VK_PIPELINE_STAGE_2_NONE,
             .srcAccessMask = 0,
             .dstStageMask = VK_PIPELINE_STAGE_2_BLIT_BIT,
             .dstAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT,
-            .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+            .oldLayout = VK_IMAGE_LAYOUT_GENERAL,
             .newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_EXTERNAL,
+            .dstQueueFamilyIndex = input.graphics_queue_family,
             .image = input.display_buffer.image,
             .subresourceRange =
             {
@@ -274,7 +276,7 @@ namespace qualquer::renderer {
             },
         };
 
-        const VkImageMemoryBarrier2 pre_blit_barriers[2]{display_to_src, swapchain_to_dst};
+        const VkImageMemoryBarrier2 pre_blit_barriers[2]{display_acquire, swapchain_to_dst};
         // ReSharper disable once CppVariableCanBeMadeConstexpr
         const VkDependencyInfo pre_blit_dep{
             .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
@@ -317,7 +319,33 @@ namespace qualquer::renderer {
         };
         vkCmdBlitImage2(cmd, &blit_info);
 
-        // --- Swapchain: TRANSFER_DST_OPTIMAL -> COLOR_ATTACHMENT_OPTIMAL for ImGui ---
+        // --- Post-blit barriers (display buffer release + swapchain transition) ---
+        // Display buffer release: hand ownership back to EXTERNAL so the next
+        // frame's CUDA tonemap can write it. Transitions back to GENERAL (the
+        // layout compatible with external access). The reverse semaphore signal
+        // in end_frame provides the execution dependency toward CUDA.
+        const VkImageMemoryBarrier2 display_release{
+            .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+            .srcStageMask = VK_PIPELINE_STAGE_2_BLIT_BIT,
+            .srcAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT,
+            .dstStageMask = VK_PIPELINE_STAGE_2_NONE,
+            .dstAccessMask = 0,
+            .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            .newLayout = VK_IMAGE_LAYOUT_GENERAL,
+            .srcQueueFamilyIndex = input.graphics_queue_family,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_EXTERNAL,
+            .image = input.display_buffer.image,
+            .subresourceRange =
+            {
+                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                .baseMipLevel = 0,
+                .levelCount = 1,
+                .baseArrayLayer = 0,
+                .layerCount = 1,
+            },
+        };
+
+        // Swapchain: TRANSFER_DST_OPTIMAL -> COLOR_ATTACHMENT_OPTIMAL for ImGui.
         const VkImageMemoryBarrier2 to_attachment{
             .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
             .srcStageMask = VK_PIPELINE_STAGE_2_BLIT_BIT,
@@ -339,12 +367,13 @@ namespace qualquer::renderer {
             },
         };
 
-        const VkDependencyInfo to_attachment_dep{
+        const VkImageMemoryBarrier2 post_blit_barriers[2]{display_release, to_attachment};
+        const VkDependencyInfo post_blit_dep{
             .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-            .imageMemoryBarrierCount = 1,
-            .pImageMemoryBarriers = &to_attachment,
+            .imageMemoryBarrierCount = 2,
+            .pImageMemoryBarriers = post_blit_barriers,
         };
-        vkCmdPipelineBarrier2(cmd, &to_attachment_dep);
+        vkCmdPipelineBarrier2(cmd, &post_blit_dep);
 
         // --- ImGui overlay on top of the blitted image (loadOp=LOAD keeps it) ---
         const VkRenderingAttachmentInfo color_attachment{

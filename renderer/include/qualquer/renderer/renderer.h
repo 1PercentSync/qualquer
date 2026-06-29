@@ -65,6 +65,9 @@ namespace qualquer::renderer {
         /** @brief Index of the acquired swapchain image for this frame. */
         uint32_t image_index;
 
+        /** @brief Graphics queue family index for display buffer ownership transfers. */
+        uint32_t graphics_queue_family;
+
         /** @brief ImGui backend for overlay recording. */
         ImGuiBackend &imgui;
     };
