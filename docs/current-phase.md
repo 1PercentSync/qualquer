@@ -109,6 +109,7 @@ struct MeshInstance {
 - 输入状态：position、yaw、pitch、fov、near/far、aspect
 - 派生状态：view、projection、inv_view、inv_projection（raygen primary ray 需要）
 - 不含 `view_projection` / `inv_view_projection`（光栅化用，PT 不需要）
+- 投影约定：标准 `glm::perspective`，**不用 reverse-Z**——Qualquer 纯 PT 无深度缓冲，reverse-Z 零收益（Himalaya 的 reverse-Z 仅为光栅化深度精度）；raygen 用 `inv_projection` 反投影取方向，方向只取决于像素 (ndc.x, ndc.y)，与深度约定无关
 - `compute_focus_position(AABB)`：自动对焦场景包围盒
 - 纯 glm 数学，无 Vulkan 依赖
 
