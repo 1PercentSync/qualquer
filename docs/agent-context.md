@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 2 — OptiX 基础（Pipeline/SBT，raygen 输出纯色，替换测试 kernel）
-- **进度**：Phase 2 Step 9 进行中（前三项完成，第四项待实现）
+- **进度**：Phase 2 全部完成，待归档
 
 ### 下一个任务
 
-Step 9 第四项：display_surface 反向同步（新增反向 interop semaphore，Vulkan signal after blit → CUDA wait before tonemap）。
+Phase 2 归档，准备 Phase 3。
 
 > Phase 1 全部完成并归档。
 
