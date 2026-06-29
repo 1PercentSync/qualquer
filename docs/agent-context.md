@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 3 — 场景加载 + 完整材质系统 + 加速结构 + Primary Ray
-- **进度**：Phase 3 文档已创建，未开始实现
+- **进度**：Phase 3 Step 1 进行中（第一项完成：vcpkg 依赖 + 文档同步）
 
 ### 下一个任务
 
-Step 1 第一项：`vcpkg.json` 新增依赖。
+Step 1 第二项：从 Himalaya 复制 `third_party/bc7enc/`，适配 include 路径（`himalaya/bc7enc/` → `qualquer/bc7enc/`）、创建 `CMakeLists.txt`。
 
 > Phase 1、Phase 2 全部完成并归档。
 
