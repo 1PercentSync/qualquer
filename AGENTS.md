@@ -227,7 +227,7 @@ vcpkg 有端口的库通过 `vcpkg.json` 管理。vcpkg 无端口的库放入 `t
 | 源码编译 | `include/qualquer/<name>/` + `src/` |
 | 预编译二进制 | `include/` + `lib/` + `bin/`（保持上游布局） |
 
-源码编译库的头文件放入 `include/qualquer/<name>/` 以统一 include 路径风格（`#include <qualquer/<name>/xxx.h>`）。PRIVATE include 指向头文件目录，解决源文件中的相对路径引用。第三方代码统一禁用编译器警告（MSVC `/W0`，GCC/Clang `-w`）。
+源码编译库的头文件放入 `include/qualquer/<name>/` 以统一 include 路径风格（`#include <qualquer/<name>/xxx.h>`）。PRIVATE include 指向头文件目录，解决源文件中的相对路径引用。第三方代码统一禁用编译器警告（MSVC `/W0`）。
 
 ---
 
