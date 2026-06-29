@@ -308,6 +308,11 @@ namespace qualquer::app {
     }
 
     void Application::recreate_swapchain() {
+        // compute_stream may still be running raygen from the current frame's
+        // submit_cuda — it has no semaphore link to the Vulkan queue, so
+        // vkQueueWaitIdle (inside recreate) does not cover it. Drain it before
+        // touching the accum buffers it reads/writes.
+        CUDA_CHECK(cudaStreamSynchronize(cuda_context_.compute_stream));
         // Swapchain::recreate waits the graphics queue idle first, which also guards
         // the display buffer's destruction — any GPU work referencing it has finished.
         // The CUDA side must release its imported surface before the Vulkan image is
@@ -331,6 +336,9 @@ namespace qualquer::app {
 
     void Application::destroy() {
         vkQueueWaitIdle(context_.graphics_queue);
+        // vkQueueWaitIdle covers display_stream (linked via the forward semaphore)
+        // but not compute_stream — drain it before freeing the resources it uses.
+        CUDA_CHECK(cudaStreamSynchronize(cuda_context_.compute_stream));
 
         imgui_backend_.destroy();
         // Renderer's OptiX pipeline and CUDA buffers are torn down before the CUDA
