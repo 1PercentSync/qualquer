@@ -308,13 +308,15 @@ namespace qualquer::app {
     }
 
     void Application::recreate_swapchain() {
-        // compute_stream may still be running raygen from the current frame's
-        // submit_cuda — it has no semaphore link to the Vulkan queue, so
-        // vkQueueWaitIdle (inside recreate) does not cover it. Drain it before
-        // touching the accum buffers it reads/writes.
+        // Drain both CUDA streams before releasing resources they use.
+        // compute_stream: raygen may still be reading/writing accum buffers.
+        // display_stream: tonemap may still be writing display_surface.
+        // Neither stream is covered by vkQueueWaitIdle (inside recreate) —
+        // compute_stream has no semaphore link to the Vulkan queue, and the
+        // forward semaphore linking display_stream is consumed on the GPU
+        // timeline which hasn't necessarily been reached yet.
         CUDA_CHECK(cudaStreamSynchronize(cuda_context_.compute_stream));
-        // Swapchain::recreate waits the graphics queue idle first, which also guards
-        // the display buffer's destruction — any GPU work referencing it has finished.
+        CUDA_CHECK(cudaStreamSynchronize(cuda_context_.display_stream));
         // The CUDA side must release its imported surface before the Vulkan image is
         // destroyed (the surface wraps that image's memory). External semaphores are
         // resolution-independent and stay.
