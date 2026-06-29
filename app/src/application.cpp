@@ -110,7 +110,7 @@ namespace qualquer::app {
                 .swapchain = swapchain_,
                 .error_message = error_message_,
             };
-            const auto actions = debug_ui_.draw(ui_ctx);
+            const auto actions = debug_ui_.draw(ui_ctx); // only CPU side, render command is in record()
 
             if (actions.error_dismissed) {
                 error_message_.clear();

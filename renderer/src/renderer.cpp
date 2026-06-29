@@ -371,6 +371,7 @@ namespace qualquer::renderer {
         };
 
         const VkImageMemoryBarrier2 post_blit_barriers[2]{display_release, to_attachment};
+        // ReSharper disable once CppVariableCanBeMadeConstexpr
         const VkDependencyInfo post_blit_dep{
             .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
             .imageMemoryBarrierCount = 2,
