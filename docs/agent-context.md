@@ -41,6 +41,8 @@ Phase 2 归档，准备 Phase 3。
 |------|------|
 | `docs/archive/phase1.md` | Phase 1 目标、范围、实现指南（已归档） |
 | `tasks/archive/phase1.md` | Phase 1 可执行任务清单（已归档） |
+| `docs/archive/phase2.md` | Phase 2 目标、范围、实现指南（已归档） |
+| `tasks/archive/phase2.md` | Phase 2 可执行任务清单（已归档） |
 ---
 
 ## 维护规则
