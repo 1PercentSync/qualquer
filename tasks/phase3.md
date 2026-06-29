@@ -16,7 +16,7 @@
 
 ## Step 2：数据结构 + Camera
 
-- [ ] 创建 `renderer/include/qualquer/renderer/vertex.h`（Vertex struct：position/normal/uv0/tangent，host + device 共享）
+- [x] 创建 `renderer/include/qualquer/renderer/vertex.h`（Vertex struct：position/normal/uv0/tangent，host + device 共享）
 - [ ] 创建 `renderer/include/qualquer/renderer/scene_types.h`（AABB、Mesh、MeshInstance、AlphaMode）
 - [ ] 创建 `renderer/include/qualquer/renderer/material.h`（GPUMaterialData、GPUGeometryInfo、MaterialInstance，含 static_assert）
 - [ ] 创建 `renderer/include/qualquer/renderer/camera.h` + `renderer/src/camera.cpp`（Camera struct：update_view/projection、forward/right、compute_focus_position）

@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 3 — 场景加载 + 完整材质系统 + 加速结构 + Primary Ray
-- **进度**：Phase 3 Step 1 完成（第三方依赖集成，编译通过），进入 Step 2
+- **进度**：Phase 3 Step 2 进行中（vertex.h 完成），下一项 scene_types.h
 
 ### 下一个任务
 
-Step 2 第一项：创建 `renderer/include/qualquer/renderer/vertex.h`（Vertex struct：position/normal/uv0/tangent，host + device 共享）。
+Step 2 第二项：创建 `renderer/include/qualquer/renderer/scene_types.h`（AABB、Mesh、MeshInstance、AlphaMode）。
 
 > Phase 1、Phase 2 全部完成并归档。
 
