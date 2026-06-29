@@ -28,6 +28,8 @@
 
 代码通过 WSL 中的 Agent 编辑，所有构建、编译、运行操作由用户在 CLion 中手动完成。
 
+vcpkg 经 CLion 工具链集成，不走命令行：依赖的拉取与安装由用户在 CLion GUI 中触发（修改 `vcpkg.json` 后重新加载 CMake 项目即自动拉取）。Agent 只负责编辑 `vcpkg.json`，不执行任何 vcpkg 命令。
+
 ### Agent 约束
 
 - **禁止** 使用 Subagent（Agent 工具）或 Plan 工具，除非用户主动要求
@@ -259,6 +261,11 @@ app_info.apiVersion = VK_API_VERSION_1_4;
 | glfw3 | 窗口与输入 |
 | imgui | UI（vulkan + glfw binding） |
 | vulkan-memory-allocator | Vulkan 内存分配（VMA） |
+| fastgltf | glTF 解析 |
+| stb | 图像解码、CPU mip 生成 |
+| glm | 数学库（向量、矩阵、变换） |
+| mikktspace | tangent 生成 |
+| xxhash | 纹理缓存 content hash |
 
 ---
 
