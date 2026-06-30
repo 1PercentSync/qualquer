@@ -25,7 +25,7 @@
 
 ## Step 3：纹理系统
 
-- [ ] 创建 `optix/include/qualquer/optix/cuda_texture.h`（CudaTexture struct：mipmap_array + texture_object + destroy）
+- [x] 创建 `optix/include/qualquer/optix/cuda_texture.h`（CudaTexture struct：mipmap_array + texture_object + destroy）
 - [ ] 创建 `renderer/include/qualquer/renderer/cache.h` + `renderer/src/cache.cpp`（cache_root、content_hash、cache_path、atomic_write_file），并注册 cache.cpp 到 `renderer/CMakeLists.txt`（链接 xxhash）
 - [ ] 创建 `renderer/include/qualquer/renderer/ktx2.h` + `renderer/src/ktx2.cpp`（Ktx2Data、read_ktx2、write_ktx2），并注册 ktx2.cpp 到 `renderer/CMakeLists.txt`
 - [ ] 创建 `renderer/include/qualquer/renderer/texture.h` + `renderer/src/texture.cpp`（TextureRole、ImageData、load_image、load_image_from_memory、ensure_bc_init、generate_cpu_mip_chain、compress_bc7/bc5、load_cached_texture、compress_texture），并注册 texture.cpp 到 `renderer/CMakeLists.txt`（链接 stb、bc7enc）

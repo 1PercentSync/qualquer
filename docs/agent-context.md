@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 3 — 场景加载 + 完整材质系统 + 加速结构 + Primary Ray
-- **进度**：Phase 3 Step 2 完成（数据结构 + Camera + CameraController，编译通过），Step 3 三点讨论与计划已确认，开始实现纹理系统
+- **进度**：Phase 3 Step 3 进行中——CudaTexture 完成，下一步 cache.h + cache.cpp
 
 ### 下一个任务
 
-Step 3（纹理系统）首项：`optix/include/qualquer/optix/cuda_texture.h`（CudaTexture struct）。两点决策已定：去掉 prepare_texture（源字节 hash 策略）、KTX2 vkFormat 用 VK_FORMAT_* 枚举。
+Step 3 第二项：`renderer/include/qualquer/renderer/cache.h` + `renderer/src/cache.cpp`（cache_root、content_hash、cache_path、atomic_write_file），链接 xxhash。
 
 > Phase 1、Phase 2 全部完成并归档。
 
