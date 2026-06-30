@@ -166,6 +166,10 @@ struct CudaTexture {
 
 从 Himalaya 照搬 cache 和 KTX2 模块。缓存路径改为 `%TEMP%\qualquer\textures\`。content hash 用 xxhash（XXH3_128），按源字节（JPEG/PNG 原始数据）计算，避免无意义的解码+重压缩。
 
+缓存查询（`load_cached_texture`）与压缩（`compress_texture`）为独立公开函数，调用方按源字节 hash 串接：先查缓存命中则跳过解码，miss 才解码并压缩。不提供 Himalaya 的 `prepare_texture`（其 hash 解码后像素，与源字节 hash 策略冲突，会产生查不到的死缓存）。
+
+KTX2 文件的 `vkFormat` 字段使用 Vulkan 枚举常量（`VK_FORMAT_*`），renderer 依赖 vulkan 层（架构允许的单向依赖），不硬编码数值。
+
 **Default Textures**：
 
 三个 1×1 纹理，R8G8B8A8_UNORM（不压缩，极值处 sRGB/linear 结果一致）：
