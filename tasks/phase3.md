@@ -18,7 +18,7 @@
 
 - [x] 创建 `renderer/include/qualquer/renderer/vertex.h`（Vertex struct：position/normal/uv0/tangent，host + device 共享）
 - [x] 创建 `renderer/include/qualquer/renderer/scene_types.h`（AABB、Mesh、MeshInstance、AlphaMode）
-- [ ] 创建 `renderer/include/qualquer/renderer/material.h`（GPUMaterialData、GPUGeometryInfo、MaterialInstance，含 static_assert）
+- [x] 创建 `renderer/include/qualquer/renderer/material.h`（Material、GPUGeometryInfo，含 static_assert）
 - [ ] 创建 `renderer/include/qualquer/renderer/camera.h` + `renderer/src/camera.cpp`（Camera struct：update_view/projection、forward/right、compute_focus_position）
 - [ ] 创建 `app/include/qualquer/app/camera_controller.h` + `app/src/camera_controller.cpp`（CameraController：右键旋转、WASD、Shift 加速、F 对焦）
 - [ ] 更新 `renderer/CMakeLists.txt`（新增 camera.cpp）、`app/CMakeLists.txt`（新增 camera_controller.cpp）
@@ -43,7 +43,7 @@
 - [ ] 创建 `renderer/src/mesh.cpp`（generate_tangents — MikkTSpace）
 - [ ] 创建 `app/include/qualquer/app/scene_loader.h` + `app/src/scene_loader.cpp`（SceneLoader：load / destroy / meshes / mesh_instances / scene_bounds 等）
 - [ ] SceneLoader::load_meshes（遍历 glTF primitive，提取顶点，生成 tangent，创建 CudaBuffer，计算 AABB）
-- [ ] SceneLoader::load_materials（sampler 转换、纹理加载 + BC 压缩 + 缓存 + CUDA 上传、GPUMaterialData 填充 + default fallback、材质数组上传）
+- [ ] SceneLoader::load_materials（sampler 转换、纹理加载 + BC 压缩 + 缓存 + CUDA 上传、Material 填充 + default fallback、材质数组上传）
 - [ ] SceneLoader::build_mesh_instances（场景图遍历、transform 收集、scene AABB 计算）
 - [ ] 更新 `renderer/CMakeLists.txt`（新增 mesh.cpp，链接 mikktspace）、`app/CMakeLists.txt`（新增 scene_loader.cpp、gltf_utils.cpp，链接 fastgltf）
 - [ ] 请求用户在 CLion 中编译验证

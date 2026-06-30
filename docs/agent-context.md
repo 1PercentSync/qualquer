@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 3 — 场景加载 + 完整材质系统 + 加速结构 + Primary Ray
-- **进度**：Phase 3 Step 2 进行中（vertex.h、scene_types.h 完成），下一项 material.h
+- **进度**：Phase 3 Step 2 进行中（vertex.h、scene_types.h、material.h 完成），下一项 camera
 
 ### 下一个任务
 
-Step 2 第三项：创建 `renderer/include/qualquer/renderer/material.h`（GPUMaterialData、GPUGeometryInfo、MaterialInstance，含 static_assert）。
+Step 2 第四项：创建 `renderer/include/qualquer/renderer/camera.h` + `renderer/src/camera.cpp`（Camera struct：update_view/projection、forward/right、compute_focus_position）。
 
 > Phase 1、Phase 2 全部完成并归档。
 
