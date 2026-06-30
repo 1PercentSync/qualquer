@@ -35,7 +35,7 @@ namespace qualquer::renderer {
      * Drives both CPU-side pass routing (opaque vs alpha-tested vs transparent)
      * and GPU-side shader behavior (discard in Mask mode). The uint32_t
      * underlying type lets the value be stored directly in the uint32
-     * alpha_mode slot of GPUMaterialData.
+     * alpha_mode slot of Material.
      */
     enum class AlphaMode : uint32_t {
         Opaque = 0, ///< Fully opaque; alpha ignored.
