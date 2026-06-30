@@ -130,6 +130,8 @@ stb_image 解码 → CPU mip 生成(stb_image_resize2) → BC 压缩(bc7enc/rgbc
 → cudaMipmappedArray 创建 + 数据上传 → cudaTextureObject_t 创建
 ```
 
+Phase 3 材质纹理（LDR：baseColor/emissive/metallic-roughness/occlusion/normal）用 BC7/BC5 CPU 压缩。BC6H 用于 HDR 纹理（Phase 4 IBL 环境贴图）；其压缩方式（CPU 端编码器 vs GPU 端计算着色器压缩）在 Phase 3 Step 3 完成 BC7 CPU 压缩后讨论确定。
+
 **TextureRole**（决定 BC 格式）：
 
 | Role | BC 格式 | 用途 |
@@ -169,6 +171,8 @@ struct CudaTexture {
 缓存查询（`load_cached_texture`）与压缩（`compress_texture`）为独立公开函数，调用方按源字节 hash 串接：先查缓存命中则跳过解码，miss 才解码并压缩。不提供 Himalaya 的 `prepare_texture`（其 hash 解码后像素，与源字节 hash 策略冲突，会产生查不到的死缓存）。
 
 KTX2 文件的 `vkFormat` 字段使用 Vulkan 枚举常量（`VK_FORMAT_*`），renderer 依赖 vulkan 层（架构允许的单向依赖），不硬编码数值。
+
+KTX2 缓存模块支持完整格式集（与 Himalaya 一致），为 Phase 4 IBL 预留：BC7 UNORM/SRGB、BC5 UNORM、BC6H UFloat、R16G16B16A16_SFLOAT、B10G11R11_UFLOAT_PACK32、R16G16_UNORM，以及 2D 与 cubemap（faceCount=6）。Phase 3 材质纹理仅用其中的 BC7/BC5/R8G8B8A8 子集。
 
 **Default Textures**：
 

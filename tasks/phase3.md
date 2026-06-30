@@ -27,8 +27,9 @@
 
 - [x] 创建 `optix/include/qualquer/optix/cuda_texture.h`（CudaTexture struct：mipmap_array + texture_object + destroy）
 - [ ] 创建 `renderer/include/qualquer/renderer/cache.h` + `renderer/src/cache.cpp`（cache_root、content_hash、cache_path、atomic_write_file），并注册 cache.cpp 到 `renderer/CMakeLists.txt`（链接 xxhash）
-- [ ] 创建 `renderer/include/qualquer/renderer/ktx2.h` + `renderer/src/ktx2.cpp`（Ktx2Data、read_ktx2、write_ktx2），并注册 ktx2.cpp 到 `renderer/CMakeLists.txt`
+- [ ] 创建 `renderer/include/qualquer/renderer/ktx2.h` + `renderer/src/ktx2.cpp`（Ktx2Data、read_ktx2、write_ktx2），并注册 ktx2.cpp 到 `renderer/CMakeLists.txt`。支持完整格式集（为 Phase 4 IBL 预留）：BC7 UNORM/SRGB、BC5 UNORM、BC6H UFloat、R16G16B16A16_SFLOAT、B10G11R11_UFLOAT_PACK32、R16G16_UNORM，2D 与 cubemap（faceCount=6）
 - [ ] 创建 `renderer/include/qualquer/renderer/texture.h` + `renderer/src/texture.cpp`（TextureRole、ImageData、load_image、load_image_from_memory、ensure_bc_init、generate_cpu_mip_chain、compress_bc7/bc5、load_cached_texture、compress_texture），并注册 texture.cpp 到 `renderer/CMakeLists.txt`（链接 stb、bc7enc）
+- [ ] 讨论 BC6H 压缩方式：CPU 端编码器 vs GPU 端计算着色器压缩，确定 HDR 纹理（Phase 4 IBL）压缩方案
 - [ ] 纹理 GPU 上传：在 texture.cpp 中实现 `finalize_texture`（`cudaMallocMipmappedArray` + 逐 level 上传 + `cudaCreateTextureObject`）
 - [ ] Default textures：实现 `create_default_textures`（1×1 white/flat_normal/black，R8G8B8A8 非压缩 CUDA 纹理）
 - [ ] 请求用户在 CLion 中编译验证
