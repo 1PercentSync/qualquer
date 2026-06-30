@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 3 — 场景加载 + 完整材质系统 + 加速结构 + Primary Ray
-- **进度**：Phase 3 Step 2 代码全部完成（vertex.h、scene_types.h、material.h、camera、camera_controller），待编译验证
+- **进度**：Phase 3 Step 2 完成（数据结构 + Camera + CameraController，编译通过），下一步 Step 3
 
 ### 下一个任务
 
-Step 2 收尾：请求用户在 CLion 中编译验证。Step 2 全部代码已就位（数据结构 + Camera + CameraController + 各自 CMake 注册）。
+进入 Step 3（纹理系统）：首项 `optix/include/qualquer/optix/cuda_texture.h`。按 M1 工作流，实现前需先读 Himalaya 纹理模块（texture/ktx2/cache）做三点讨论。
 
 > Phase 1、Phase 2 全部完成并归档。
 
