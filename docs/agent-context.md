@@ -15,7 +15,7 @@
 
 ### 下一个任务
 
-Step 2 第四项：创建 `renderer/include/qualquer/renderer/camera.h` + `renderer/src/camera.cpp`（Camera struct：update_view/projection、forward/right、compute_focus_position）。
+Step 2 第四项：创建 `renderer/include/qualquer/renderer/camera.h` + `renderer/src/camera.cpp`（Camera struct：update_view/projection、forward/right、compute_focus_position），并注册 camera.cpp 到 `renderer/CMakeLists.txt`。
 
 > Phase 1、Phase 2 全部完成并归档。
 
