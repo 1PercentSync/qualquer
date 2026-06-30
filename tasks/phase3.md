@@ -19,7 +19,7 @@
 - [x] 创建 `renderer/include/qualquer/renderer/vertex.h`（Vertex struct：position/normal/uv0/tangent，host + device 共享）
 - [x] 创建 `renderer/include/qualquer/renderer/scene_types.h`（AABB、Mesh、MeshInstance、AlphaMode）
 - [x] 创建 `renderer/include/qualquer/renderer/material.h`（Material、GPUGeometryInfo，含 static_assert）
-- [ ] 创建 `renderer/include/qualquer/renderer/camera.h` + `renderer/src/camera.cpp`（Camera struct：update_view/projection、forward/right、compute_focus_position），并注册 camera.cpp 到 `renderer/CMakeLists.txt`
+- [x] 创建 `renderer/include/qualquer/renderer/camera.h` + `renderer/src/camera.cpp`（Camera struct：update_view/projection、forward/right、compute_focus_position），并注册 camera.cpp 到 `renderer/CMakeLists.txt`
 - [ ] 创建 `app/include/qualquer/app/camera_controller.h` + `app/src/camera_controller.cpp`（CameraController：右键旋转、WASD、Shift 加速、F 对焦），并注册 camera_controller.cpp 到 `app/CMakeLists.txt`
 - [ ] 请求用户在 CLion 中编译验证
 
