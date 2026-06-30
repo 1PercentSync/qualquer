@@ -1,5 +1,6 @@
 find_package(imgui CONFIG REQUIRED)
 find_package(OptiX REQUIRED)
+find_package(xxHash CONFIG REQUIRED)
 
 include(CompileOptiXIR)
 
@@ -10,6 +11,7 @@ target_sources(qualquer_renderer PRIVATE
     src/debug_ui.cpp
     src/renderer.cpp
     src/camera.cpp
+    src/cache.cpp
     src/tonemap.cu
 )
 
@@ -21,6 +23,7 @@ target_link_libraries(qualquer_renderer
     PUBLIC qualquer_vulkan
     PRIVATE imgui::imgui
     PRIVATE qualquer_optix
+    PRIVATE xxHash::xxhash
 )
 
 # Expose device programs to CLion's code model (inherits target include paths)
