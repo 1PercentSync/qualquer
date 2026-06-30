@@ -1,6 +1,7 @@
 add_executable(qualquer_app
     src/main.cpp
     src/application.cpp
+    src/camera_controller.cpp
 )
 
 target_include_directories(qualquer_app
