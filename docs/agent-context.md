@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 3 — 场景加载 + 完整材质系统 + 加速结构 + Primary Ray
-- **进度**：Phase 3 Step 2 进行中（vertex.h、scene_types.h、material.h、camera 完成），下一项 camera_controller
+- **进度**：Phase 3 Step 2 代码全部完成（vertex.h、scene_types.h、material.h、camera、camera_controller），待编译验证
 
 ### 下一个任务
 
-Step 2 第五项：创建 `app/include/qualquer/app/camera_controller.h` + `app/src/camera_controller.cpp`（CameraController：右键旋转、WASD、Shift 加速、F 对焦），并注册 camera_controller.cpp 到 `app/CMakeLists.txt`。
+Step 2 收尾：请求用户在 CLion 中编译验证。Step 2 全部代码已就位（数据结构 + Camera + CameraController + 各自 CMake 注册）。
 
 > Phase 1、Phase 2 全部完成并归档。
 
