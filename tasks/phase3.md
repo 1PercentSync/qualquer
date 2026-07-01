@@ -27,7 +27,7 @@
 
 - [x] 创建 `optix/include/qualquer/optix/cuda_texture.h`（CudaTexture struct：mipmap_array + texture_object + destroy）
 - [x] 创建 `renderer/include/qualquer/renderer/cache.h` + `renderer/src/cache.cpp`（cache_root、content_hash、cache_path、atomic_write_file），并注册 cache.cpp 到 `renderer/CMakeLists.txt`（链接 xxhash）
-- [ ] 创建 `renderer/include/qualquer/renderer/ktx2.h` + `renderer/src/ktx2.cpp`（Ktx2Data、read_ktx2、write_ktx2），并注册 ktx2.cpp 到 `renderer/CMakeLists.txt`。支持完整格式集：BC7 UNORM/SRGB、BC5 UNORM、BC6H UFloat、R16G16B16A16_SFLOAT、B10G11R11_UFLOAT_PACK32、R16G16_UNORM，2D 与 cubemap（faceCount=6）
+- [x] 创建 `renderer/include/qualquer/renderer/ktx2.h` + `renderer/src/ktx2.cpp`（Ktx2Data、read_ktx2、write_ktx2），并注册 ktx2.cpp 到 `renderer/CMakeLists.txt`。支持格式集：BC7 UNORM/SRGB、BC5 UNORM、BC6H UFloat、B10G11R11_UFLOAT_PACK32、R16G16_UNORM，2D 与 cubemap（faceCount=6）
 - [ ] 从 ISPCTextureCompressor 复制 `kernel.ispc` + `ispc_texcomp.h/cpp`，创建 `third_party/ispc_texcomp/CMakeLists.txt`，顶层 `CMakeLists.txt` 新增 `add_subdirectory(third_party/ispc_texcomp)`
 - [ ] 创建 `renderer/include/qualquer/renderer/texture.h` + `renderer/src/texture.cpp`（TextureRole、ImageData、load_image、load_image_from_memory、ensure_bc_init、generate_cpu_mip_chain、compress_bc7/bc5/bc6h、load_cached_texture、compress_texture），并注册 texture.cpp 到 `renderer/CMakeLists.txt`（链接 stb、bc7enc、ispc_texcomp）
 - [ ] 纹理 GPU 上传：在 texture.cpp 中实现 `finalize_texture`（`cudaMallocMipmappedArray` + 逐 level 上传 + `cudaCreateTextureObject`）

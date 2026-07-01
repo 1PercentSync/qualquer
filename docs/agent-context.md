@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 3 — 场景加载 + 完整材质系统 + 加速结构 + Primary Ray
-- **进度**：Phase 3 Step 3 进行中——CudaTexture、cache 完成，ktx2 代码已写但未验证完成
+- **进度**：Phase 3 Step 3 进行中——CudaTexture、cache、ktx2 完成
 
 ### 下一个任务
 
-Step 3 ktx2 验证/完成 → ISPCTextureCompressor 集成 → texture.h + texture.cpp（BC7/BC5/BC6H 三条压缩路径）。BC6H 决策已定：ISPCTextureCompressor CPU ISPC 压缩（不走 GPU compute），全部纹理压缩与缓存能力在 Phase 3 就绪。
+ISPCTextureCompressor 集成 → texture.h + texture.cpp（BC7/BC5/BC6H 三条压缩路径）→ finalize_texture（CUDA 上传）→ default textures → 编译验证 → ISPC 运行时验证 → 压缩参数检查。
 
 > Phase 1、Phase 2 全部完成并归档。
 

@@ -179,7 +179,7 @@ struct CudaTexture {
 
 KTX2 文件的 `vkFormat` 字段使用 Vulkan 枚举常量（`VK_FORMAT_*`），renderer 依赖 vulkan 层（架构允许的单向依赖），不硬编码数值。
 
-KTX2 缓存模块支持完整格式集（与 Himalaya 一致）：BC7 UNORM/SRGB、BC5 UNORM、BC6H UFloat、R16G16B16A16_SFLOAT、B10G11R11_UFLOAT_PACK32、R16G16_UNORM，以及 2D 与 cubemap（faceCount=6）。Phase 3 LDR 材质用 BC7/BC5 子集，HDR IBL 纹理用 BC6H 等格式。
+KTX2 缓存模块支持实际需要缓存的格式集：BC7 UNORM/SRGB、BC5 UNORM、BC6H UFloat、B10G11R11_UFLOAT_PACK32、R16G16_UNORM，以及 2D 与 cubemap（faceCount=6）。与 Himalaya 的差异：去掉 R16G16B16A16_SFLOAT（Himalaya 中用于 IBL cubemap 的未压缩中间格式，Qualquer 的 BC6H 由 ISPCTextureCompressor CPU 端直接产出，fp16 数据不经 KTX2 缓存）。Phase 3 LDR 材质用 BC7/BC5 子集，HDR IBL 纹理用 BC6H。
 
 **Default Textures**：
 
