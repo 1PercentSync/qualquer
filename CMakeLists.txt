@@ -26,6 +26,7 @@ endif()
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 
 add_subdirectory(third_party/bc7enc)
+add_subdirectory(third_party/ispc_texcomp)
 add_subdirectory(vulkan)
 add_subdirectory(optix)
 add_subdirectory(renderer)
