@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 3 — 场景加载 + 完整材质系统 + 加速结构 + Primary Ray
-- **进度**：Phase 3 Step 3 进行中——CudaTexture、cache 完成，下一步 ktx2.h + ktx2.cpp
+- **进度**：Phase 3 Step 3 进行中——CudaTexture、cache 完成，ktx2 代码已写但未验证完成
 
 ### 下一个任务
 
-Step 3 第三项：`renderer/include/qualquer/renderer/ktx2.h` + `renderer/src/ktx2.cpp`（Ktx2Data、read_ktx2、write_ktx2），格式枚举适配为 renderer 中性 TextureFormat + VK_FORMAT_* 映射。
+Step 3 ktx2 验证/完成 → ISPCTextureCompressor 集成 → texture.h + texture.cpp（BC7/BC5/BC6H 三条压缩路径）。BC6H 决策已定：ISPCTextureCompressor CPU ISPC 压缩（不走 GPU compute），全部纹理压缩与缓存能力在 Phase 3 就绪。
 
 > Phase 1、Phase 2 全部完成并归档。
 
