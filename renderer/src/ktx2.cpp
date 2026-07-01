@@ -225,7 +225,7 @@ namespace qualquer::renderer {
 
             case TextureFormat::BC6H_UFLOAT:
                 return build_dfd({kDfModelBc6h, kDfTransferLinear, 3, 3, 16},
-                                 {{0, 127, 0, 0, UINT32_MAX}});
+                                 {{0, 127, kDfSampleFloat, 0, 0x3F800000}});
 
             case TextureFormat::BC5_UNORM:
                 return build_dfd({kDfModelBc5, kDfTransferLinear, 3, 3, 16},
