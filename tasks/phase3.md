@@ -27,14 +27,14 @@
 
 - [x] 创建 `optix/include/qualquer/optix/cuda_texture.h`（CudaTexture struct：mipmap_array + texture_object + destroy）
 - [ ] 创建 `renderer/include/qualquer/renderer/cache.h` + `renderer/src/cache.cpp`（cache_root、content_hash、cache_path、atomic_write_file），并注册 cache.cpp 到 `renderer/CMakeLists.txt`（链接 xxhash）
-- [ ] 创建 `renderer/include/qualquer/renderer/ktx2.h` + `renderer/src/ktx2.cpp`（Ktx2Data、read_ktx2、write_ktx2），并注册 ktx2.cpp 到 `renderer/CMakeLists.txt`。支持完整格式集（为 Phase 4 IBL 预留）：BC7 UNORM/SRGB、BC5 UNORM、BC6H UFloat、R16G16B16A16_SFLOAT、B10G11R11_UFLOAT_PACK32、R16G16_UNORM，2D 与 cubemap（faceCount=6）
-- [ ] 创建 `renderer/include/qualquer/renderer/texture.h` + `renderer/src/texture.cpp`（TextureRole、ImageData、load_image、load_image_from_memory、ensure_bc_init、generate_cpu_mip_chain、compress_bc7/bc5、load_cached_texture、compress_texture），并注册 texture.cpp 到 `renderer/CMakeLists.txt`（链接 stb、bc7enc）
-- [ ] 讨论 BC6H 压缩方式：CPU 端编码器 vs GPU 端计算着色器压缩，确定 HDR 纹理（Phase 4 IBL）压缩方案
+- [ ] 创建 `renderer/include/qualquer/renderer/ktx2.h` + `renderer/src/ktx2.cpp`（Ktx2Data、read_ktx2、write_ktx2），并注册 ktx2.cpp 到 `renderer/CMakeLists.txt`。支持完整格式集：BC7 UNORM/SRGB、BC5 UNORM、BC6H UFloat、R16G16B16A16_SFLOAT、B10G11R11_UFLOAT_PACK32、R16G16_UNORM，2D 与 cubemap（faceCount=6）
+- [ ] 从 ISPCTextureCompressor 复制 `kernel.ispc` + `ispc_texcomp.h/cpp`，创建 `third_party/ispc_texcomp/CMakeLists.txt`，顶层 `CMakeLists.txt` 新增 `add_subdirectory(third_party/ispc_texcomp)`
+- [ ] 创建 `renderer/include/qualquer/renderer/texture.h` + `renderer/src/texture.cpp`（TextureRole、ImageData、load_image、load_image_from_memory、ensure_bc_init、generate_cpu_mip_chain、compress_bc7/bc5/bc6h、load_cached_texture、compress_texture），并注册 texture.cpp 到 `renderer/CMakeLists.txt`（链接 stb、bc7enc、ispc_texcomp）
 - [ ] 纹理 GPU 上传：在 texture.cpp 中实现 `finalize_texture`（`cudaMallocMipmappedArray` + 逐 level 上传 + `cudaCreateTextureObject`）
 - [ ] Default textures：实现 `create_default_textures`（1×1 white/flat_normal/black，R8G8B8A8 非压缩 CUDA 纹理）
 - [ ] 请求用户在 CLion 中编译验证
-- [ ] 验证 bc7enc/ISPC 运行时正确（Step 1 仅编译通过，此处首次实际调用 BC 压缩，确认 ISPC dispatch 与压缩产出正常）
-- [ ] 检查 bc7enc 使用是否最优（压缩 preset/参数、并行策略等）
+- [ ] 验证 ISPC 压缩运行时正确（BC7/BC5 via bc7enc、BC6H via ISPCTextureCompressor，确认 ISPC dispatch 与压缩产出正常）
+- [ ] 检查压缩参数是否最优（bc7enc preset、ISPCTextureCompressor BC6H profile、并行策略等）
 
 ## Step 4：材质系统 + 场景加载
 

@@ -197,6 +197,25 @@ CUDA 侧通过 `cudaExternalMemoryGetMappedMipmappedArray` → `cudaArray_t` →
 
 ---
 
+## 纹理压缩
+
+### BC6H 压缩方式
+
+**决策**：ISPCTextureCompressor CPU ISPC 压缩，不使用 GPU compute shader。
+
+**理由**：
+- Qualquer 无 Vulkan compute 基础设施（无 compute pipeline、push descriptor、ShaderCompiler），为 BC6H 单一功能引入整套违背 KISS
+- Himalaya 的 GPU BC6H 压缩（`texture_compress.cpp`）需 ~200 行 Vulkan 管线编排（pipeline 创建、descriptor layout、staging buffer、per-face × per-mip 循环、4 层 barrier），复杂度与收益不成比例
+- GPU BC6H encoder 受 shared memory / register 限制，只尝试少量模式；ISPCTextureCompressor 的 `veryslow` profile 可做更多 refine iteration，质量更优
+- IBL 纹理是离线预处理（一次压缩、永久缓存），CPU 耗时完全可接受
+- 项目已有 ISPC 语言支持（bc7enc），ISPCTextureCompressor 集成为同类操作——复制 `kernel.ispc` + wrapper，无新构建依赖
+
+**备选（已排除）**：
+- **GPU compute shader（Himalaya 方式）**：需引入完整 Vulkan compute 管线 + `bc6h.comp` shader，复杂度远超收益
+- **其他 CPU BC6H 编码器**（如 DirectXTex）：ISPCTextureCompressor 是 Intel 官方 ISPC 实现，与项目已有 ISPC 工具链一致，且有多档质量 profile
+
+---
+
 ## Vulkan 基础设施
 
 ### Swapchain 格式
