@@ -1,0 +1,489 @@
+#include <qualquer/renderer/ktx2.h>
+
+#include <qualquer/renderer/cache.h>
+
+#include <fstream>
+#include <numeric>
+
+#include <spdlog/spdlog.h>
+#include <vulkan/vulkan_core.h>
+
+namespace qualquer::renderer {
+    // ---- KTX2 binary layout ----
+
+    static constexpr uint8_t kKtx2Identifier[12] = {
+        0xAB, 0x4B, 0x54, 0x58, 0x20, 0x32, 0x30, 0xBB, 0x0D, 0x0A, 0x1A, 0x0A
+    };
+
+    /// Maps 1:1 to the first 80 bytes of a KTX2 file (little-endian, x86/x64).
+#pragma pack(push, 1)
+    struct Ktx2FileHeader {
+        uint8_t identifier[12];
+        // Header fields (9 × uint32)
+        uint32_t vk_format;
+        uint32_t type_size;
+        uint32_t pixel_width;
+        uint32_t pixel_height;
+        uint32_t pixel_depth;
+        uint32_t layer_count;
+        uint32_t face_count;
+        uint32_t level_count;
+        uint32_t supercompression_scheme;
+        // Index section (4 × uint32 + 2 × uint64)
+        uint32_t dfd_byte_offset;
+        uint32_t dfd_byte_length;
+        // ReSharper disable CppDeclaratorNeverUsed
+        uint32_t kvd_byte_offset;
+        uint32_t kvd_byte_length;
+        uint64_t sgd_byte_offset;
+        uint64_t sgd_byte_length;
+        // ReSharper restore CppDeclaratorNeverUsed
+    };
+
+    /// One entry in the per-level index (3 × uint64 = 24 bytes).
+    struct Ktx2LevelIndexEntry {
+        uint64_t byte_offset;
+        uint64_t byte_length;
+        // ReSharper disable once CppDeclaratorNeverUsed
+        uint64_t uncompressed_byte_length;
+    };
+#pragma pack(pop)
+
+    static_assert(sizeof(Ktx2FileHeader) == 80);
+    static_assert(sizeof(Ktx2LevelIndexEntry) == 24);
+
+    // ---- KHR Data Format constants ----
+
+    static constexpr uint8_t kDfModelRgbsda = 1;
+    static constexpr uint8_t kDfModelBc5 = 132;
+    static constexpr uint8_t kDfModelBc6h = 133;
+    static constexpr uint8_t kDfModelBc7 = 134;
+    static constexpr uint8_t kDfTransferLinear = 1;
+    static constexpr uint8_t kDfTransferSrgb = 2;
+    static constexpr uint8_t kDfPrimariesBt709 = 1;
+    static constexpr uint16_t kDfVersion = 2; // KHR Data Format 1.3
+
+    // Sample datatype flags (upper bits of channelType byte)
+    static constexpr uint8_t kDfSampleFloat = 0x80;
+    // ReSharper disable once CppDeclaratorNeverUsed
+    static constexpr uint8_t kDfSampleSigned = 0x40;
+
+    // Channel IDs (RGBSDA model; values also match BC5 model channels)
+    static constexpr uint8_t kChannelR = 0;
+    static constexpr uint8_t kChannelG = 1;
+    static constexpr uint8_t kChannelB = 2;
+    // ReSharper disable once CppDeclaratorNeverUsed
+    static constexpr uint8_t kChannelA = 15;
+
+    // ---- Format mapping ----
+
+    uint32_t to_vk_format(const TextureFormat format) {
+        switch (format) {
+            case TextureFormat::BC7_UNORM: return VK_FORMAT_BC7_UNORM_BLOCK;
+            case TextureFormat::BC7_SRGB: return VK_FORMAT_BC7_SRGB_BLOCK;
+            case TextureFormat::BC5_UNORM: return VK_FORMAT_BC5_UNORM_BLOCK;
+            case TextureFormat::BC6H_UFLOAT: return VK_FORMAT_BC6H_UFLOAT_BLOCK;
+            case TextureFormat::B10G11R11_UFLOAT_PACK32: return VK_FORMAT_B10G11R11_UFLOAT_PACK32;
+            case TextureFormat::R16G16_UNORM: return VK_FORMAT_R16G16_UNORM;
+        }
+        return VK_FORMAT_UNDEFINED;
+    }
+
+    std::optional<TextureFormat> from_vk_format(const uint32_t vk_format) {
+        switch (vk_format) {
+            case VK_FORMAT_BC7_UNORM_BLOCK: return TextureFormat::BC7_UNORM;
+            case VK_FORMAT_BC7_SRGB_BLOCK: return TextureFormat::BC7_SRGB;
+            case VK_FORMAT_BC5_UNORM_BLOCK: return TextureFormat::BC5_UNORM;
+            case VK_FORMAT_BC6H_UFLOAT_BLOCK: return TextureFormat::BC6H_UFLOAT;
+            case VK_FORMAT_B10G11R11_UFLOAT_PACK32: return TextureFormat::B10G11R11_UFLOAT_PACK32;
+            case VK_FORMAT_R16G16_UNORM: return TextureFormat::R16G16_UNORM;
+            default: return std::nullopt;
+        }
+    }
+
+    /** @brief Bytes per compressed block, or per pixel for uncompressed formats. */
+    static uint32_t block_bytes(const TextureFormat format) {
+        switch (format) {
+            case TextureFormat::BC7_UNORM:
+            case TextureFormat::BC7_SRGB:
+            case TextureFormat::BC5_UNORM:
+            case TextureFormat::BC6H_UFLOAT:
+                return 16;
+            case TextureFormat::B10G11R11_UFLOAT_PACK32:
+            case TextureFormat::R16G16_UNORM:
+                return 4;
+        }
+        return 0;
+    }
+
+    /** @brief Whether the format is block-compressed (affects typeSize). */
+    static bool is_block_compressed(const TextureFormat format) {
+        switch (format) {
+            case TextureFormat::BC7_UNORM:
+            case TextureFormat::BC7_SRGB:
+            case TextureFormat::BC5_UNORM:
+            case TextureFormat::BC6H_UFLOAT:
+                return true;
+            case TextureFormat::B10G11R11_UFLOAT_PACK32:
+            case TextureFormat::R16G16_UNORM:
+                return false;
+        }
+        return false;
+    }
+
+    /** @brief Returns the KTX2 typeSize for a format. */
+    static uint32_t ktx2_type_size(const TextureFormat format) {
+        if (is_block_compressed(format)) {
+            return 1;
+        }
+        switch (format) {
+            case TextureFormat::R16G16_UNORM: return 2;
+            case TextureFormat::B10G11R11_UFLOAT_PACK32: return 4;
+            default: return 1;
+        }
+    }
+
+    // ---- DFD builder ----
+
+    /// One sample descriptor within a DFD basic block.
+    struct DfdSample {
+        uint16_t bit_offset;
+        uint8_t bit_length; ///< 0-indexed (actual bits - 1).
+        uint8_t channel_type; ///< Channel ID | datatype flags.
+        uint32_t lower;
+        uint32_t upper;
+    };
+
+    /// DFD basic block header parameters.
+    struct DfdBlockDesc {
+        uint8_t color_model;
+        uint8_t transfer;
+        uint8_t texel_dim_x; ///< 0-indexed (value 3 → 4 texels).
+        uint8_t texel_dim_y; ///< 0-indexed.
+        uint8_t bytes_plane0;
+    };
+
+    // DFD section sizes
+    static constexpr size_t kDfdPrefixSize = 4; // dfdTotalSize field
+    static constexpr size_t kDfdBlockHeaderSize = 24; // 6 × uint32
+    static constexpr size_t kDfdSampleSize = 16; // 4 × uint32 per sample
+
+    /// Builds the complete DFD (including dfdTotalSize prefix) as a byte vector.
+    static std::vector<uint8_t> build_dfd(const DfdBlockDesc &block, const std::vector<DfdSample> &samples) {
+        const auto sample_count = static_cast<uint32_t>(samples.size());
+        const uint32_t block_size = kDfdBlockHeaderSize + kDfdSampleSize * sample_count;
+        const uint32_t total_size = kDfdPrefixSize + block_size;
+
+        std::vector<uint8_t> dfd(total_size, 0);
+        auto write32 = [&](const size_t off, const uint32_t v) {
+            std::memcpy(dfd.data() + off, &v, 4);
+        };
+        auto write16 = [&](const size_t off, const uint16_t v) {
+            std::memcpy(dfd.data() + off, &v, 2);
+        };
+
+        // dfdTotalSize prefix
+        write32(0, total_size);
+
+        // Block header (6 words starting after prefix)
+        constexpr size_t hdr = kDfdPrefixSize;
+        write32(hdr, 0); // vendorId(0) | descriptorType(0) — Khronos basic
+        write32(hdr + 4, static_cast<uint32_t>(kDfVersion) | (block_size << 16));
+        write32(hdr + 8, static_cast<uint32_t>(block.color_model)
+                         | (static_cast<uint32_t>(kDfPrimariesBt709) << 8)
+                         | (static_cast<uint32_t>(block.transfer) << 16));
+        write32(hdr + 12, static_cast<uint32_t>(block.texel_dim_x)
+                          | (static_cast<uint32_t>(block.texel_dim_y) << 8));
+        write32(hdr + 16, block.bytes_plane0);
+        // Word 5 (bytesPlane[4-7]) = 0, already zeroed
+
+        // Sample descriptors
+        for (size_t i = 0; i < samples.size(); ++i) {
+            const size_t base = kDfdPrefixSize + kDfdBlockHeaderSize + i * kDfdSampleSize;
+            const auto &s = samples[i];
+            write16(base, s.bit_offset);
+            dfd[base + 2] = s.bit_length;
+            dfd[base + 3] = s.channel_type;
+            // samplePosition[4] = 0, already zeroed
+            write32(base + 8, s.lower);
+            write32(base + 12, s.upper);
+        }
+
+        return dfd;
+    }
+
+    /// Returns the DFD for a supported format. Empty vector = unsupported.
+    static std::vector<uint8_t> build_dfd_for_format(const TextureFormat format) {
+        switch (format) {
+            case TextureFormat::BC7_UNORM:
+                return build_dfd({kDfModelBc7, kDfTransferLinear, 3, 3, 16},
+                                 {{0, 127, 0, 0, UINT32_MAX}});
+
+            case TextureFormat::BC7_SRGB:
+                return build_dfd({kDfModelBc7, kDfTransferSrgb, 3, 3, 16},
+                                 {{0, 127, 0, 0, UINT32_MAX}});
+
+            case TextureFormat::BC6H_UFLOAT:
+                return build_dfd({kDfModelBc6h, kDfTransferLinear, 3, 3, 16},
+                                 {{0, 127, 0, 0, UINT32_MAX}});
+
+            case TextureFormat::BC5_UNORM:
+                return build_dfd({kDfModelBc5, kDfTransferLinear, 3, 3, 16},
+                                 {
+                                     {0, 63, kChannelR, 0, UINT32_MAX},
+                                     {64, 63, kChannelG, 0, UINT32_MAX}
+                                 });
+
+            case TextureFormat::B10G11R11_UFLOAT_PACK32:
+                return build_dfd({kDfModelRgbsda, kDfTransferLinear, 0, 0, 4},
+                                 {
+                                     {
+                                         0,
+                                         10,
+                                         static_cast<uint8_t>(kChannelR | kDfSampleFloat),
+                                         0,
+                                         0x3F800000
+                                     },
+                                     {
+                                         11,
+                                         10,
+                                         static_cast<uint8_t>(kChannelG | kDfSampleFloat),
+                                         0,
+                                         0x3F800000
+                                     },
+                                     {
+                                         22,
+                                         9,
+                                         static_cast<uint8_t>(kChannelB | kDfSampleFloat),
+                                         0,
+                                         0x3F800000
+                                     }
+                                 });
+
+            case TextureFormat::R16G16_UNORM:
+                return build_dfd({kDfModelRgbsda, kDfTransferLinear, 0, 0, 4},
+                                 {
+                                     {0, 15, kChannelR, 0, 0xFFFF},
+                                     {16, 15, kChannelG, 0, 0xFFFF}
+                                 });
+
+            default:
+                return {};
+        }
+    }
+
+    // ---- Alignment ----
+
+    static uint64_t align_up(const uint64_t value, const uint64_t alignment) {
+        return (value + alignment - 1) & ~(alignment - 1);
+    }
+
+    /** @brief Expected byte size of one mip level (all faces). */
+    static uint64_t expected_level_size(const TextureFormat format,
+                                        const uint32_t base_width,
+                                        const uint32_t base_height,
+                                        const uint32_t face_count,
+                                        const uint32_t level) {
+        const uint32_t w = std::max(1u, base_width >> level);
+        const uint32_t h = std::max(1u, base_height >> level);
+        const uint32_t bb = block_bytes(format);
+        if (is_block_compressed(format)) {
+            return static_cast<uint64_t>((w + 3) / 4) * ((h + 3) / 4) * bb * face_count;
+        }
+        return static_cast<uint64_t>(w) * h * bb * face_count;
+    }
+
+    // ---- write_ktx2 ----
+
+    bool write_ktx2(const std::filesystem::path &path,
+                    const TextureFormat format,
+                    const uint32_t base_width,
+                    const uint32_t base_height,
+                    const uint32_t face_count,
+                    const std::span<const Ktx2WriteLevel> levels) {
+        if (levels.empty()) {
+            return false;
+        }
+        if (face_count != 1 && face_count != 6) {
+            return false;
+        }
+
+        const auto dfd = build_dfd_for_format(format);
+        if (dfd.empty()) {
+            spdlog::error("ktx2: unsupported format for write");
+            return false;
+        }
+
+        const auto level_count = static_cast<uint32_t>(levels.size());
+        const uint64_t mip_alignment = std::lcm(static_cast<uint64_t>(block_bytes(format)), uint64_t{4});
+
+        // 1. Fill header (2D/cubemap only: depth/layers/supercompression = 0)
+        Ktx2FileHeader header{};
+        std::memcpy(header.identifier, kKtx2Identifier, 12);
+        header.vk_format = to_vk_format(format);
+        header.type_size = ktx2_type_size(format);
+        header.pixel_width = base_width;
+        header.pixel_height = base_height;
+        header.face_count = face_count;
+        header.level_count = level_count;
+        header.dfd_byte_offset = sizeof(Ktx2FileHeader)
+                                 + level_count * sizeof(Ktx2LevelIndexEntry);
+        header.dfd_byte_length = static_cast<uint32_t>(dfd.size());
+        // pixel_depth, layer_count, supercompression_scheme,
+        // kvd_*, sgd_* all zero-initialized
+
+        // 2. Compute level index (mip data stored smallest-first per KTX2 spec)
+        uint64_t data_cursor = align_up(
+            header.dfd_byte_offset + header.dfd_byte_length, mip_alignment);
+
+        std::vector<Ktx2LevelIndexEntry> level_index(level_count);
+        for (uint32_t i = level_count; i-- > 0;) {
+            data_cursor = align_up(data_cursor, mip_alignment);
+            level_index[i] = {
+                .byte_offset = data_cursor,
+                .byte_length = levels[i].size,
+                .uncompressed_byte_length = levels[i].size, // no supercompression
+            };
+            data_cursor += levels[i].size;
+        }
+
+        // 3. Assemble file in memory
+        std::vector<uint8_t> file_buf(data_cursor, 0);
+
+        std::memcpy(file_buf.data(),
+                    &header, sizeof(header));
+        std::memcpy(file_buf.data() + sizeof(header),
+                    level_index.data(), level_count * sizeof(Ktx2LevelIndexEntry));
+        std::memcpy(file_buf.data() + header.dfd_byte_offset,
+                    dfd.data(), dfd.size());
+
+        for (uint32_t i = 0; i < level_count; ++i) {
+            std::memcpy(file_buf.data() + level_index[i].byte_offset,
+                        static_cast<const uint8_t *>(levels[i].data),
+                        levels[i].size);
+        }
+
+        // 4. Write to disk (atomic: write-to-temp + rename)
+        return atomic_write_file(path, file_buf.data(), file_buf.size());
+    }
+
+    // ---- read_ktx2 ----
+
+    std::optional<Ktx2Data> read_ktx2(const std::filesystem::path &path) {
+        std::ifstream ifs(path, std::ios::binary | std::ios::ate);
+        if (!ifs) {
+            return std::nullopt;
+        }
+
+        const auto file_size = static_cast<size_t>(ifs.tellg());
+        if (file_size < sizeof(Ktx2FileHeader)) {
+            spdlog::warn("ktx2: file too small: {}", path.string());
+            return std::nullopt;
+        }
+
+        ifs.seekg(0);
+        std::vector<uint8_t> file(file_size);
+        ifs.read(reinterpret_cast<char *>(file.data()), static_cast<std::streamsize>(file_size));
+        if (!ifs.good()) {
+            spdlog::warn("ktx2: read error: {}", path.string());
+            return std::nullopt;
+        }
+
+        // 1. Parse header
+        Ktx2FileHeader header{};
+        std::memcpy(&header, file.data(), sizeof(header));
+
+        if (std::memcmp(header.identifier, kKtx2Identifier, 12) != 0) {
+            spdlog::warn("ktx2: invalid identifier: {}", path.string());
+            return std::nullopt;
+        }
+
+        const auto format = from_vk_format(header.vk_format);
+        if (!format) {
+            spdlog::warn("ktx2: unsupported vkFormat {}: {}", header.vk_format, path.string());
+            return std::nullopt;
+        }
+
+        if (header.pixel_depth != 0) {
+            spdlog::warn("ktx2: 3D textures not supported: {}", path.string());
+            return std::nullopt;
+        }
+        if (header.layer_count != 0) {
+            spdlog::warn("ktx2: array textures not supported: {}", path.string());
+            return std::nullopt;
+        }
+        if (header.face_count != 1 && header.face_count != 6) {
+            spdlog::warn("ktx2: invalid faceCount {}: {}", header.face_count, path.string());
+            return std::nullopt;
+        }
+        if (header.level_count == 0) {
+            spdlog::warn("ktx2: levelCount is 0: {}", path.string());
+            return std::nullopt;
+        }
+        if (header.supercompression_scheme != 0) {
+            spdlog::warn("ktx2: supercompression not supported: {}", path.string());
+            return std::nullopt;
+        }
+        if (header.type_size != ktx2_type_size(*format)) {
+            spdlog::warn("ktx2: typeSize mismatch (got {}, expected {}): {}",
+                         header.type_size, ktx2_type_size(*format), path.string());
+            return std::nullopt;
+        }
+
+        // 2. Parse level index
+        const size_t level_index_end = sizeof(header)
+                                       + static_cast<size_t>(header.level_count) * sizeof(Ktx2LevelIndexEntry);
+        if (file_size < level_index_end) {
+            spdlog::warn("ktx2: file too small for level index: {}", path.string());
+            return std::nullopt;
+        }
+
+        std::vector<Ktx2LevelIndexEntry> level_index(header.level_count);
+        std::memcpy(level_index.data(),
+                    file.data() + sizeof(header),
+                    header.level_count * sizeof(Ktx2LevelIndexEntry));
+
+        // Validate bounds and compute total mip size
+        uint64_t total_mip_size = 0;
+        for (uint32_t i = 0; i < header.level_count; ++i) {
+            if (level_index[i].byte_offset > file_size
+                || level_index[i].byte_length > file_size - level_index[i].byte_offset) {
+                spdlog::warn("ktx2: level {} data out of bounds: {}", i, path.string());
+                return std::nullopt;
+            }
+            if (level_index[i].uncompressed_byte_length != level_index[i].byte_length) {
+                spdlog::warn("ktx2: level {} uncompressed size mismatch: {}", i, path.string());
+                return std::nullopt;
+            }
+            const uint64_t expected = expected_level_size(
+                *format, header.pixel_width, header.pixel_height, header.face_count, i);
+            if (level_index[i].byte_length != expected) {
+                spdlog::warn("ktx2: level {} size mismatch (got {}, expected {}): {}",
+                             i, level_index[i].byte_length, expected, path.string());
+                return std::nullopt;
+            }
+            total_mip_size += level_index[i].byte_length;
+        }
+
+        // 3. Extract mip data into contiguous buffer (strips KTX2 metadata)
+        Ktx2Data result;
+        result.format = *format;
+        result.base_width = header.pixel_width;
+        result.base_height = header.pixel_height;
+        result.face_count = header.face_count;
+        result.level_count = header.level_count;
+        result.levels.resize(header.level_count);
+        result.blob.resize(total_mip_size);
+
+        uint64_t cursor = 0;
+        for (uint32_t i = 0; i < header.level_count; ++i) {
+            std::memcpy(result.blob.data() + cursor,
+                        file.data() + level_index[i].byte_offset,
+                        level_index[i].byte_length);
+            result.levels[i] = {cursor, level_index[i].byte_length};
+            cursor += level_index[i].byte_length;
+        }
+
+        return result;
+    }
+} // namespace qualquer::renderer
