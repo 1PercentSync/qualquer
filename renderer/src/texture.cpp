@@ -8,6 +8,8 @@
 #include <qualquer/renderer/cache.h>
 #include <qualquer/renderer/ktx2.h>
 
+#include <qualquer/optix/cuda_check.h>
+
 #include <algorithm>
 #include <cassert>
 #include <filesystem>
@@ -379,9 +381,9 @@ namespace qualquer::renderer {
         const bool is_color = (role == TextureRole::Color);
 
         const auto mip_chain = generate_cpu_mip_chain(data.pixels.get(),
-                                                data.width,
-                                                data.height,
-                                                is_color);
+                                                      data.width,
+                                                      data.height,
+                                                      is_color);
         const uint32_t base_w = mip_chain[0].width;
         const uint32_t base_h = mip_chain[0].height;
 
@@ -396,6 +398,110 @@ namespace qualquer::renderer {
         }
 
         return finalize_compressed(format, base_w, base_h, 1, levels, source_hash);
+    }
+
+    // ---- GPU upload ----
+
+    namespace {
+        /// Maps TextureFormat to the native CUDA BC channel descriptor.
+        cudaChannelFormatDesc channel_desc_for_format(const TextureFormat format) {
+            switch (format) {
+                case TextureFormat::BC5_UNORM:
+                    return cudaCreateChannelDesc(8, 8, 0, 0,
+                                                 cudaChannelFormatKindUnsignedBlockCompressed5);
+                case TextureFormat::BC6H_UFLOAT:
+                    return cudaCreateChannelDesc(16, 16, 16, 0,
+                                                 cudaChannelFormatKindUnsignedBlockCompressed6H);
+                case TextureFormat::BC7_UNORM:
+                    return cudaCreateChannelDesc(8, 8, 8, 8,
+                                                 cudaChannelFormatKindUnsignedBlockCompressed7);
+                case TextureFormat::BC7_SRGB:
+                    return cudaCreateChannelDesc(8, 8, 8, 8,
+                                                 cudaChannelFormatKindUnsignedBlockCompressed7SRGB);
+            }
+            // ReSharper disable once CppDFAUnreachableCode
+            return cudaCreateChannelDesc(8, 8, 8, 8,
+                                         cudaChannelFormatKindUnsignedBlockCompressed7);
+        }
+    } // namespace
+
+    optix::CudaTexture finalize_texture(const PreparedTexture &prepared, const SamplerDesc &sampler) {
+        auto channel_desc = channel_desc_for_format(prepared.format);
+        const bool is_cubemap = (prepared.face_count == 6);
+
+        // BC5/BC6H/BC7 blocks are all 4x4 texels, 16 bytes each.
+
+        // Allocate mipmapped array (extent in texels).
+        const cudaExtent extent = is_cubemap
+                                      ? make_cudaExtent(prepared.base_width, prepared.base_height, 6)
+                                      : make_cudaExtent(prepared.base_width, prepared.base_height, 0);
+        const unsigned int flags = is_cubemap ? cudaArrayCubemap : 0;
+
+        cudaMipmappedArray_t mipmap_array = nullptr;
+        CUDA_CHECK(
+            cudaMallocMipmappedArray(&mipmap_array, &channel_desc, extent, prepared.level_count, flags));
+
+        // Upload compressed data per level.
+        for (uint32_t level = 0; level < prepared.level_count; ++level) {
+            constexpr size_t kBcBlockBytes = 16;
+            cudaArray_t level_array = nullptr;
+            CUDA_CHECK(cudaGetMipmappedArrayLevel(&level_array, mipmap_array, level));
+
+            const auto &region = prepared.regions[level];
+            const uint32_t bx = block_count(region.width);
+            const uint32_t by = block_count(region.height);
+            const size_t row_bytes = static_cast<size_t>(bx) * kBcBlockBytes;
+            const auto *src = prepared.data.data() + region.buffer_offset;
+
+            if (is_cubemap) {
+                // Face-major data layout aligns with cudaPitchedPtr z-stride
+                // (z-stride = ysize * pitch = by * row_bytes = face_bytes).
+                cudaMemcpy3DParms params = {};
+                params.srcPtr = make_cudaPitchedPtr(
+                    const_cast<uint8_t *>(src),
+                    row_bytes,
+                    row_bytes,
+                    by);
+                params.dstArray = level_array;
+                params.extent = make_cudaExtent(region.width, region.height, 6);
+                params.kind = cudaMemcpyHostToDevice;
+                CUDA_CHECK(cudaMemcpy3D(&params));
+            } else {
+                CUDA_CHECK(cudaMemcpy2DToArray(
+                    level_array,
+                    0, 0,
+                    src,
+                    row_bytes,
+                    row_bytes,
+                    by,
+                    cudaMemcpyHostToDevice));
+            }
+        }
+
+        // Create texture object.
+        cudaResourceDesc res_desc = {};
+        res_desc.resType = cudaResourceTypeMipmappedArray;
+        res_desc.res.mipmap.mipmap = mipmap_array;
+
+        cudaTextureDesc tex_desc = {};
+        tex_desc.addressMode[0] = sampler.address_mode_u;
+        tex_desc.addressMode[1] = sampler.address_mode_v;
+        tex_desc.addressMode[2] = sampler.address_mode_u; // W axis: reuse U (no glTF W wrap)
+        tex_desc.filterMode = sampler.filter_mode;
+        tex_desc.mipmapFilterMode = sampler.mipmap_filter_mode;
+        tex_desc.readMode = cudaReadModeElementType;
+        tex_desc.normalizedCoords = 1;
+        tex_desc.maxMipmapLevelClamp = static_cast<float>(prepared.level_count - 1);
+        tex_desc.seamlessCubemap = is_cubemap ? 1 : 0;
+
+        cudaTextureObject_t texture_object = 0;
+        CUDA_CHECK(cudaCreateTextureObject(
+            &texture_object, &res_desc, &tex_desc, nullptr));
+
+        optix::CudaTexture result;
+        result.mipmap_array = mipmap_array;
+        result.texture_object = texture_object;
+        return result;
     }
 
     // ---- HDR (BC6H) cache + compress, cubemap only ----

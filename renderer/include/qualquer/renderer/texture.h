@@ -14,6 +14,7 @@
 #include <string_view>
 #include <vector>
 
+#include <qualquer/optix/cuda_texture.h>
 #include <qualquer/renderer/ktx2.h>
 
 namespace qualquer::renderer {
@@ -201,5 +202,46 @@ namespace qualquer::renderer {
      */
     [[nodiscard]] PreparedTexture compress_texture_bc6h(
         std::span<const uint16_t> rgba, uint32_t face_size, std::string_view source_hash);
+
+    // ---- GPU upload ----
+
+    /**
+     * @brief Sampler settings for a CUDA texture object.
+     *
+     * Groups the glTF-derived sampler parameters that a
+     * @c cudaTextureObject_t bakes in (CUDA has no separate sampler handle).
+     * Callers construct from glTF sampler data; finalize_texture() forwards
+     * the values into @c cudaTextureDesc.
+     */
+    struct SamplerDesc {
+        /** @brief Texture filter for magnification and minification. */
+        cudaTextureFilterMode filter_mode;
+
+        /** @brief Filter between mip levels (point = no trilinear, linear = trilinear). */
+        cudaTextureFilterMode mipmap_filter_mode;
+
+        /** @brief Address mode for the U (S) coordinate. */
+        cudaTextureAddressMode address_mode_u;
+
+        /** @brief Address mode for the V (T) coordinate. */
+        cudaTextureAddressMode address_mode_v;
+    };
+
+    /**
+     * @brief Uploads a PreparedTexture to the GPU and creates a CUDA texture object.
+     *
+     * Allocates a @c cudaMipmappedArray_t with the native BC channel format,
+     * uploads compressed mip data level-by-level, and wraps the result in a
+     * @c cudaTextureObject_t. Supports both 2D (LDR, face_count=1) and
+     * cubemap (HDR BC6H, face_count=6) textures.
+     *
+     * @param prepared CPU-side compressed texture from compress_texture() /
+     *                 compress_texture_bc6h() or cache.
+     * @param sampler  Filter and address mode settings for the texture object.
+     * @return RAII handle owning the GPU resources; devices sample via
+     *         @c tex2D<float4>() on the contained texture object.
+     */
+    [[nodiscard]] optix::CudaTexture finalize_texture(
+        const PreparedTexture &prepared, const SamplerDesc &sampler);
 
 } // namespace qualquer::renderer
