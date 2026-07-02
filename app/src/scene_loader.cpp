@@ -5,6 +5,7 @@
 
 #include <qualquer/app/scene_loader.h>
 
+#include <qualquer/renderer/cache.h>
 #include <qualquer/renderer/mesh.h>
 #include <qualquer/renderer/texture.h>
 
@@ -14,6 +15,7 @@
 #include <fastgltf/types.hpp>
 #include <spdlog/spdlog.h>
 
+#include <cassert>
 #include <filesystem>
 #include <limits>
 #include <map>
@@ -55,6 +57,128 @@ namespace qualquer::app {
                 case fastgltf::AlphaMode::Blend: return renderer::AlphaMode::Blend;
             }
             return renderer::AlphaMode::Opaque;
+        }
+        // Visits the raw encoded bytes (JPEG/PNG) of a glTF image and
+        // invokes the callback with (const uint8_t* data, size_t size).
+        // Handles all fastgltf source types used with LoadExternalImages.
+        template<typename Fn>
+        void visit_gltf_image_bytes(const fastgltf::Asset &gltf,
+                                    const fastgltf::Image &image,
+                                    Fn &&callback) {
+            auto invoke = [&](const auto *data, const size_t size) {
+                callback(reinterpret_cast<const uint8_t *>(data), size);
+            };
+
+            std::visit(fastgltf::visitor{
+                           [](const fastgltf::sources::URI &) {
+                               assert(false && "URI source should not appear with LoadExternalImages");
+                           },
+                           [&](const fastgltf::sources::Array &array) {
+                               invoke(array.bytes.data(), array.bytes.size_bytes());
+                           },
+                           [&](const fastgltf::sources::Vector &vec) {
+                               invoke(vec.bytes.data(), vec.bytes.size());
+                           },
+                           [&](const fastgltf::sources::BufferView &bv) {
+                               const auto &view = gltf.bufferViews[bv.bufferViewIndex];
+                               const auto &buffer = gltf.buffers[view.bufferIndex];
+                               std::visit(fastgltf::visitor{
+                                              [&](const fastgltf::sources::Array &arr) {
+                                                  invoke(arr.bytes.data() + view.byteOffset,
+                                                         view.byteLength);
+                                              },
+                                              [&](const fastgltf::sources::Vector &v) {
+                                                  invoke(v.bytes.data() + view.byteOffset,
+                                                         view.byteLength);
+                                              },
+                                              [&](const fastgltf::sources::ByteView &bytes) {
+                                                  invoke(bytes.bytes.data() + view.byteOffset,
+                                                         view.byteLength);
+                                              },
+                                              [](auto &&) {
+                                                  throw std::runtime_error(
+                                                      "Unsupported buffer data source for image");
+                                              }
+                                          }, buffer.data);
+                           },
+                           [&](const fastgltf::sources::ByteView &bytes) {
+                               invoke(bytes.bytes.data(), bytes.bytes.size());
+                           },
+                           [](auto &&) {
+                               throw std::runtime_error("Unsupported image source type");
+                           }
+                       }, image.data);
+        }
+
+        /// Decodes a glTF image into CPU RGBA8 pixel data.
+        renderer::ImageData decode_gltf_image(const fastgltf::Asset &gltf,
+                                              const fastgltf::Image &image) {
+            renderer::ImageData result;
+            visit_gltf_image_bytes(gltf, image, [&](const uint8_t *data, const size_t size) {
+                result = renderer::load_image_from_memory(data, size);
+            });
+
+            if (!result.valid()) {
+                throw std::runtime_error("Failed to decode glTF image '"
+                                         + std::string(image.name) + "'");
+            }
+            return result;
+        }
+
+        /// Computes a content hash of the raw source bytes without decoding.
+        std::string hash_gltf_image(const fastgltf::Asset &gltf,
+                                    const fastgltf::Image &image) {
+            std::string hash;
+            visit_gltf_image_bytes(gltf, image, [&](const uint8_t *data, const size_t size) {
+                hash = renderer::content_hash(data, size);
+            });
+            return hash;
+        }
+
+        /// Converts a fastgltf wrap mode to CUDA texture address mode.
+        cudaTextureAddressMode convert_wrap(const fastgltf::Wrap wrap) {
+            switch (wrap) {
+                case fastgltf::Wrap::Repeat: return cudaAddressModeWrap;
+                case fastgltf::Wrap::ClampToEdge: return cudaAddressModeClamp;
+                case fastgltf::Wrap::MirroredRepeat: return cudaAddressModeMirror;
+            }
+            return cudaAddressModeWrap;
+        }
+
+        /// Converts a glTF sampler to a CUDA SamplerDesc.
+        /// CUDA has a single filterMode (shared by mag/min); the minFilter's
+        /// base part is used (more impactful for mipmapped textures).
+        renderer::SamplerDesc convert_gltf_sampler(const fastgltf::Sampler &sampler) {
+            renderer::SamplerDesc desc{
+                .filter_mode = cudaFilterModeLinear,
+                .mipmap_filter_mode = cudaFilterModeLinear,
+                .address_mode_u = convert_wrap(sampler.wrapS),
+                .address_mode_v = convert_wrap(sampler.wrapT),
+            };
+
+            if (sampler.minFilter.has_value()) {
+                switch (*sampler.minFilter) {
+                    case fastgltf::Filter::Nearest:
+                    case fastgltf::Filter::NearestMipMapNearest:
+                    case fastgltf::Filter::NearestMipMapLinear:
+                        desc.filter_mode = cudaFilterModePoint;
+                        break;
+                    default:
+                        break;
+                }
+
+                switch (*sampler.minFilter) {
+                    case fastgltf::Filter::NearestMipMapLinear:
+                    case fastgltf::Filter::LinearMipMapLinear:
+                        desc.mipmap_filter_mode = cudaFilterModeLinear;
+                        break;
+                    default:
+                        desc.mipmap_filter_mode = cudaFilterModePoint;
+                        break;
+                }
+            }
+
+            return desc;
         }
     } // anonymous namespace
 
@@ -234,10 +358,189 @@ namespace qualquer::app {
         return result;
     }
 
-    void SceneLoader::load_materials(const fastgltf::Asset &,
+    void SceneLoader::load_materials(const fastgltf::Asset &gltf,
                                      const std::string &,
-                                     const renderer::DefaultTextures &) {
-        // Implemented in a subsequent task item.
+                                     const renderer::DefaultTextures &default_textures) {
+        // ---- Default texture indices (reserved at the front of texture_objects_) ----
+
+        texture_objects_.push_back(default_textures.white.texture_object);
+        texture_objects_.push_back(default_textures.flat_normal.texture_object);
+        texture_objects_.push_back(default_textures.black.texture_object);
+
+        // ---- Phase 1: Collect unique (texture_index, role) pairs ----
+        using TexKey = std::pair<size_t, renderer::TextureRole>;
+        std::map<TexKey, size_t> unique_tex_map;
+
+        struct TexEntry {
+            size_t texture_index;
+            renderer::TextureRole role;
+        };
+        std::vector<TexEntry> unique_entries;
+
+        for (const auto &mat : gltf.materials) {
+            const auto &pbr = mat.pbrData;
+            auto collect = [&](const auto &opt_tex, const renderer::TextureRole role) {
+                if (!opt_tex.has_value()) { return; }
+                const auto key = std::make_pair(opt_tex->textureIndex, role);
+                if (unique_tex_map.contains(key)) { return; }
+                unique_tex_map[key] = unique_entries.size();
+                unique_entries.push_back({opt_tex->textureIndex, role});
+            };
+            collect(pbr.baseColorTexture, renderer::TextureRole::Color);
+            collect(pbr.metallicRoughnessTexture, renderer::TextureRole::Linear);
+            collect(mat.normalTexture, renderer::TextureRole::Normal);
+            collect(mat.occlusionTexture, renderer::TextureRole::Linear);
+            collect(mat.emissiveTexture, renderer::TextureRole::Color);
+        }
+
+        // ---- Phase 2a: Hash source bytes + cache check (serial, fast) ----
+        const auto tex_count = static_cast<int>(unique_entries.size());
+
+        std::vector<std::string> source_hashes(tex_count);
+        std::vector<renderer::PreparedTexture> prepared_textures(tex_count);
+        std::vector cache_hit(tex_count, false);
+
+        for (int i = 0; i < tex_count; ++i) {
+            const auto &tex = gltf.textures[unique_entries[i].texture_index];
+            assert(tex.imageIndex.has_value() && "glTF texture must have an image source");
+            source_hashes[i] = hash_gltf_image(gltf, gltf.images[*tex.imageIndex]);
+            if (auto cached = renderer::load_cached_texture(
+                    source_hashes[i], unique_entries[i].role)) {
+                prepared_textures[i] = std::move(*cached);
+                cache_hit[i] = true;
+            }
+        }
+
+        // ---- Phase 2b: Decode only cache-miss images (serial) ----
+        std::vector<renderer::ImageData> decoded_images(tex_count);
+        for (int i = 0; i < tex_count; ++i) {
+            if (cache_hit[i]) { continue; }
+            const auto &tex = gltf.textures[unique_entries[i].texture_index];
+            decoded_images[i] = decode_gltf_image(gltf, gltf.images[*tex.imageIndex]);
+        }
+
+        // ---- Phase 2c: Parallel BC compression for cache misses only ----
+        #pragma omp parallel for schedule(dynamic)
+        for (int i = 0; i < tex_count; ++i) {
+            if (cache_hit[i]) { continue; }
+            prepared_textures[i] = renderer::compress_texture(
+                decoded_images[i], unique_entries[i].role, source_hashes[i]);
+        }
+
+        decoded_images.clear();
+
+        // ---- Phase 3: Serial GPU upload ----
+        constexpr renderer::SamplerDesc default_sampler{
+            .filter_mode = cudaFilterModeLinear,
+            .mipmap_filter_mode = cudaFilterModeLinear,
+            .address_mode_u = cudaAddressModeWrap,
+            .address_mode_v = cudaAddressModeWrap,
+        };
+
+        std::map<TexKey, uint32_t> tex_index_cache;
+
+        for (size_t i = 0; i < unique_entries.size(); ++i) {
+            const auto &entry = unique_entries[i];
+            const auto &tex = gltf.textures[entry.texture_index];
+            const auto sampler = tex.samplerIndex.has_value()
+                                     ? convert_gltf_sampler(gltf.samplers[*tex.samplerIndex])
+                                     : default_sampler;
+
+            auto cuda_texture = renderer::finalize_texture(prepared_textures[i], sampler);
+            const auto obj_index = static_cast<uint32_t>(texture_objects_.size());
+            texture_objects_.push_back(cuda_texture.texture_object);
+            textures_.push_back(std::move(cuda_texture));
+            tex_index_cache[{entry.texture_index, entry.role}] = obj_index;
+        }
+        prepared_textures.clear();
+
+        // ---- Fill materials ----
+        auto resolve_texture = [&](const size_t texture_index,
+                                   const renderer::TextureRole role) -> uint32_t {
+            const auto it = tex_index_cache.find({texture_index, role});
+            assert(it != tex_index_cache.end() && "Texture must have been prepared");
+            return it->second;
+        };
+
+        gpu_materials_.reserve(gltf.materials.size());
+
+        for (const auto &mat : gltf.materials) {
+            constexpr uint32_t kDefaultWhiteIdx = 0;
+            renderer::Material data{};
+            // ReSharper disable once CppUseStructuredBinding
+            const auto &pbr = mat.pbrData;
+
+            data.base_color_factor = {
+                pbr.baseColorFactor[0], pbr.baseColorFactor[1],
+                pbr.baseColorFactor[2], pbr.baseColorFactor[3]
+            };
+            data.emissive_factor = {
+                mat.emissiveFactor[0], mat.emissiveFactor[1],
+                mat.emissiveFactor[2], 0.0f
+            };
+            data.metallic_factor = pbr.metallicFactor;
+            data.roughness_factor = pbr.roughnessFactor;
+            data.normal_scale = mat.normalTexture.has_value()
+                                    ? mat.normalTexture->scale : 1.0f;
+            data.occlusion_strength = mat.occlusionTexture.has_value()
+                                          ? mat.occlusionTexture->strength : 1.0f;
+            data.alpha_cutoff = mat.alphaCutoff;
+            data.alpha_mode = static_cast<uint32_t>(convert_alpha_mode(mat.alphaMode));
+            data.double_sided = mat.doubleSided ? 1u : 0u;
+
+            // Texture references (UINT32_MAX → default fallback below)
+            data.base_color_tex = pbr.baseColorTexture.has_value()
+                                      ? resolve_texture(pbr.baseColorTexture->textureIndex,
+                                                        renderer::TextureRole::Color)
+                                      : UINT32_MAX;
+            data.metallic_roughness_tex = pbr.metallicRoughnessTexture.has_value()
+                                              ? resolve_texture(
+                                                    pbr.metallicRoughnessTexture->textureIndex,
+                                                    renderer::TextureRole::Linear)
+                                              : UINT32_MAX;
+            data.normal_tex = mat.normalTexture.has_value()
+                                  ? resolve_texture(mat.normalTexture->textureIndex,
+                                                    renderer::TextureRole::Normal)
+                                  : UINT32_MAX;
+            data.occlusion_tex = mat.occlusionTexture.has_value()
+                                     ? resolve_texture(mat.occlusionTexture->textureIndex,
+                                                       renderer::TextureRole::Linear)
+                                     : UINT32_MAX;
+            data.emissive_tex = mat.emissiveTexture.has_value()
+                                    ? resolve_texture(mat.emissiveTexture->textureIndex,
+                                                      renderer::TextureRole::Color)
+                                    : UINT32_MAX;
+
+            // Fill unset texture slots with default indices
+            if (data.base_color_tex == UINT32_MAX) { data.base_color_tex = kDefaultWhiteIdx; }
+            if (data.metallic_roughness_tex == UINT32_MAX) { data.metallic_roughness_tex = kDefaultWhiteIdx; }
+            if (data.normal_tex == UINT32_MAX) {
+                constexpr uint32_t kDefaultFlatNormalIdx = 1;
+                data.normal_tex = kDefaultFlatNormalIdx;
+            }
+            if (data.occlusion_tex == UINT32_MAX) { data.occlusion_tex = kDefaultWhiteIdx; }
+            if (data.emissive_tex == UINT32_MAX) {
+                constexpr uint32_t kDefaultBlackIdx = 2;
+                data.emissive_tex = kDefaultBlackIdx;
+            }
+
+            gpu_materials_.push_back(data);
+        }
+
+        // Upload material array to device
+        if (!gpu_materials_.empty()) {
+            material_buffer_.alloc(gpu_materials_.size());
+            material_buffer_.upload(gpu_materials_.data(), gpu_materials_.size(), nullptr);
+        }
+
+        // Upload texture-object array to device
+        if (!texture_objects_.empty()) {
+            texture_objects_buffer_.alloc(texture_objects_.size());
+            texture_objects_buffer_.upload(texture_objects_.data(), texture_objects_.size(), nullptr);
+        }
+
+        spdlog::info("Loaded {} materials, {} scene textures (+ 3 defaults)",
+                     gpu_materials_.size(), textures_.size());
     }
 
     void SceneLoader::build_mesh_instances(fastgltf::Asset &,

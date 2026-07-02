@@ -1,4 +1,5 @@
 find_package(fastgltf CONFIG REQUIRED)
+find_package(OpenMP REQUIRED)
 
 add_executable(qualquer_app
     src/main.cpp
@@ -15,6 +16,7 @@ target_link_libraries(qualquer_app
     PRIVATE qualquer_renderer
     PRIVATE qualquer_optix
     PRIVATE fastgltf::fastgltf
+    PRIVATE OpenMP::OpenMP_CXX
 )
 
 # Deploy OptiX IR to the executable's runtime directory so Pipeline::init can
