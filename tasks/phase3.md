@@ -42,9 +42,8 @@
 - [x] 创建 `app/include/qualquer/app/scene_loader.h` + `app/src/scene_loader.cpp`（SceneLoader：load / destroy / meshes / mesh_instances / scene_bounds 等），并注册 scene_loader.cpp 到 `app/CMakeLists.txt`
 - [x] SceneLoader::load_meshes（遍历 glTF primitive，提取顶点，生成 tangent，创建 CudaBuffer，计算 AABB）
 - [x] SceneLoader::load_materials（sampler 转换、纹理加载 + BC 压缩 + 缓存 + CUDA 上传、Material 填充 + default fallback、材质数组上传）。纹理级 OpenMP：`#pragma omp parallel for schedule(dynamic)` 并行调用 `compress_texture`（照搬 Himalaya `scene_loader.cpp` Phase 2c；单张纹理内部串行）
-- [ ] SceneLoader::build_mesh_instances（场景图遍历、transform 收集、scene AABB 计算）
-- [ ] 请求用户在 CLion 中编译验证
-- [ ] 验证 ISPC 压缩运行时正确（BC7/BC5 via bc7enc、BC6H via ISPCTextureCompressor，确认 ISPC dispatch 与压缩产出正常；场景加载后端到端可验证）
+- [x] SceneLoader::build_mesh_instances（场景图遍历、transform 收集、scene AABB 计算）
+- [x] 请求用户在 CLion 中编译验证
 
 ## Step 5：OptiX 加速结构
 
@@ -73,6 +72,7 @@ MUSTREAD:4
 - [ ] Application 帧循环：CameraController::update → Camera 矩阵更新 → submit_cuda
 - [ ] Application destroy：SceneLoader::destroy
 - [ ] 请求用户在 CLion 中编译验证（窗口显示场景 PBR ambient 着色 + ImGui，交互式相机可浏览，resize 不崩溃）
+- [ ] 验证 ISPC 压缩运行时正确（BC7/BC5 via bc7enc、BC6H via ISPCTextureCompressor，确认 ISPC dispatch 与压缩产出正常；场景加载后端到端可验证）
 
 ## Step 8：清理 + 最终验证
 
