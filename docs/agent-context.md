@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 3 — 场景加载 + 完整材质系统 + 加速结构 + Primary Ray
-- **进度**：Phase 3 Step 4 第三小项完成：SceneLoader::load_meshes 已实现（遍历 glTF primitive、提取顶点属性、MikkTSpace tangent 生成、CudaBuffer 创建、local AABB 计算）
+- **进度**：Phase 3 Step 4 第四小项完成：SceneLoader::load_materials 已实现（三阶段并行纹理流水线、glTF sampler→CUDA SamplerDesc、材质参数提取 + 默认纹理 fallback、材质与纹理数组上传；ensure_bc_init 收归 texture.cpp 匿名命名空间）
 
 ### 下一个任务
 
-Phase 3 Step 4 第四小项：SceneLoader::load_materials 实现
+Phase 3 Step 4 第五小项：SceneLoader::build_mesh_instances 实现
 
 > Phase 1、Phase 2 全部完成并归档。
 
