@@ -171,16 +171,42 @@ struct CudaTexture {
 };
 ```
 
-创建流程：
-1. `cudaMallocMipmappedArray(&mipmap_array, &channel_desc, extent, level_count)`
-   - `channel_desc` 使用 BC 格式对应的 `cudaChannelFormatKind`（如 `cudaChannelFormatKindBC7_UNORM_SRGB`）
-2. 逐 level `cudaGetMipmappedArrayLevel(&level_array, mipmap_array, i)` + `cudaMemcpy2DToArray` 上传压缩数据
-3. `cudaCreateTextureObject(&texture_object, &res_desc, &tex_desc, nullptr)`
+创建流程（`finalize_texture`，renderer 层 `texture.cpp`）：
+
+1. **格式映射**：`TextureFormat` → `cudaChannelFormatDesc`（来自 `channel_descriptor.h` 模板特化）
+
+   | TextureFormat | x | y | z | w | cudaChannelFormatKind |
+   |---------------|---|---|---|---|-----------------------|
+   | BC5_UNORM | 8 | 8 | 0 | 0 | `cudaChannelFormatKindUnsignedBlockCompressed5` |
+   | BC6H_UFLOAT | 16 | 16 | 16 | 0 | `cudaChannelFormatKindUnsignedBlockCompressed6H` |
+   | BC7_UNORM | 8 | 8 | 8 | 8 | `cudaChannelFormatKindUnsignedBlockCompressed7` |
+   | BC7_SRGB | 8 | 8 | 8 | 8 | `cudaChannelFormatKindUnsignedBlockCompressed7SRGB` |
+
+2. **分配**：`cudaMallocMipmappedArray(&mipmap_array, &channel_desc, extent, level_count, flags)`
+   - extent 用**纹素**维度（运行时内部处理块布局）
+   - 2D（LDR）：`make_cudaExtent(width, height, 0)`，flags = 0
+   - Cubemap（HDR）：`make_cudaExtent(face_size, face_size, 6)`，flags = `cudaArrayCubemap`
+
+3. **逐 level 上传**：`cudaGetMipmappedArrayLevel(&level_array, mipmap_array, i)`，按 face_count 分路
+
+   - **2D**（face_count=1）：`cudaMemcpy2DToArray`（参数以字节和块行为单位）
+     - width = `block_count_x * 16`（字节/块行），spitch = 同 width
+     - height = `block_count_y`（块行数）
+   - **Cubemap**（face_count=6）：`cudaMemcpy3D`（extent 以 CUDA array 元素=纹素为单位，srcPtr.pitch 以字节为单位；运行时根据 array 的 BC 格式计算块-字节映射）
+     - `srcPtr`：pitch = `block_count_x * 16`，ysize = `block_count_y`
+     - `extent`：`make_cudaExtent(face_size, face_size, 6)`（纹素）
+     - 6 face 数据在 `PreparedTexture::data` 中 face-major 排列，与 `cudaPitchedPtr` 的 z-stride = `ysize * pitch` 天然对齐，可单次 `cudaMemcpy3D` 上传全部 face
+
+4. **创建纹理对象**：`cudaCreateTextureObject(&texture_object, &res_desc, &tex_desc, nullptr)`
    - `res_desc.resType = cudaResourceTypeMipmappedArray`
    - `tex_desc.filterMode = cudaFilterModeLinear`（硬件双线性过滤）
    - `tex_desc.mipmapFilterMode = cudaFilterModeLinear`（trilinear）
-   - `tex_desc.normalizedCoords = 1`
-   - BC 格式时 `pResViewDesc` 传 `nullptr`
+   - `tex_desc.normalizedCoords = 1`（mipmapped array 必须用归一化坐标）
+   - `tex_desc.readMode = cudaReadModeElementType`（BC 硬件解压直接产出 float，无需 normalize 转换）
+   - `tex_desc.sRGB = 0`（BC7_SRGB kind 自身已编码 sRGB 信息，避免双重转换）
+   - `tex_desc.maxMipmapLevelClamp = level_count - 1`
+   - `tex_desc.addressMode[0..2] = cudaAddressModeWrap`
+   - `pResViewDesc` 传 `nullptr`（runtime API 文档明确：BC 格式 mipmapped array 不可指定 resource view desc）
 
 **纹理缓存**（renderer 层）：
 
