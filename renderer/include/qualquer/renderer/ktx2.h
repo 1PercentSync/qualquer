@@ -4,9 +4,8 @@
  * @file ktx2.h
  * @brief Minimal KTX2 reader/writer for texture and IBL caching.
  *
- * Supports a fixed set of formats (BC5, BC6H UFloat, BC7 SRGB/UNORM,
- * B10G11R11_UFLOAT_PACK32, R16G16_UNORM) for 2D and
- * cubemap textures with mip chains. No supercompression or Basis Universal
+ * Supports a fixed set of formats (BC5, BC6H UFloat, BC7 SRGB/UNORM)
+ * for 2D and cubemap textures with mip chains. No supercompression or Basis Universal
  * support.
  */
 
@@ -31,8 +30,6 @@ namespace qualquer::renderer {
         BC7_SRGB,              ///< BC7, gamma-correct (base color, emissive)
         BC5_UNORM,             ///< BC5, RG only (tangent-space normals, Z reconstructed)
         BC6H_UFLOAT,           ///< BC6H, unsigned float (HDR / IBL environment)
-        B10G11R11_UFLOAT_PACK32, ///< IBL irradiance cubemap
-        R16G16_UNORM,          ///< IBL utility (e.g. filtered importance sampling)
     };
 
     /** @brief Data read back from a KTX2 file. */

@@ -54,7 +54,6 @@ namespace qualquer::renderer {
 
     // ---- KHR Data Format constants ----
 
-    static constexpr uint8_t kDfModelRgbsda = 1;
     static constexpr uint8_t kDfModelBc5 = 132;
     static constexpr uint8_t kDfModelBc6h = 133;
     static constexpr uint8_t kDfModelBc7 = 134;
@@ -65,15 +64,10 @@ namespace qualquer::renderer {
 
     // Sample datatype flags (upper bits of channelType byte)
     static constexpr uint8_t kDfSampleFloat = 0x80;
-    // ReSharper disable once CppDeclaratorNeverUsed
-    static constexpr uint8_t kDfSampleSigned = 0x40;
 
-    // Channel IDs (RGBSDA model; values also match BC5 model channels)
+    // KHR Data Format channel IDs (BC5 DFD uses R and G)
     static constexpr uint8_t kChannelR = 0;
     static constexpr uint8_t kChannelG = 1;
-    static constexpr uint8_t kChannelB = 2;
-    // ReSharper disable once CppDeclaratorNeverUsed
-    static constexpr uint8_t kChannelA = 15;
 
     // ---- Format mapping ----
 
@@ -83,8 +77,6 @@ namespace qualquer::renderer {
             case TextureFormat::BC7_SRGB: return VK_FORMAT_BC7_SRGB_BLOCK;
             case TextureFormat::BC5_UNORM: return VK_FORMAT_BC5_UNORM_BLOCK;
             case TextureFormat::BC6H_UFLOAT: return VK_FORMAT_BC6H_UFLOAT_BLOCK;
-            case TextureFormat::B10G11R11_UFLOAT_PACK32: return VK_FORMAT_B10G11R11_UFLOAT_PACK32;
-            case TextureFormat::R16G16_UNORM: return VK_FORMAT_R16G16_UNORM;
         }
         return VK_FORMAT_UNDEFINED;
     }
@@ -95,13 +87,11 @@ namespace qualquer::renderer {
             case VK_FORMAT_BC7_SRGB_BLOCK: return TextureFormat::BC7_SRGB;
             case VK_FORMAT_BC5_UNORM_BLOCK: return TextureFormat::BC5_UNORM;
             case VK_FORMAT_BC6H_UFLOAT_BLOCK: return TextureFormat::BC6H_UFLOAT;
-            case VK_FORMAT_B10G11R11_UFLOAT_PACK32: return TextureFormat::B10G11R11_UFLOAT_PACK32;
-            case VK_FORMAT_R16G16_UNORM: return TextureFormat::R16G16_UNORM;
             default: return std::nullopt;
         }
     }
 
-    /** @brief Bytes per compressed block, or per pixel for uncompressed formats. */
+    /** @brief Bytes per compressed block (all supported formats are 16 bytes/block). */
     static uint32_t block_bytes(const TextureFormat format) {
         switch (format) {
             case TextureFormat::BC7_UNORM:
@@ -109,38 +99,8 @@ namespace qualquer::renderer {
             case TextureFormat::BC5_UNORM:
             case TextureFormat::BC6H_UFLOAT:
                 return 16;
-            case TextureFormat::B10G11R11_UFLOAT_PACK32:
-            case TextureFormat::R16G16_UNORM:
-                return 4;
         }
         return 0;
-    }
-
-    /** @brief Whether the format is block-compressed (affects typeSize). */
-    static bool is_block_compressed(const TextureFormat format) {
-        switch (format) {
-            case TextureFormat::BC7_UNORM:
-            case TextureFormat::BC7_SRGB:
-            case TextureFormat::BC5_UNORM:
-            case TextureFormat::BC6H_UFLOAT:
-                return true;
-            case TextureFormat::B10G11R11_UFLOAT_PACK32:
-            case TextureFormat::R16G16_UNORM:
-                return false;
-        }
-        return false;
-    }
-
-    /** @brief Returns the KTX2 typeSize for a format. */
-    static uint32_t ktx2_type_size(const TextureFormat format) {
-        if (is_block_compressed(format)) {
-            return 1;
-        }
-        switch (format) {
-            case TextureFormat::R16G16_UNORM: return 2;
-            case TextureFormat::B10G11R11_UFLOAT_PACK32: return 4;
-            default: return 1;
-        }
     }
 
     // ---- DFD builder ----
@@ -234,39 +194,6 @@ namespace qualquer::renderer {
                                      {64, 63, kChannelG, 0, UINT32_MAX}
                                  });
 
-            case TextureFormat::B10G11R11_UFLOAT_PACK32:
-                return build_dfd({kDfModelRgbsda, kDfTransferLinear, 0, 0, 4},
-                                 {
-                                     {
-                                         0,
-                                         10,
-                                         static_cast<uint8_t>(kChannelR | kDfSampleFloat),
-                                         0,
-                                         0x3F800000
-                                     },
-                                     {
-                                         11,
-                                         10,
-                                         static_cast<uint8_t>(kChannelG | kDfSampleFloat),
-                                         0,
-                                         0x3F800000
-                                     },
-                                     {
-                                         22,
-                                         9,
-                                         static_cast<uint8_t>(kChannelB | kDfSampleFloat),
-                                         0,
-                                         0x3F800000
-                                     }
-                                 });
-
-            case TextureFormat::R16G16_UNORM:
-                return build_dfd({kDfModelRgbsda, kDfTransferLinear, 0, 0, 4},
-                                 {
-                                     {0, 15, kChannelR, 0, 0xFFFF},
-                                     {16, 15, kChannelG, 0, 0xFFFF}
-                                 });
-
             default:
                 return {};
         }
@@ -278,7 +205,7 @@ namespace qualquer::renderer {
         return (value + alignment - 1) & ~(alignment - 1);
     }
 
-    /** @brief Expected byte size of one mip level (all faces). */
+    /** @brief Expected byte size of one mip level (all faces, block-compressed). */
     static uint64_t expected_level_size(const TextureFormat format,
                                         const uint32_t base_width,
                                         const uint32_t base_height,
@@ -287,10 +214,7 @@ namespace qualquer::renderer {
         const uint32_t w = std::max(1u, base_width >> level);
         const uint32_t h = std::max(1u, base_height >> level);
         const uint32_t bb = block_bytes(format);
-        if (is_block_compressed(format)) {
-            return static_cast<uint64_t>((w + 3) / 4) * ((h + 3) / 4) * bb * face_count;
-        }
-        return static_cast<uint64_t>(w) * h * bb * face_count;
+        return static_cast<uint64_t>((w + 3) / 4) * ((h + 3) / 4) * bb * face_count;
     }
 
     // ---- write_ktx2 ----
@@ -321,7 +245,7 @@ namespace qualquer::renderer {
         Ktx2FileHeader header{};
         std::memcpy(header.identifier, kKtx2Identifier, 12);
         header.vk_format = to_vk_format(format);
-        header.type_size = ktx2_type_size(format);
+        header.type_size = 1;
         header.pixel_width = base_width;
         header.pixel_height = base_height;
         header.face_count = face_count;
@@ -424,9 +348,9 @@ namespace qualquer::renderer {
             spdlog::warn("ktx2: supercompression not supported: {}", path.string());
             return std::nullopt;
         }
-        if (header.type_size != ktx2_type_size(*format)) {
+        if (header.type_size != 1) {
             spdlog::warn("ktx2: typeSize mismatch (got {}, expected {}): {}",
-                         header.type_size, ktx2_type_size(*format), path.string());
+                         header.type_size, 1, path.string());
             return std::nullopt;
         }
 
