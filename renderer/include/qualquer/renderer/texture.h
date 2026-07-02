@@ -5,7 +5,6 @@
  * @brief Renderer layer — texture module.
  */
 
-#include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <memory>
