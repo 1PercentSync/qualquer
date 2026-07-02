@@ -31,7 +31,7 @@
 - [x] 从 KTX2/纹理模块中移除 `B10G11R11_UFLOAT_PACK32` 和 `R16G16_UNORM` 格式支持（Split-Sum 近似产物：irradiance cubemap 和 BRDF LUT，纯 PT 不需要）
 - [x] 从 ISPCTextureCompressor 复制 `kernel.ispc` + `ispc_texcomp.h/cpp`，创建 `third_party/ispc_texcomp/CMakeLists.txt`，顶层 `CMakeLists.txt` 新增 `add_subdirectory(third_party/ispc_texcomp)`
 - [x] 创建 `renderer/include/qualquer/renderer/texture.h` + `renderer/src/texture.cpp`，并注册 texture.cpp 到 `renderer/CMakeLists.txt`（链接 stb、bc7enc、ispc_texcomp）。LDR（TextureRole、ImageData、load_image、load_image_from_memory、ensure_bc_init、generate_cpu_mip_chain、compress_bc7/compress_bc5、load_cached_texture、compress_texture）+ HDR（compress_bc6h，共享缓存层）
-- [ ] 纹理 GPU 上传：在 texture.cpp 中实现 `finalize_texture`（`cudaMallocMipmappedArray` + 逐 level 上传 + `cudaCreateTextureObject`）。LDR 与 HDR（BC6H）均经此上传。可与上一项同文件实现，验收仍按复选框顺序
+- [x] 纹理 GPU 上传：在 texture.cpp 中实现 `finalize_texture`（`cudaMallocMipmappedArray` + 逐 level 上传 + `cudaCreateTextureObject`）。LDR 与 HDR（BC6H）均经此上传。可与上一项同文件实现，验收仍按复选框顺序
 - [ ] Default textures：实现 `create_default_textures`（1×1 white/flat_normal/black，R8G8B8A8 非压缩 CUDA 纹理）。可与 `texture.cpp` 同文件实现，验收仍按复选框顺序
 - [ ] 请求用户在 CLion 中编译验证
 - [ ] 验证 ISPC 压缩运行时正确（BC7/BC5 via bc7enc、BC6H via ISPCTextureCompressor，确认 ISPC dispatch 与压缩产出正常；HDR 路径经模块 API 端到端可验证）
