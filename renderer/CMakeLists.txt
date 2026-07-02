@@ -14,6 +14,7 @@ target_sources(qualquer_renderer PRIVATE
     src/camera.cpp
     src/cache.cpp
     src/ktx2.cpp
+    src/stb_impl.cpp
     src/texture.cpp
     src/tonemap.cu
 )
