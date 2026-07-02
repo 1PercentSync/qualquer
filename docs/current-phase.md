@@ -128,7 +128,7 @@ CUDA 从 11.5 起原生支持 BC1–BC7 压缩纹理。纹理通过 `cudaMipmapp
 
 ```
 LDR: stb_image 解码 → CPU mip 生成(stb_image_resize2) → BC7/BC5 压缩(bc7enc) → KTX2 缓存 → CUDA 上传
-HDR: fp16 数据 → CPU mip 生成 → BC6H 压缩(ISPCTextureCompressor) → KTX2 缓存 → CUDA 上传
+HDR: fp16 数据 → BC6H 压缩(ISPCTextureCompressor, base level only) → KTX2 缓存 → CUDA 上传
 ```
 
 LDR 材质纹理（baseColor/emissive/metallic-roughness/occlusion/normal）用 BC7/BC5 CPU 压缩（bc7enc ISPC）。HDR 纹理（IBL 环境贴图）用 BC6H CPU 压缩（ISPCTextureCompressor ISPC）。两条路径共享 KTX2 缓存层和 CUDA 上传（`finalize_texture`），全部纹理压缩与缓存能力在 Step 3 纹理模块就绪。
@@ -138,7 +138,7 @@ LDR 材质纹理（baseColor/emissive/metallic-roughness/occlusion/normal）用 
 | 路径 | 输入 | 压缩 | 缓存 / 上传 |
 |------|------|------|-------------|
 | LDR | `ImageData`（RGBA8，`stb_image` 解码） | `compress_texture(data, TextureRole, hash)` | `load_cached_texture(hash, role)` → `PreparedTexture` → `finalize_texture` |
-| HDR | fp16 RGBA（64 bpp，caller 提供或后续解码入口） | 与 LDR 对称的模块级压缩 / 缓存 API（内部调 `compress_bc6h`） | 同上，格式为 `BC6H_UFLOAT`；支持 2D 与 cubemap |
+| HDR | fp16 RGBA（64 bpp，caller 提供或后续解码入口） | 与 LDR 并列的模块级压缩 / 缓存 API（内部调 `compress_bc6h`，base level only） | 同上，格式为 `BC6H_UFLOAT`；支持 2D 与 cubemap |
 
 `compress_bc6h` 是 HDR 路径内部的原语（单 mip level、单 face），不是模块集成的完成标志。Step 3 验收要求 HDR 路径与 LDR 一样经缓存层与 `finalize_texture` 闭环，而非仅暴露 encoder wrapper。
 
@@ -152,7 +152,9 @@ LDR 材质纹理（baseColor/emissive/metallic-roughness/occlusion/normal）用 
 
 **BC6H HDR 压缩**（ISPCTextureCompressor）：
 
-HDR 纹理（IBL 环境贴图）使用 BC6H UFLOAT 格式，输入为 fp16 RGBA（64 bpp）。压缩通过 ISPCTextureCompressor 的 `CompressBlocksBC6H` 完成，Release 用 `veryslow` profile、Debug 用 `slow` profile（与 bc7enc 的 `slowest`/`slow` 策略一致）。IBL 是离线预处理（一次压缩、永久 KTX2 缓存），CPU 耗时完全可接受。集成位置：`texture.cpp` 的 HDR 压缩路径（CPU mip 链 → 逐 level 调 `compress_bc6h` → KTX2 写入），与 LDR 的 `compress_texture` 并列；不是 SceneLoader 或独立 wrapper 文件。
+HDR 纹理（IBL 环境贴图）使用 BC6H UFLOAT 格式，输入为 fp16 RGBA（64 bpp）。压缩通过 ISPCTextureCompressor 的 `CompressBlocksBC6H` 完成，Release 用 `veryslow` profile、Debug 用 `slow` profile（与 bc7enc 的 `slowest`/`slow` 策略一致）。IBL 是离线预处理（一次压缩、永久 KTX2 缓存），CPU 耗时完全可接受。集成位置：`texture.cpp` 的 HDR 压缩路径（base level only，cubemap 逐 face 调 `compress_bc6h` → KTX2 写入），与 LDR 的 `compress_texture` 并列；不是 SceneLoader 或独立 wrapper 文件。
+
+与 LDR 的关键差异：**HDR 不生成 mip 链**（`level_count = 1`）。纯 PT 中 IBL 环境贴图只在 miss / NEE / MIS 处被采样，全部是按光线方向的点采样（一条光线 → 一个方向 → 一次 `tex2D`），不存在光栅化的纹理 footprint 问题，抗锯齿靠像素内多条光线的蒙特卡洛累积。且 Qualquer 不用 split-sum 近似（去掉了 irradiance cubemap / BRDF LUT），mip 不具备"按粗糙度分层预过滤"的用途。因此 HDR 无 mip 消费者，生成 mip 链属过度设计。LDR 材质纹理保留 mip 是为 ray cone LOD（M1 移植范围）准备。
 
 与 Himalaya 的差异：Himalaya 使用 Vulkan GPU compute shader（`texture_compress.h/.cpp` + `bc6h.comp`），需完整 compute pipeline 编排；Qualquer 无 Vulkan compute 基础设施，且 CPU ISPC 编码器质量更优（更多 refine iteration），故选用 ISPCTextureCompressor。
 
