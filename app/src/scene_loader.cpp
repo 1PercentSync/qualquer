@@ -5,10 +5,12 @@
 
 #include <qualquer/app/scene_loader.h>
 
+#include <qualquer/renderer/mesh.h>
 #include <qualquer/renderer/texture.h>
 
 #include <fastgltf/core.hpp>
 #include <fastgltf/math.hpp>
+#include <fastgltf/tools.hpp>
 #include <fastgltf/types.hpp>
 #include <spdlog/spdlog.h>
 
@@ -97,9 +99,139 @@ namespace qualquer::app {
         }
     }
 
-    SceneLoader::MeshLoadResult SceneLoader::load_meshes(const fastgltf::Asset &) {
-        // Implemented in a subsequent task item.
-        return {};
+    SceneLoader::MeshLoadResult SceneLoader::load_meshes(const fastgltf::Asset &gltf) {
+        MeshLoadResult result;
+        result.prim_offsets.reserve(gltf.meshes.size() + 1);
+
+        for (size_t mesh_idx = 0; mesh_idx < gltf.meshes.size(); ++mesh_idx) {
+            const auto &gltf_mesh = gltf.meshes[mesh_idx];
+            result.prim_offsets.push_back(static_cast<uint32_t>(meshes_.size()));
+
+            for (const auto &primitive : gltf_mesh.primitives) {
+                // Position (required by glTF spec)
+                const auto pos_it = primitive.findAttribute("POSITION");
+                if (pos_it == primitive.attributes.end()) {
+                    throw std::runtime_error("Mesh '"
+                                             + std::string(gltf_mesh.name)
+                                             + "' primitive missing POSITION attribute");
+                }
+                const auto &pos_accessor = gltf.accessors[pos_it->accessorIndex];
+                const auto vertex_count = pos_accessor.count;
+
+                std::vector<renderer::Vertex> vertices(vertex_count);
+
+                // Compute local AABB from position data
+                glm::vec3 local_min(std::numeric_limits<float>::max());
+                glm::vec3 local_max(std::numeric_limits<float>::lowest());
+
+                {
+                    size_t i = 0;
+                    for (auto p : fastgltf::iterateAccessor<fastgltf::math::fvec3>(gltf, pos_accessor)) {
+                        vertices[i].position = {p.x(), p.y(), p.z()};
+                        local_min = glm::min(local_min, vertices[i].position);
+                        local_max = glm::max(local_max, vertices[i].position);
+                        ++i;
+                    }
+                }
+
+                // Normal (optional, default +Z)
+                bool has_normals = false;
+                if (const auto it = primitive.findAttribute("NORMAL");
+                    it != primitive.attributes.end()) {
+                    has_normals = true;
+                    const auto &accessor = gltf.accessors[it->accessorIndex];
+                    size_t i = 0;
+                    for (auto n : fastgltf::iterateAccessor<fastgltf::math::fvec3>(gltf, accessor)) {
+                        vertices[i].normal = {n.x(), n.y(), n.z()};
+                        ++i;
+                    }
+                } else {
+                    for (auto &v : vertices) {
+                        v.normal = {0.0f, 0.0f, 1.0f};
+                    }
+                }
+
+                // TEXCOORD_0 (optional, zero-initialized default is fine)
+                bool has_uv0 = false;
+                if (const auto it = primitive.findAttribute("TEXCOORD_0");
+                    it != primitive.attributes.end()) {
+                    has_uv0 = true;
+                    const auto &accessor = gltf.accessors[it->accessorIndex];
+                    size_t i = 0;
+                    for (auto uv : fastgltf::iterateAccessor<fastgltf::math::fvec2>(gltf, accessor)) {
+                        vertices[i].uv0 = {uv.x(), uv.y()};
+                        ++i;
+                    }
+                }
+
+                // TANGENT (optional)
+                bool has_tangent = false;
+                if (const auto it = primitive.findAttribute("TANGENT");
+                    it != primitive.attributes.end()) {
+                    has_tangent = true;
+                    const auto &accessor = gltf.accessors[it->accessorIndex];
+                    size_t i = 0;
+                    for (auto t : fastgltf::iterateAccessor<fastgltf::math::fvec4>(gltf, accessor)) {
+                        vertices[i].tangent = {t.x(), t.y(), t.z(), t.w()};
+                        ++i;
+                    }
+                }
+
+                // Indices (generate sequential if non-indexed)
+                std::vector<uint32_t> indices;
+                if (primitive.indicesAccessor.has_value()) {
+                    const auto &accessor = gltf.accessors[*primitive.indicesAccessor];
+                    indices.reserve(accessor.count);
+                    for (auto idx : fastgltf::iterateAccessor<uint32_t>(gltf, accessor)) {
+                        indices.push_back(idx);
+                    }
+                } else {
+                    indices.resize(vertex_count);
+                    for (size_t j = 0; j < vertex_count; ++j) {
+                        indices[j] = static_cast<uint32_t>(j);
+                    }
+                }
+
+                // Generate tangents via MikkTSpace if missing (needs normal + uv0)
+                if (!has_tangent && has_normals && has_uv0) {
+                    renderer::generate_tangents(vertices, indices);
+                }
+
+                // Create CUDA vertex and index buffers
+                optix::CudaBuffer<renderer::Vertex> vb;
+                vb.alloc(vertices.size());
+                vb.upload(vertices.data(), vertices.size(), nullptr);
+
+                optix::CudaBuffer<uint32_t> ib;
+                ib.alloc(indices.size());
+                ib.upload(indices.data(), indices.size(), nullptr);
+
+                // Material index
+                if (!primitive.materialIndex.has_value()) {
+                    throw std::runtime_error("Mesh '" + std::string(gltf_mesh.name)
+                                             + "' primitive has no material (required by renderer)");
+                }
+                const auto prim_material_id = static_cast<uint32_t>(*primitive.materialIndex);
+
+                meshes_.push_back({
+                    .vertex_buffer = std::move(vb),
+                    .index_buffer = std::move(ib),
+                    .vertex_count = static_cast<uint32_t>(vertices.size()),
+                    .index_count = static_cast<uint32_t>(indices.size()),
+                    .group_id = static_cast<uint32_t>(mesh_idx),
+                    .material_id = prim_material_id,
+                });
+
+                result.material_ids.push_back(prim_material_id);
+                result.local_bounds.push_back({local_min, local_max});
+            }
+        }
+
+        // Sentinel for the last mesh's primitive range
+        result.prim_offsets.push_back(static_cast<uint32_t>(meshes_.size()));
+
+        spdlog::info("Loaded {} mesh primitives", meshes_.size());
+        return result;
     }
 
     void SceneLoader::load_materials(const fastgltf::Asset &,
