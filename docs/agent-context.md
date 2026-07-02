@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 3 — 场景加载 + 完整材质系统 + 加速结构 + Primary Ray
-- **进度**：Phase 3 Step 3 全部完成。ISPC 运行时验证已移至 Step 4 编译验证后
+- **进度**：Phase 3 Step 4 第一小项完成：mesh.h + mesh.cpp 已创建（MikkTSpace tangent 生成，声明与实现拆分为 vertex.h/mesh.h）
 
 ### 下一个任务
 
-Phase 3 Step 4 第一小项：创建 renderer/src/mesh.cpp（generate_tangents — MikkTSpace）
+Phase 3 Step 4 第二小项：创建 scene_loader.h + scene_loader.cpp（SceneLoader 类骨架）
 
 > Phase 1、Phase 2 全部完成并归档。
 
