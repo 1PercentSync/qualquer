@@ -227,6 +227,40 @@ namespace qualquer::renderer {
         cudaTextureAddressMode address_mode_v;
     };
 
+    // ---- Default textures ----
+
+    /**
+     * @brief Holds the three default 1×1 textures for material fallback.
+     *
+     * Missing material texture slots are filled with these neutral values
+     * so the shader can always sample without special-casing.
+     */
+    struct DefaultTextures {
+        /** @brief 1×1 (1,1,1,1) — neutral base color / metallic-roughness / occlusion. */
+        optix::CudaTexture white;
+
+        /** @brief 1×1 (0.5,0.5,1.0,1.0) — tangent-space Z-up, no perturbation. */
+        optix::CudaTexture flat_normal;
+
+        /** @brief 1×1 (0,0,0,1) — no emission. */
+        optix::CudaTexture black;
+    };
+
+    /**
+     * @brief Creates three default 1×1 R8G8B8A8 textures for material fallback.
+     *
+     * Each texture is a single float32×4 texel allocated via
+     * @c cudaMallocMipmappedArray (1 level) with @c cudaReadModeElementType,
+     * matching BC textures' read mode so @c tex2D<float4>() works uniformly.
+     * Sampler is point-filter + clamp (1×1 has only one texel, so filter/wrap
+     * mode has no practical effect).
+     *
+     * @return DefaultTextures holding three RAII CudaTexture handles.
+     */
+    [[nodiscard]] DefaultTextures create_default_textures();
+
+    // ---- GPU upload ----
+
     /**
      * @brief Uploads a PreparedTexture to the GPU and creates a CUDA texture object.
      *

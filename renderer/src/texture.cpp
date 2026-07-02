@@ -504,6 +504,64 @@ namespace qualquer::renderer {
         return result;
     }
 
+    // ---- Default textures ----
+
+    namespace {
+        /// Creates a 1×1 float32x4 CUDA texture with the given solid color.
+        optix::CudaTexture create_solid_texture(
+            const float r, const float g, const float b, const float a) {
+            const auto channel_desc = cudaCreateChannelDesc(
+                32, 32, 32, 32, cudaChannelFormatKindFloat);
+
+            // Allocate a 1-level mipmapped array (keeps CudaTexture::destroy uniform).
+            cudaMipmappedArray_t mipmap_array = nullptr;
+            CUDA_CHECK(cudaMallocMipmappedArray(
+                &mipmap_array, &channel_desc, make_cudaExtent(1, 1, 0), 1, 0));
+
+            cudaArray_t level_array = nullptr;
+            CUDA_CHECK(cudaGetMipmappedArrayLevel(&level_array, mipmap_array, 0));
+
+            const float pixels[4] = {r, g, b, a};
+            CUDA_CHECK(cudaMemcpy2DToArray(
+                level_array, 0, 0,
+                pixels,
+                16, // srcPitch (1 pixel × 4 floats × 4 bytes)
+                16, // width in bytes
+                1,  // height in rows
+                cudaMemcpyHostToDevice));
+
+            cudaResourceDesc res_desc = {};
+            res_desc.resType = cudaResourceTypeMipmappedArray;
+            res_desc.res.mipmap.mipmap = mipmap_array;
+
+            cudaTextureDesc tex_desc = {};
+            tex_desc.addressMode[0] = cudaAddressModeClamp;
+            tex_desc.addressMode[1] = cudaAddressModeClamp;
+            tex_desc.addressMode[2] = cudaAddressModeClamp;
+            tex_desc.filterMode = cudaFilterModePoint;
+            tex_desc.mipmapFilterMode = cudaFilterModePoint;
+            tex_desc.readMode = cudaReadModeElementType;
+            tex_desc.normalizedCoords = 1;
+
+            cudaTextureObject_t texture_object = 0;
+            CUDA_CHECK(cudaCreateTextureObject(
+                &texture_object, &res_desc, &tex_desc, nullptr));
+
+            optix::CudaTexture result;
+            result.mipmap_array = mipmap_array;
+            result.texture_object = texture_object;
+            return result;
+        }
+    } // namespace
+
+    DefaultTextures create_default_textures() {
+        DefaultTextures defaults;
+        defaults.white = create_solid_texture(1.0f, 1.0f, 1.0f, 1.0f);
+        defaults.flat_normal = create_solid_texture(0.5f, 0.5f, 1.0f, 1.0f);
+        defaults.black = create_solid_texture(0.0f, 0.0f, 0.0f, 1.0f);
+        return defaults;
+    }
+
     // ---- HDR (BC6H) cache + compress, cubemap only ----
 
     std::optional<PreparedTexture> load_cached_texture_bc6h(const std::string_view source_hash) {
