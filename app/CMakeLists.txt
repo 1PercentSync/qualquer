@@ -1,7 +1,10 @@
+find_package(fastgltf CONFIG REQUIRED)
+
 add_executable(qualquer_app
     src/main.cpp
     src/application.cpp
     src/camera_controller.cpp
+    src/scene_loader.cpp
 )
 
 target_include_directories(qualquer_app
@@ -11,6 +14,7 @@ target_include_directories(qualquer_app
 target_link_libraries(qualquer_app
     PRIVATE qualquer_renderer
     PRIVATE qualquer_optix
+    PRIVATE fastgltf::fastgltf
 )
 
 # Deploy OptiX IR to the executable's runtime directory so Pipeline::init can
