@@ -34,7 +34,6 @@
 - [x] 纹理 GPU 上传：在 texture.cpp 中实现 `finalize_texture`（`cudaMallocMipmappedArray` + 逐 level 上传 + `cudaCreateTextureObject`）。LDR 与 HDR（BC6H）均经此上传。可与上一项同文件实现，验收仍按复选框顺序
 - [x] Default textures：实现 `create_default_textures`（1×1 white/flat_normal/black，float32×4 CUDA 纹理）。可与 `texture.cpp` 同文件实现，验收仍按复选框顺序
 - [x] 请求用户在 CLion 中编译验证
-- [ ] 验证 ISPC 压缩运行时正确（BC7/BC5 via bc7enc、BC6H via ISPCTextureCompressor，确认 ISPC dispatch 与压缩产出正常；HDR 路径经模块 API 端到端可验证）
 - [x] 检查压缩参数是否最优（bc7enc preset、ISPCTextureCompressor BC6H profile）。并行策略：确认 OpenMP 在 SceneLoader 纹理级（Step 4），不在 `texture.cpp` 内
 
 ## Step 4：材质系统 + 场景加载
@@ -46,6 +45,7 @@
 - [ ] SceneLoader::load_materials（sampler 转换、纹理加载 + BC 压缩 + 缓存 + CUDA 上传、Material 填充 + default fallback、材质数组上传）。纹理级 OpenMP：`#pragma omp parallel for schedule(dynamic)` 并行调用 `compress_texture`（照搬 Himalaya `scene_loader.cpp` Phase 2c；单张纹理内部串行）
 - [ ] SceneLoader::build_mesh_instances（场景图遍历、transform 收集、scene AABB 计算）
 - [ ] 请求用户在 CLion 中编译验证
+- [ ] 验证 ISPC 压缩运行时正确（BC7/BC5 via bc7enc、BC6H via ISPCTextureCompressor，确认 ISPC dispatch 与压缩产出正常；场景加载后端到端可验证）
 
 ## Step 5：OptiX 加速结构
 
