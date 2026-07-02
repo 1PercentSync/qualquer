@@ -437,7 +437,7 @@ raygen 和 miss record 仍保持 header-only（这些程序通过 `LaunchParams`
 
 ### Renderer 变化
 
-- **init 扩展**：接收场景数据（Mesh 列表、材质、纹理、MeshInstance），构建 AS，上传 geometry info / 材质 / 纹理 object 数组，重建 SBT
+- **init 扩展**：接收 SceneLoader 的公开接口（meshes、mesh_instances、material_buffer、texture_objects_buffer），构建 AS，构建 geometry info buffer，重建 SBT
 - **submit_cuda 更新**：LaunchParams 填入相机矩阵 + TLAS handle + 数据指针，`optixLaunch` 的 traversable 从 0 变为 TLAS handle
 - **resize 扩展**：累积 buffer 重建（不变），AS / 材质 / 纹理不受 resize 影响
 
