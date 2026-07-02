@@ -40,7 +40,7 @@
 
 - [x] 创建 `renderer/include/qualquer/renderer/mesh.h`（generate_tangents 声明）+ `renderer/src/mesh.cpp`（MikkTSpace 实现），并注册 mesh.cpp 到 `renderer/CMakeLists.txt`（链接 mikktspace）
 - [x] 创建 `app/include/qualquer/app/scene_loader.h` + `app/src/scene_loader.cpp`（SceneLoader：load / destroy / meshes / mesh_instances / scene_bounds 等），并注册 scene_loader.cpp 到 `app/CMakeLists.txt`
-- [ ] SceneLoader::load_meshes（遍历 glTF primitive，提取顶点，生成 tangent，创建 CudaBuffer，计算 AABB）
+- [x] SceneLoader::load_meshes（遍历 glTF primitive，提取顶点，生成 tangent，创建 CudaBuffer，计算 AABB）
 - [ ] SceneLoader::load_materials（sampler 转换、纹理加载 + BC 压缩 + 缓存 + CUDA 上传、Material 填充 + default fallback、材质数组上传）。纹理级 OpenMP：`#pragma omp parallel for schedule(dynamic)` 并行调用 `compress_texture`（照搬 Himalaya `scene_loader.cpp` Phase 2c；单张纹理内部串行）
 - [ ] SceneLoader::build_mesh_instances（场景图遍历、transform 收集、scene AABB 计算）
 - [ ] 请求用户在 CLion 中编译验证
