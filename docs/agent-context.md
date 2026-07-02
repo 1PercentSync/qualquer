@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 3 — 场景加载 + 完整材质系统 + 加速结构 + Primary Ray
-- **进度**：Phase 3 Step 3 第七小项完成：finalize_texture 已实现（cudaMallocMipmappedArray + 逐 level 上传 + cudaCreateTextureObject + SamplerDesc 参数化）
+- **进度**：Phase 3 Step 3 完成（编译通过、压缩参数已审查）。剩余：ISPC 压缩运行时验证（需场景加载后端到端测试）
 
 ### 下一个任务
 
-Phase 3 Step 3 第八小项：Default textures — create_default_textures（1×1 white/flat_normal/black，R8G8B8A8 非压缩 CUDA 纹理）
+Phase 3 Step 3 最后一项：验证 ISPC 压缩运行时正确（BC7/BC5 via bc7enc、BC6H via ISPCTextureCompressor）。需场景加载后端到端可验证，可在 Step 4 后回归
 
 > Phase 1、Phase 2 全部完成并归档。
 
