@@ -543,9 +543,46 @@ namespace qualquer::app {
                      gpu_materials_.size(), textures_.size());
     }
 
-    void SceneLoader::build_mesh_instances(fastgltf::Asset &,
-                                           const MeshLoadResult &) {
-        // Implemented in a subsequent task item.
+    void SceneLoader::build_mesh_instances(fastgltf::Asset &gltf,
+                                           const MeshLoadResult &mesh_data) {
+        if (gltf.scenes.empty()) {
+            spdlog::warn("No scenes in glTF file, no mesh instances created");
+            return;
+        }
+
+        const auto scene_index = gltf.defaultScene.value_or(0);
+
+        fastgltf::iterateSceneNodes(
+            gltf, scene_index, fastgltf::math::fmat4x4(1.0f),
+            [&](fastgltf::Node &node, const fastgltf::math::fmat4x4 &world_transform) {
+                if (!node.meshIndex.has_value()) { return; }
+
+                const auto world_mat = convert_matrix(world_transform);
+                const auto gltf_mesh_idx = *node.meshIndex;
+                const uint32_t prim_start = mesh_data.prim_offsets[gltf_mesh_idx];
+                const uint32_t prim_end = mesh_data.prim_offsets[gltf_mesh_idx + 1];
+
+                for (uint32_t i = prim_start; i < prim_end; ++i) {
+                    mesh_instances_.push_back({
+                        .mesh_id = i,
+                        .material_id = mesh_data.material_ids[i],
+                        .transform = world_mat,
+                        .world_bounds = transform_aabb(mesh_data.local_bounds[i], world_mat),
+                    });
+                }
+            });
+
+        spdlog::info("Created {} mesh instances from {} nodes",
+                     mesh_instances_.size(), gltf.nodes.size());
+
+        // Compute scene AABB (union of all instance world_bounds)
+        if (!mesh_instances_.empty()) {
+            scene_bounds_ = mesh_instances_[0].world_bounds;
+            for (size_t i = 1; i < mesh_instances_.size(); ++i) {
+                scene_bounds_.min = glm::min(scene_bounds_.min, mesh_instances_[i].world_bounds.min);
+                scene_bounds_.max = glm::max(scene_bounds_.max, mesh_instances_[i].world_bounds.max);
+            }
+        }
     }
 
     void SceneLoader::destroy() {
