@@ -2,6 +2,7 @@ find_package(imgui CONFIG REQUIRED)
 find_package(OptiX REQUIRED)
 find_package(xxHash CONFIG REQUIRED)
 find_package(Stb REQUIRED)
+find_package(mikktspace CONFIG REQUIRED)
 
 include(CompileOptiXIR)
 
@@ -16,6 +17,7 @@ target_sources(qualquer_renderer PRIVATE
     src/ktx2.cpp
     src/stb_impl.cpp
     src/texture.cpp
+    src/mesh.cpp
     src/tonemap.cu
 )
 
@@ -31,6 +33,7 @@ target_link_libraries(qualquer_renderer
     PRIVATE xxHash::xxhash
     PRIVATE bc7enc
     PRIVATE ispc_texcomp
+    PRIVATE mikktspace::mikktspace
 )
 
 # Expose device programs to CLion's code model (inherits target include paths)
