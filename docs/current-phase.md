@@ -131,9 +131,18 @@ LDR: stb_image 解码 → CPU mip 生成(stb_image_resize2) → BC7/BC5 压缩(b
 HDR: fp16 数据 → CPU mip 生成 → BC6H 压缩(ISPCTextureCompressor) → KTX2 缓存 → CUDA 上传
 ```
 
-LDR 材质纹理（baseColor/emissive/metallic-roughness/occlusion/normal）用 BC7/BC5 CPU 压缩（bc7enc ISPC）。HDR 纹理（IBL 环境贴图）用 BC6H CPU 压缩（ISPCTextureCompressor ISPC）。两条路径共享 KTX2 缓存层和 CUDA 上传（`finalize_texture`），全部纹理压缩与缓存能力在 Phase 3 就绪。
+LDR 材质纹理（baseColor/emissive/metallic-roughness/occlusion/normal）用 BC7/BC5 CPU 压缩（bc7enc ISPC）。HDR 纹理（IBL 环境贴图）用 BC6H CPU 压缩（ISPCTextureCompressor ISPC）。两条路径共享 KTX2 缓存层和 CUDA 上传（`finalize_texture`），全部纹理压缩与缓存能力在 Step 3 纹理模块就绪。
 
-**TextureRole**（决定 BC 格式）：
+**模块 API**（renderer 层，`texture.h`）：
+
+| 路径 | 输入 | 压缩 | 缓存 / 上传 |
+|------|------|------|-------------|
+| LDR | `ImageData`（RGBA8，`stb_image` 解码） | `compress_texture(data, TextureRole, hash)` | `load_cached_texture(hash, role)` → `PreparedTexture` → `finalize_texture` |
+| HDR | fp16 RGBA（64 bpp，caller 提供或后续解码入口） | 与 LDR 对称的模块级压缩 / 缓存 API（内部调 `compress_bc6h`） | 同上，格式为 `BC6H_UFLOAT`；支持 2D 与 cubemap |
+
+`compress_bc6h` 是 HDR 路径内部的原语（单 mip level、单 face），不是模块集成的完成标志。Step 3 验收要求 HDR 路径与 LDR 一样经缓存层与 `finalize_texture` 闭环，而非仅暴露 encoder wrapper。
+
+**TextureRole**（LDR，决定 BC 格式）：
 
 | Role | BC 格式 | 用途 |
 |------|---------|------|
@@ -143,7 +152,7 @@ LDR 材质纹理（baseColor/emissive/metallic-roughness/occlusion/normal）用 
 
 **BC6H HDR 压缩**（ISPCTextureCompressor）：
 
-HDR 纹理（IBL 环境贴图）使用 BC6H UFLOAT 格式，输入为 fp16 RGBA（64 bpp）。压缩通过 ISPCTextureCompressor 的 `CompressBlocksBC6H` 完成，Release 用 `veryslow` profile、Debug 用 `slow` profile（与 bc7enc 的 `slowest`/`slow` 策略一致）。IBL 是离线预处理（一次压缩、永久 KTX2 缓存），CPU 耗时完全可接受。
+HDR 纹理（IBL 环境贴图）使用 BC6H UFLOAT 格式，输入为 fp16 RGBA（64 bpp）。压缩通过 ISPCTextureCompressor 的 `CompressBlocksBC6H` 完成，Release 用 `veryslow` profile、Debug 用 `slow` profile（与 bc7enc 的 `slowest`/`slow` 策略一致）。IBL 是离线预处理（一次压缩、永久 KTX2 缓存），CPU 耗时完全可接受。集成位置：`texture.cpp` 的 HDR 压缩路径（CPU mip 链 → 逐 level 调 `compress_bc6h` → KTX2 写入），与 LDR 的 `compress_texture` 并列；不是 SceneLoader 或独立 wrapper 文件。
 
 与 Himalaya 的差异：Himalaya 使用 Vulkan GPU compute shader（`texture_compress.h/.cpp` + `bc6h.comp`），需完整 compute pipeline 编排；Qualquer 无 Vulkan compute 基础设施，且 CPU ISPC 编码器质量更优（更多 refine iteration），故选用 ISPCTextureCompressor。
 
@@ -175,7 +184,11 @@ struct CudaTexture {
 
 从 Himalaya 照搬 cache 和 KTX2 模块。缓存路径改为 `%TEMP%\qualquer\textures\`。content hash 用 xxhash（XXH3_128），按源字节（JPEG/PNG 原始数据）计算，避免无意义的解码+重压缩。
 
-缓存查询（`load_cached_texture`）与压缩（`compress_texture`）为独立公开函数，调用方按源字节 hash 串接：先查缓存命中则跳过解码，miss 才解码并压缩。不提供 Himalaya 的 `prepare_texture`（其 hash 解码后像素，与源字节 hash 策略冲突，会产生查不到的死缓存）。
+缓存查询（`load_cached_texture`）与压缩（`compress_texture`）为独立公开函数，调用方按源字节 hash 串接：先查缓存命中则跳过解码，miss 才解码并压缩。LDR 用 `TextureRole` 区分 BC 格式；HDR 用格式 / 路径参数区分（如 cubemap faceCount）。不提供 Himalaya 的 `prepare_texture`（其 hash 解码后像素，与源字节 hash 策略冲突，会产生查不到的死缓存）。
+
+**压缩并行度**（与 Himalaya 一致，归属 SceneLoader，不在 `texture.cpp`）：
+
+Himalaya 在 `SceneLoader::load_materials` 对**多张纹理**做 OpenMP 并行（`#pragma omp parallel for schedule(dynamic)`），每张纹理串行调用 `compress_texture`；`texture.cpp` 内单张纹理的 mip / block 压缩保持串行，块内并行由 bc7e ISPC SIMD 承担。Qualquer 照搬此分层：OpenMP 在 Step 4 SceneLoader，不在 Step 3 `compress_texture` 内。
 
 KTX2 文件的 `vkFormat` 字段使用 Vulkan 枚举常量（`VK_FORMAT_*`），renderer 依赖 vulkan 层（架构允许的单向依赖），不硬编码数值。
 
@@ -257,7 +270,7 @@ app 层，从 Himalaya 照搬加载逻辑，适配 CUDA 资源。
 | 纹理 | VkImage + bindless descriptor | `cudaMipmappedArray` + `cudaTextureObject_t` |
 | 材质 SSBO | Vulkan SSBO（descriptor binding） | `CudaBuffer<Material>` |
 | RT buffer flags | `ShaderDeviceAddress` + `AccelStructBuildInput` | 不需要（OptiX 直接用 CUDA 指针） |
-| 纹理并行压缩 | OpenMP `#pragma omp parallel for` | 照搬（MSVC 支持 OpenMP） |
+| 纹理并行压缩 | SceneLoader 纹理级 OpenMP（`#pragma omp parallel for schedule(dynamic)`，并行调 `compress_texture`） | 照搬（MSVC 支持 OpenMP）；不在 `texture.cpp` 内 |
 
 ### OptiX 加速结构
 
@@ -368,7 +381,7 @@ Phase 3 primary ray 不需要 bounce，payload 用于 closest hit → raygen 回
 
 **`__miss__ms`**：
 - 输出背景色（固定颜色，如深灰），hit_distance = -1 信号终止
-- Phase 6 接入 IBL 后改为环境贴图采样
+- 接入 IBL 后改为环境贴图采样
 
 **`__anyhit__ah`**：
 - Phase 3 保持空实现（全部视为 opaque）

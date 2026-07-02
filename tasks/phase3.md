@@ -30,12 +30,12 @@
 - [x] 创建 `renderer/include/qualquer/renderer/ktx2.h` + `renderer/src/ktx2.cpp`（Ktx2Data、read_ktx2、write_ktx2），并注册 ktx2.cpp 到 `renderer/CMakeLists.txt`。支持格式集：BC7 UNORM/SRGB、BC5 UNORM、BC6H UFloat、B10G11R11_UFLOAT_PACK32、R16G16_UNORM，2D 与 cubemap（faceCount=6）
 - [x] 从 KTX2/纹理模块中移除 `B10G11R11_UFLOAT_PACK32` 和 `R16G16_UNORM` 格式支持（Split-Sum 近似产物：irradiance cubemap 和 BRDF LUT，纯 PT 不需要）
 - [x] 从 ISPCTextureCompressor 复制 `kernel.ispc` + `ispc_texcomp.h/cpp`，创建 `third_party/ispc_texcomp/CMakeLists.txt`，顶层 `CMakeLists.txt` 新增 `add_subdirectory(third_party/ispc_texcomp)`
-- [ ] 创建 `renderer/include/qualquer/renderer/texture.h` + `renderer/src/texture.cpp`（TextureRole、ImageData、load_image、load_image_from_memory、ensure_bc_init、generate_cpu_mip_chain、compress_bc7/bc5/bc6h、load_cached_texture、compress_texture），并注册 texture.cpp 到 `renderer/CMakeLists.txt`（链接 stb、bc7enc、ispc_texcomp）
-- [ ] 纹理 GPU 上传：在 texture.cpp 中实现 `finalize_texture`（`cudaMallocMipmappedArray` + 逐 level 上传 + `cudaCreateTextureObject`）
-- [ ] Default textures：实现 `create_default_textures`（1×1 white/flat_normal/black，R8G8B8A8 非压缩 CUDA 纹理）
+- [ ] 创建 `renderer/include/qualquer/renderer/texture.h` + `renderer/src/texture.cpp`，并注册 texture.cpp 到 `renderer/CMakeLists.txt`（链接 stb、bc7enc、ispc_texcomp）。LDR 路径：`TextureRole`、`ImageData`、`load_image`、`load_image_from_memory`、`ensure_bc_init`、`generate_cpu_mip_chain`、`compress_bc7`/`compress_bc5`、`load_cached_texture`、`compress_texture`（解码 → CPU mip → BC7/BC5 → KTX2 缓存，与 `current-phase.md` 一致）。HDR 路径：fp16 输入 → CPU mip → `compress_bc6h` → KTX2 缓存，接入与 LDR 对称的模块级 API（`load_cached_texture` / 压缩入口共享缓存层，非孤立 `compress_bc6h` wrapper）。`compress_bc6h` 为路径内部原语，不单独算作 HDR 集成完成
+- [ ] 纹理 GPU 上传：在 texture.cpp 中实现 `finalize_texture`（`cudaMallocMipmappedArray` + 逐 level 上传 + `cudaCreateTextureObject`）。LDR 与 HDR（BC6H）均经此上传。可与上一项同文件实现，验收仍按复选框顺序
+- [ ] Default textures：实现 `create_default_textures`（1×1 white/flat_normal/black，R8G8B8A8 非压缩 CUDA 纹理）。可与 `texture.cpp` 同文件实现，验收仍按复选框顺序
 - [ ] 请求用户在 CLion 中编译验证
-- [ ] 验证 ISPC 压缩运行时正确（BC7/BC5 via bc7enc、BC6H via ISPCTextureCompressor，确认 ISPC dispatch 与压缩产出正常）
-- [ ] 检查压缩参数是否最优（bc7enc preset、ISPCTextureCompressor BC6H profile、并行策略等）
+- [ ] 验证 ISPC 压缩运行时正确（BC7/BC5 via bc7enc、BC6H via ISPCTextureCompressor，确认 ISPC dispatch 与压缩产出正常；HDR 路径经模块 API 端到端可验证）
+- [ ] 检查压缩参数是否最优（bc7enc preset、ISPCTextureCompressor BC6H profile）。并行策略：确认 OpenMP 在 SceneLoader 纹理级（Step 4），不在 `texture.cpp` 内
 
 ## Step 4：材质系统 + 场景加载
 
@@ -43,7 +43,7 @@
 - [ ] 创建 `renderer/src/mesh.cpp`（generate_tangents — MikkTSpace），并注册 mesh.cpp 到 `renderer/CMakeLists.txt`（链接 mikktspace）
 - [ ] 创建 `app/include/qualquer/app/scene_loader.h` + `app/src/scene_loader.cpp`（SceneLoader：load / destroy / meshes / mesh_instances / scene_bounds 等），并注册 scene_loader.cpp 到 `app/CMakeLists.txt`
 - [ ] SceneLoader::load_meshes（遍历 glTF primitive，提取顶点，生成 tangent，创建 CudaBuffer，计算 AABB）
-- [ ] SceneLoader::load_materials（sampler 转换、纹理加载 + BC 压缩 + 缓存 + CUDA 上传、Material 填充 + default fallback、材质数组上传）
+- [ ] SceneLoader::load_materials（sampler 转换、纹理加载 + BC 压缩 + 缓存 + CUDA 上传、Material 填充 + default fallback、材质数组上传）。纹理级 OpenMP：`#pragma omp parallel for schedule(dynamic)` 并行调用 `compress_texture`（照搬 Himalaya `scene_loader.cpp` Phase 2c；单张纹理内部串行）
 - [ ] SceneLoader::build_mesh_instances（场景图遍历、transform 收集、scene AABB 计算）
 - [ ] 请求用户在 CLion 中编译验证
 
