@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 3 — 场景加载 + 完整材质系统 + 加速结构 + Primary Ray
-- **进度**：Phase 3 Step 3 进行中——CudaTexture、cache、ktx2、ISPCTextureCompressor 已完成；当前复选框 `texture.h` / `texture.cpp` 进行中（LDR 路径已有初稿，HDR 模块集成未完成）
+- **进度**：Phase 3 Step 3 第五小项完成：ISPCTextureCompressor 已集成（kernel.ispc + ispc_texcomp.h/cpp 复制，CMakeLists.txt 创建并接入顶层构建）
 
 ### 下一个任务
 
-完成 `texture.h` + `texture.cpp`：LDR 路径 + HDR 接入模块级缓存/压缩 API（见 `docs/current-phase.md` 模块 API 表、`tasks/phase3.md` Step 3 当前未勾选项）。
+Phase 3 Step 3 第六小项：创建 texture.h + texture.cpp（LDR + HDR 双路径：TextureRole、load_image、compress_texture、compress_bc6h、load_cached_texture）
 
 > Phase 1、Phase 2 全部完成并归档。
 
