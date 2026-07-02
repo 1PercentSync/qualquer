@@ -15,7 +15,7 @@
 
 ### 下一个任务
 
-Phase 3 Step 4 第一小项：创建 gltf_utils.h + gltf_utils.cpp（parse_gltf、transform_aabb）
+Phase 3 Step 4 第一小项：创建 renderer/src/mesh.cpp（generate_tangents — MikkTSpace）
 
 > Phase 1、Phase 2 全部完成并归档。
 

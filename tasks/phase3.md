@@ -38,7 +38,6 @@
 
 ## Step 4：材质系统 + 场景加载
 
-- [ ] 创建 `app/include/qualquer/app/gltf_utils.h` + `app/src/gltf_utils.cpp`（parse_gltf、transform_aabb），并注册 gltf_utils.cpp 到 `app/CMakeLists.txt`（链接 fastgltf）
 - [ ] 创建 `renderer/src/mesh.cpp`（generate_tangents — MikkTSpace），并注册 mesh.cpp 到 `renderer/CMakeLists.txt`（链接 mikktspace）
 - [ ] 创建 `app/include/qualquer/app/scene_loader.h` + `app/src/scene_loader.cpp`（SceneLoader：load / destroy / meshes / mesh_instances / scene_bounds 等），并注册 scene_loader.cpp 到 `app/CMakeLists.txt`
 - [ ] SceneLoader::load_meshes（遍历 glTF primitive，提取顶点，生成 tangent，创建 CudaBuffer，计算 AABB）
