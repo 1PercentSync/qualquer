@@ -60,19 +60,18 @@ namespace qualquer::renderer {
         };
     }
 
-    // ---- BC encoder one-time init ----
-
-    void ensure_bc_init() {
-        static std::once_flag flag;
-        std::call_once(flag, [] {
-            ispc::bc7e_compress_block_init();
-            rgbcx::init(rgbcx::bc1_approx_mode::cBC1Ideal);
-        });
-    }
-
     // ---- internal helpers ----
 
     namespace {
+        /// Performs one-time initialization of the bc7e/rgbcx encoders.
+        /// Idempotent (guarded by std::once_flag).
+        void ensure_bc_init() {
+            static std::once_flag flag;
+            std::call_once(flag, [] {
+                ispc::bc7e_compress_block_init();
+                rgbcx::init(rgbcx::bc1_approx_mode::cBC1Ideal);
+            });
+        }
         /// Rounds up to the next multiple of 4 (BC block alignment).
         uint32_t align4(const uint32_t v) { return (v + 3u) & ~3u; }
 

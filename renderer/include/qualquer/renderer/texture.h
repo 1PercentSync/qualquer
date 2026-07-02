@@ -126,18 +126,6 @@ namespace qualquer::renderer {
      */
     [[nodiscard]] ImageData load_image_from_memory(const uint8_t *buffer, std::size_t byte_length);
 
-    // ---- LDR: BC encoder one-time init ----
-
-    /**
-     * @brief Performs one-time initialization of the bc7e/rgbcx encoders.
-     *
-     * Idempotent (guarded by std::once_flag). compress_texture() calls this
-     * internally, so callers need not invoke it; it is exposed only for
-     * pre-warming ahead of timed batches. The BC6H path does not use these
-     * encoders and does not require initialization.
-     */
-    void ensure_bc_init();
-
     // ---- LDR: cache lookup + compression ----
 
     /**
