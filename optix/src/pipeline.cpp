@@ -68,12 +68,11 @@ namespace qualquer::optix {
         // traversableGraphFlags selects single-level instancing (TLAS->BLAS), the
         // graph shape used for instanced geometry, over the broader ALLOW_ANY so
         // the traversal shader compiles for the actual graph depth rather than the
-        // most general one. numPayloadValues=0: the device programs issue no
-        // optixTrace, so no payload registers are reserved, and without optixTrace
-        // there is no traversal, so the graph flag carries no runtime cost.
+        // most general one. numPayloadValues=3: shading color (RGB float3).
+        // numAttributeValues=2: triangle barycentrics (built-in, unchanged).
         const OptixPipelineCompileOptions pipeline_options{
             .traversableGraphFlags = OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
-            .numPayloadValues = 0,
+            .numPayloadValues = 3,
             .numAttributeValues = 2,
             .pipelineLaunchParamsVariableName = launch_params_variable_name,
             .pipelineLaunchParamsSizeInBytes = launch_params_size,
@@ -128,11 +127,10 @@ namespace qualquer::optix {
         miss_program = program_groups[1];
         hitgroup_program = program_groups[2];
 
-        // maxTraceDepth=0 is permitted by OptiX: raygen launches but traces no
-        // rays (no optixTrace call), so no continuation stack for tracing is
-        // reserved.
+        // maxTraceDepth=1: primary ray only (raygen → closesthit/miss, no
+        // recursive trace from hit shaders).
         constexpr OptixPipelineLinkOptions link_options{
-            .maxTraceDepth = 0,
+            .maxTraceDepth = 1,
         };
 
         OPTIX_CHECK(optixPipelineCreate(device_context,
@@ -144,13 +142,13 @@ namespace qualquer::optix {
                                         nullptr,
                                         &handle));
 
+        // maxTraceDepth=1 matches link options (primary ray only).
         // maxTraversableGraphDepth=0 lets OptiX derive the default from
-        // traversableGraphFlags (single-level instancing -> depth 2), matching the
-        // TLAS->BLAS graph depth. Trace and callable depths are 0 since no
-        // optixTrace or callable programs are used.
+        // traversableGraphFlags (single-level instancing → depth 2, matching
+        // the TLAS→BLAS graph). No callable programs are used.
         OPTIX_CHECK(optixPipelineSetStackSizeFromCallDepths(
             handle,
-            /*maxTraceDepth=*/0,
+            /*maxTraceDepth=*/1,
             /*maxContinuationCallableDepth=*/0,
             /*maxDirectCallableDepthFromState=*/0,
             /*maxDirectCallableDepthFromTraversal=*/0,
