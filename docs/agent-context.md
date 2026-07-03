@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 3 — 场景加载 + 完整材质系统 + 加速结构 + Primary Ray
-- **进度**：Phase 3 Step 6 第一小项完成：launch_params.h 已扩展（float4x4 类型定义、LaunchParams 新增 traversable/geometry_infos/materials/texture_objects/inv_view/inv_projection）
+- **进度**：Phase 3 Step 6 第二小项完成：Pipeline 参数已更新（numPayloadValues = 3、maxTraceDepth = 1、stack size 同步）
 
 ### 下一个任务
 
-Phase 3 Step 6 第二小项：更新 Pipeline 参数（numPayloadValues = 6、maxTraceDepth = 1、stack size 更新）
+Phase 3 Step 6 第三小项：`__raygen__rg` 实现（inverse matrix primary ray 生成 → optixTrace → payload 读取 → 写累积 buffer）
 
 > Phase 1、Phase 2 全部完成并归档。
 

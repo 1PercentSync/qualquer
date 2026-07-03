@@ -56,7 +56,7 @@
 
 - [x] launch_params.h 新增 `float4x4` 类型定义 + 扩展 LaunchParams（traversable、geometry_infos、materials、texture_objects、inv_view、inv_projection）
 MUSTREAD:4
-- [ ] 更新 Pipeline 参数：`numPayloadValues` = 6、`maxTraceDepth` = 1、stack size 更新
+- [x] 更新 Pipeline 参数：`numPayloadValues` = 3、`maxTraceDepth` = 1、stack size 更新
 - [ ] `__raygen__rg`：inverse matrix primary ray 生成 → `optixTrace` → payload 读取 → 写累积 buffer
 - [ ] `__closesthit__ch`：geometry info 查找 → 顶点插值 → 材质采样（全部 PBR 纹理）→ normal mapping → ambient 着色（baseColor × occlusion）→ payload 写入
 - [ ] `__miss__ms`：输出背景色 + hit_distance = -1
