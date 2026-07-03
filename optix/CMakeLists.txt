@@ -1,6 +1,7 @@
 add_library(qualquer_optix STATIC)
 
 target_sources(qualquer_optix PRIVATE
+    src/accel_structure.cpp
     src/context.cpp
     src/optix_stubs_impl.cpp
     src/pipeline.cpp
