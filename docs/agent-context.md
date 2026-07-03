@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 3 — 场景加载 + 完整材质系统 + 加速结构 + Primary Ray
-- **进度**：Phase 3 Step 6 完成（LaunchParams 扩展 + Pipeline 参数更新 + raygen/closesthit/miss 设备程序 + HitGroupSbtRecord；编译通过）
+- **进度**：Phase 3 Step 7 第1小项完成：Renderer 新增 `load_scene`（按 group_id 分组构建 BLAS、组装去重 TLAS、构建 GeometryInfo buffer、重建 hit-group SBT；逻辑拆分为匿名命名空间辅助函数 + load_scene 编排）
 
 ### 下一个任务
 
-Phase 3 Step 7 第一小项：Renderer 新增 `load_scene`（接收 SceneLoader 公开接口，构建 AS，构建 GeometryInfo buffer，重建 SBT）
+Phase 3 Step 7 第2小项：Renderer::submit_cuda 更新（LaunchParams 填入相机矩阵 + TLAS handle + 数据指针）
 
 > Phase 1、Phase 2 全部完成并归档。
 

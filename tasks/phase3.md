@@ -65,7 +65,7 @@ MUSTREAD:4
 
 ## Step 7：Renderer + Application 核心集成
 
-- [ ] Renderer 新增 `load_scene` 公开方法：接收 SceneLoader 公开接口（meshes、mesh_instances、material_buffer、texture_objects_buffer），构建 AS（按 group_id 分组 BLAS、按 (group_id, transform) 去重组装 OptixInstance、构建 TLAS），构建 GeometryInfo buffer（per-group 连续排列，与 instanceId 对应），重建 SBT。独立于 init，支持运行时场景切换
+- [x] Renderer 新增 `load_scene` 公开方法：接收 SceneLoader 公开接口（meshes、mesh_instances、material_buffer、texture_objects_buffer），构建 AS（按 group_id 分组 BLAS、按 (group_id, transform) 去重组装 OptixInstance、构建 TLAS），构建 GeometryInfo buffer（per-group 连续排列，与 instanceId 对应），重建 SBT。独立于 init，支持运行时场景切换
 - [ ] Renderer::submit_cuda 更新：LaunchParams 填入相机矩阵 + TLAS handle + 数据指针
 - [ ] `vcpkg.json` 新增 nlohmann-json；创建 `app/include/qualquer/app/config.h` + `app/src/config.cpp`（AppConfig + load_config + save_config，`%LOCALAPPDATA%\qualquer\config.json`），注册到 `app/CMakeLists.txt`
 - [ ] Application init + destroy 扩展：Config 加载、DefaultTextures 创建与持有、Camera + CameraController 初始化（aspect 从 swapchain）、SceneLoader 加载（config.scene_path + default_textures）、Renderer load_scene、Camera 初始定位（auto_position_camera + set_focus_target）；destroy 同步扩展（DefaultTextures 销毁 + SceneLoader::destroy）
