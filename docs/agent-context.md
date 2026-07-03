@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 3 — 场景加载 + 完整材质系统 + 加速结构 + Primary Ray
-- **进度**：Phase 3 Step 7 第1小项（load_scene）+ SBT 死数据清理修复小项完成（hitgroup record 回 header-only、移除 HitGroupData 与 rebuild_hitgroup_sbt、load_scene 去 material/texture 参数）
+- **进度**：Phase 3 Step 7 第3小项（Renderer::submit_cuda 更新）完成：新增 SceneRenderInput 借用 Camera + materials/texture_objects buffer；submit_cuda 填入 traversable/geometry_infos/materials/texture_objects/inv_view/inv_projection；新增 to_float4x4（glm column-major → float4x4 row-major 转置）；raygen 加 traversable==0 空 scene guard
 
 ### 下一个任务
 
-Phase 3 Step 7 第3小项：Renderer::submit_cuda 更新（LaunchParams 填入相机矩阵 + TLAS handle + 数据指针）
+Phase 3 Step 7 第4小项：Config 模块（vcpkg.json 新增 nlohmann-json + config.h/config.cpp，仅保留 scene_path）
 
 > Phase 1、Phase 2 全部完成并归档。
 
