@@ -325,7 +325,7 @@ struct BLASHandle {
 - 输入：`OptixBuildInput` type = `OPTIX_BUILD_INPUT_TYPE_TRIANGLES`
 - vertex format = `OPTIX_VERTEX_FORMAT_FLOAT3`，stride = `sizeof(Vertex)`（position 在 offset 0）
 - index format = `OPTIX_INDICES_FORMAT_UNSIGNED_INT3`
-- flags = `OPTIX_GEOMETRY_FLAG_NONE`（Phase 3 全部视为 opaque，但不设 `DISABLE_ANYHIT`——保留未来 alpha 接入空间；也不设 `OPAQUE` flag 因为 Pipeline 级 `OPTIX_EXCEPTION_FLAG_NONE` + 不注册 anyhit 等效于 opaque 行为）
+- flags = per-geometry：opaque 材质用 `OPTIX_GEOMETRY_FLAG_DISABLE_ANYHIT`（硬件跳过 anyhit），非 opaque（alpha mask/blend）用 `OPTIX_GEOMETRY_FLAG_REQUIRE_SINGLE_ANYHIT_CALL`（anyhit 每 primitive 至多调一次）。Phase 3 全部 opaque，均为 `DISABLE_ANYHIT`
 - build flags = `OPTIX_BUILD_FLAG_PREFER_FAST_TRACE | OPTIX_BUILD_FLAG_ALLOW_COMPACTION`
 - 每个 glTF mesh（多个 primitive）构建一个 multi-geometry BLAS（按 `group_id` 分组，与 Himalaya 一致）
 
