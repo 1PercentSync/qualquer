@@ -212,13 +212,9 @@ namespace qualquer::renderer {
         sbt_miss_.alloc(1);
         sbt_miss_.upload(&record, 1, cuda_context.compute_stream);
 
-        // Hit-group record carries scene data pointers; load_scene rebuilds
-        // this record with the loaded scene's device pointers.
-        HitGroupSbtRecord hit_record{};
-        OPTIX_CHECK(optixSbtRecordPackHeader(pipeline_.hitgroup_program, &hit_record));
-        hit_record.data = {};
+        OPTIX_CHECK(optixSbtRecordPackHeader(pipeline_.hitgroup_program, &record));
         sbt_hit_.alloc(1);
-        sbt_hit_.upload(&hit_record, 1, cuda_context.compute_stream);
+        sbt_hit_.upload(&record, 1, cuda_context.compute_stream);
 
         // Two accumulation buffers for ping-pong HDR accumulation, cleared so the
         // first frame reads a defined zero background.
@@ -306,37 +302,17 @@ namespace qualquer::renderer {
         }
     }
 
-    // ReSharper disable once CppParameterMayBeConst
-    void Renderer::rebuild_hitgroup_sbt(cudaStream_t stream,
-                                        const GPUGeometryInfo *geometry_infos,
-                                        const Material *materials,
-                                        const cudaTextureObject_t *texture_objects) {
-        // init() allocated sbt_hit_ once with a zeroed HitGroupData; load_scene
-        // rewrites only the record contents — the header is unchanged because the
-        // hit-group program stays the same — so a plain upload suffices (no realloc).
-        HitGroupSbtRecord hit_record{};
-        OPTIX_CHECK(optixSbtRecordPackHeader(pipeline_.hitgroup_program, &hit_record));
-        hit_record.data.geometry_infos = geometry_infos;
-        hit_record.data.materials = materials;
-        hit_record.data.texture_objects = texture_objects;
-        sbt_hit_.upload(&hit_record, 1, stream);
-    }
-
     void Renderer::load_scene(const optix::Context &cuda_context,
                               const std::span<const Mesh> meshes,
-                              const std::span<const MeshInstance> instances,
-                              const optix::CudaBuffer<Material> &material_buffer,
-                              const optix::CudaBuffer<cudaTextureObject_t> &texture_objects_buffer) {
+                              const std::span<const MeshInstance> instances) {
         // Runtime scene switching: tear down the previous scene's AS and
-        // geometry-info buffer before rebuilding. sbt_hit_ is allocated once in
-        // init() and reused (only its contents are rewritten below).
+        // geometry-info buffer before rebuilding.
         accel_.destroy();
         geometry_info_buffer_.free();
 
         if (meshes.empty()) {
-            // No geometry to trace: SBT data pointers stay null, and submit_cuda
-            // is responsible for keeping the traversable at 0 so raygen skips optixTrace.
-            rebuild_hitgroup_sbt(cuda_context.compute_stream, nullptr, nullptr, nullptr);
+            // No geometry to trace; submit_cuda must keep the traversable at 0 so
+            // raygen skips optixTrace.
             spdlog::warn("Renderer::load_scene: empty scene, no acceleration structures built");
             return;
         }
@@ -347,11 +323,6 @@ namespace qualquer::renderer {
         SceneGrouping grouping = group_meshes(meshes);
         build_blas_groups(accel_, cuda_context, grouping);
         build_geometry_info(geometry_info_buffer_, cuda_context.compute_stream, grouping);
-
-        rebuild_hitgroup_sbt(cuda_context.compute_stream,
-                             geometry_info_buffer_.data(),
-                             material_buffer.data(),
-                             texture_objects_buffer.data());
 
         std::vector<OptixInstance> tlas_instances = build_tlas_instances(meshes, instances, grouping, accel_);
         if (tlas_instances.empty()) {
@@ -400,7 +371,7 @@ namespace qualquer::renderer {
             .missRecordStrideInBytes = sizeof(SbtRecord),
             .missRecordCount = 1,
             .hitgroupRecordBase = sbt_hit_.device_ptr(),
-            .hitgroupRecordStrideInBytes = sizeof(HitGroupSbtRecord),
+            .hitgroupRecordStrideInBytes = sizeof(SbtRecord),
             .hitgroupRecordCount = 1,
             .callablesRecordBase = 0,
             .callablesRecordStrideInBytes = 0,
