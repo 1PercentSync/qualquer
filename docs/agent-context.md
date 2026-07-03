@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 3 — 场景加载 + 完整材质系统 + 加速结构 + Primary Ray
-- **进度**：Phase 3 Step 6 第二小项完成：Pipeline 参数已更新（numPayloadValues = 3、maxTraceDepth = 1、stack size 同步）
+- **进度**：Phase 3 Step 6 第三小项完成：`__raygen__rg` 已实现（primary ray 生成 + optixTrace + payload 读取 + 累积 buffer 写入）
 
 ### 下一个任务
 
-Phase 3 Step 6 第三小项：`__raygen__rg` 实现（inverse matrix primary ray 生成 → optixTrace → payload 读取 → 写累积 buffer）
+Phase 3 Step 6 第四小项：`__closesthit__ch` 实现（geometry info 查找 → 顶点插值 → 材质采样 → normal mapping → ambient 着色 → payload 写入）
 
 > Phase 1、Phase 2 全部完成并归档。
 
