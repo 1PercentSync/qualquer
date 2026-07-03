@@ -63,18 +63,20 @@ MUSTREAD:4
 - [x] SBT 更新：HitGroupSbtRecord 新增 HitGroupData（geometry_infos、materials、texture_objects 指针）
 - [x] 请求用户在 CLion 中编译验证
 
-## Step 7：Renderer + Application 集成
+## Step 7：Renderer + Application 核心集成
 
-- [ ] Renderer::init 扩展：接收 SceneLoader 公开接口（meshes、mesh_instances、material_buffer、texture_objects_buffer），构建 AS（按 group_id 分组 BLAS、按 (group_id, transform) 去重组装 OptixInstance、构建 TLAS），构建 GeometryInfo buffer（per-group 连续排列，与 instanceId 对应），重建 SBT
+- [ ] Renderer 新增 `load_scene` 公开方法：接收 SceneLoader 公开接口（meshes、mesh_instances、material_buffer、texture_objects_buffer），构建 AS（按 group_id 分组 BLAS、按 (group_id, transform) 去重组装 OptixInstance、构建 TLAS），构建 GeometryInfo buffer（per-group 连续排列，与 instanceId 对应），重建 SBT。独立于 init，支持运行时场景切换
 - [ ] Renderer::submit_cuda 更新：LaunchParams 填入相机矩阵 + TLAS handle + 数据指针
-- [ ] Application 新增：Camera + CameraController 初始化、SceneLoader 加载、delta time 计算
-- [ ] Application 帧循环：CameraController::update → Camera 矩阵更新 → submit_cuda
-- [ ] Application destroy：SceneLoader::destroy
+- [ ] `vcpkg.json` 新增 nlohmann-json；创建 `app/include/qualquer/app/config.h` + `app/src/config.cpp`（AppConfig + load_config + save_config，`%LOCALAPPDATA%\qualquer\config.json`），注册到 `app/CMakeLists.txt`
+- [ ] Application init + destroy 扩展：Config 加载、DefaultTextures 创建与持有、Camera + CameraController 初始化（aspect 从 swapchain）、SceneLoader 加载（config.scene_path + default_textures）、Renderer load_scene、Camera 初始定位（auto_position_camera + set_focus_target）；destroy 同步扩展（DefaultTextures 销毁 + SceneLoader::destroy）
+- [ ] Application 帧循环：delta time（glfwGetTime）、camera.aspect 从 swapchain 更新、CameraController::update → submit_cuda（传入相机 + 场景数据指针）
 - [ ] 请求用户在 CLion 中编译验证（窗口显示场景 PBR ambient 着色 + ImGui，交互式相机可浏览，resize 不崩溃）
+
+## Step 8：场景切换 + 清理 + 最终验证
+
+- [ ] DebugUI 场景路径输入 + 加载按钮；Application switch_scene（GPU idle → destroy 旧场景 → 加载新场景 → load_scene → auto_position → save_config）
+- [ ] 请求用户在 CLion 中编译验证（场景切换正常）
 - [ ] 验证 ISPC 压缩运行时正确（BC7/BC5 via bc7enc、BC6H via ISPCTextureCompressor，确认 ISPC dispatch 与压缩产出正常；场景加载后端到端可验证）
-
-## Step 8：清理 + 最终验证
-
 - [ ] 确认无 validation / OptiX / CUDA 报错
 - [ ] 确认纹理缓存生效（第二次加载从 KTX2 读取）
 - [ ] 确认 BLAS compaction 生效（日志对比 compaction 前后大小）

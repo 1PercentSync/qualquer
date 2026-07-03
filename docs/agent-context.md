@@ -15,7 +15,7 @@
 
 ### 下一个任务
 
-Phase 3 Step 7 第一小项：Renderer::init 扩展（接收 SceneLoader 公开接口，构建 AS，构建 GeometryInfo buffer，重建 SBT）
+Phase 3 Step 7 第一小项：Renderer 新增 `load_scene`（接收 SceneLoader 公开接口，构建 AS，构建 GeometryInfo buffer，重建 SBT）
 
 > Phase 1、Phase 2 全部完成并归档。
 

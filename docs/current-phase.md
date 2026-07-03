@@ -25,8 +25,8 @@ Step 1 → Step 2 → Step 3 → Step 4 → Step 5 → Step 6 → Step 7 → Ste
 | 4 | 材质系统 + 场景加载 | 编译通过，日志输出加载统计 |
 | 5 | OptiX 加速结构 | 编译通过 |
 | 6 | LaunchParams + 设备程序 + Pipeline 更新 | 编译通过 |
-| 7 | Renderer + Application 集成 | 窗口显示场景 PBR ambient 着色 + ImGui，交互式相机可浏览，resize 不崩溃 |
-| 8 | 清理 + 最终验证 | 无 validation / OptiX / CUDA 报错，场景正确渲染 |
+| 7 | Renderer + Application 核心集成 | 窗口显示场景 PBR ambient 着色 + ImGui，交互式相机可浏览，resize 不崩溃 |
+| 8 | 场景切换 + 清理 + 最终验证 | 场景切换正常，无 validation / OptiX / CUDA 报错，场景正确渲染 |
 
 ---
 
@@ -43,6 +43,7 @@ Step 1 → Step 2 → Step 3 → Step 4 → Step 5 → Step 6 → Step 7 → Ste
 | xxhash | vcpkg | 纹理缓存 content hash |
 | bc7enc（bc7e.ispc + rgbcx） | third_party | BC7/BC5 纹理压缩 |
 | ISPCTextureCompressor（kernel.ispc） | third_party | BC6H HDR 纹理压缩 |
+| nlohmann-json | vcpkg | 配置文件 JSON 序列化 |
 
 bc7enc 不在 vcpkg 中，从 Himalaya 的 `third_party/bc7enc/` 复制并适配（include 路径改为 `qualquer/bc7enc/`）。需要 CMake ISPC 语言支持（CMake 3.19+，项目已用 4.2）。
 
@@ -437,17 +438,26 @@ raygen 和 miss record 仍保持 header-only（这些程序通过 `LaunchParams`
 
 ### Renderer 变化
 
-- **init 扩展**：接收 SceneLoader 的公开接口（meshes、mesh_instances、material_buffer、texture_objects_buffer），构建 AS，构建 geometry info buffer，重建 SBT
+- **新增 `load_scene` 公开方法**：接收 SceneLoader 的公开接口（meshes、mesh_instances、material_buffer、texture_objects_buffer），构建 AS，构建 GeometryInfo buffer，重建 SBT。独立于 init（pipeline + accumulation buffer），支持运行时场景切换（destroy 旧数据 → 重建）
 - **submit_cuda 更新**：LaunchParams 填入相机矩阵 + TLAS handle + 数据指针，`optixLaunch` 的 traversable 从 0 变为 TLAS handle
 - **resize 扩展**：累积 buffer 重建（不变），AS / 材质 / 纹理不受 resize 影响
 
-### Application 变化
+### Application 变化（Step 7）
 
-- **新增成员**：`Camera`、`CameraController`、`SceneLoader`
-- **init 流程扩展**：Camera 初始化 → SceneLoader 加载场景 → Renderer init 接收场景数据
-- **帧循环**：`CameraController::update(delta_time)` → Camera matrices 更新 → submit_cuda（传入相机数据）
+- **新增成员**：`Camera`、`CameraController`、`SceneLoader`、`AppConfig`、`DefaultTextures`
+- **init 流程扩展**：Config 加载 → Camera 初始化（aspect 从 swapchain）→ CameraController init → Renderer init → DefaultTextures 创建 → SceneLoader 加载（config.scene_path）→ Renderer load_scene → Camera 初始定位（auto_position_camera + set_focus_target）
+- **destroy 扩展**：DefaultTextures 销毁 + SceneLoader::destroy
+- **帧循环**：Camera aspect 从 swapchain 更新 → `CameraController::update(delta_time)` → submit_cuda（传入相机 + 场景数据指针）
 - **delta time**：GLFW `glfwGetTime()` 计算帧间隔
-- **场景路径**：暂时硬编码或通过命令行参数传入
+- **场景路径**：从 `%LOCALAPPDATA%\qualquer\config.json` 读取（照搬 Himalaya config 模块，nlohmann/json）。首次运行无 config → 空场景
+
+### Config 模块（Step 7）
+
+从 Himalaya 照搬 config.h/config.cpp，适配命名空间和路径（`%LOCALAPPDATA%\qualquer\`）。Phase 3 仅需 `scene_path` 字段。
+
+### 场景切换（Step 8）
+
+DebugUI 场景路径输入 + 加载按钮 → Application switch_scene（GPU idle → destroy 旧场景 → 加载新场景 → load_scene → auto_position → save_config）
 
 ### 文件结构变化
 
@@ -490,6 +500,8 @@ raygen 和 miss record 仍保持 header-only（这些程序通过 `LaunchParams`
   app/src/scene_loader.cpp
   app/include/qualquer/app/camera_controller.h
   app/src/camera_controller.cpp
+  app/include/qualquer/app/config.h
+  app/src/config.cpp
 
 修改:
   vcpkg.json
