@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 3 — 场景加载 + 完整材质系统 + 加速结构 + Primary Ray
-- **进度**：Phase 3 Step 6 第六小项完成：SBT 更新（HitGroupSbtRecord 新增 HitGroupData；data 暂置零待 Step 7 接入场景数据）
+- **进度**：Phase 3 Step 6 完成（LaunchParams 扩展 + Pipeline 参数更新 + raygen/closesthit/miss 设备程序 + HitGroupSbtRecord；编译通过）
 
 ### 下一个任务
 
-Phase 3 Step 6 编译验证：请求用户在 CLion 中编译
+Phase 3 Step 7 第一小项：Renderer::init 扩展（接收 SceneLoader 公开接口，构建 AS，构建 GeometryInfo buffer，重建 SBT）
 
 > Phase 1、Phase 2 全部完成并归档。
 
