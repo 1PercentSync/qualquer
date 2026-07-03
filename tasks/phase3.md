@@ -54,7 +54,7 @@
 
 ## Step 6：LaunchParams + 设备程序 + Pipeline 更新
 
-- [ ] launch_params.h 新增 `float4x4` 类型定义 + 扩展 LaunchParams（traversable、geometry_infos、materials、texture_objects、inv_view、inv_projection）
+- [x] launch_params.h 新增 `float4x4` 类型定义 + 扩展 LaunchParams（traversable、geometry_infos、materials、texture_objects、inv_view、inv_projection）
 MUSTREAD:4
 - [ ] 更新 Pipeline 参数：`numPayloadValues` = 6、`maxTraceDepth` = 1、stack size 更新
 - [ ] `__raygen__rg`：inverse matrix primary ray 生成 → `optixTrace` → payload 读取 → 写累积 buffer

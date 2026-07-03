@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 3 — 场景加载 + 完整材质系统 + 加速结构 + Primary Ray
-- **进度**：Phase 3 Step 5 完成（AccelStructure 类：build_blas with compaction + per-geometry opaque flag、build_tlas with compaction；GeometryInfo buffer 构建和 TLAS 去重/组装移至 Step 7 Renderer 集成；编译通过）
+- **进度**：Phase 3 Step 6 第一小项完成：launch_params.h 已扩展（float4x4 类型定义、LaunchParams 新增 traversable/geometry_infos/materials/texture_objects/inv_view/inv_projection）
 
 ### 下一个任务
 
-Phase 3 Step 6 第一小项：launch_params.h 新增 float4x4 类型定义 + 扩展 LaunchParams
+Phase 3 Step 6 第二小项：更新 Pipeline 参数（numPayloadValues = 6、maxTraceDepth = 1、stack size 更新）
 
 > Phase 1、Phase 2 全部完成并归档。
 
