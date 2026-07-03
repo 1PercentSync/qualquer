@@ -10,11 +10,15 @@
 #include <vulkan/vulkan.h>
 
 #include <array>
+#include <span>
 #include <string>
 
+#include <qualquer/optix/accel_structure.h>
 #include <qualquer/optix/cuda_buffer.h>
 #include <qualquer/optix/pipeline.h>
 #include <qualquer/renderer/launch_params.h>
+#include <qualquer/renderer/material.h>
+#include <qualquer/renderer/scene_types.h>
 
 namespace qualquer::optix {
     class Context;
@@ -45,8 +49,8 @@ namespace qualquer::renderer {
      * The closest-hit shader reads these via optixGetSbtDataPointer() to access
      * the scene's geometry, material, and texture arrays. Redundant with
      * LaunchParams (which carries the same pointers), but SBT data is the
-     * standard OptiX mechanism for per-hit-group data delivery and allows
-     * independent hit groups in the future.
+     * standard OptiX mechanism for per-hit-group data delivery and supports
+     * independent per-geometry hit groups.
      */
     struct HitGroupData {
         /** @brief Device pointer to the GPUGeometryInfo array. */
@@ -138,6 +142,31 @@ namespace qualquer::renderer {
         void destroy();
 
         /**
+         * @brief Builds acceleration structures, the geometry-info buffer, and the
+         *        hit-group SBT from loaded scene data.
+         *
+         * Independent of init(): callable any time after init to load or switch
+         * scenes. Destroys the previously built scene resources first (AS +
+         * geometry-info buffer); the hit-group SBT record buffer allocated in
+         * init() is reused and re-uploaded with the new data pointers. All
+         * geometries build as opaque (DISABLE_ANYHIT). An empty mesh list
+         * skips AS construction and writes null data pointers into the SBT
+         * (raygen must then skip optixTrace).
+         *
+         * @param cuda_context           CUDA context (device context + compute
+         *                               stream for AS builds and buffer uploads).
+         * @param meshes                 Loaded meshes (one per glTF primitive).
+         * @param instances              Scene mesh instances (one per node-primitive).
+         * @param material_buffer        Device material array, indexed by material_id.
+         * @param texture_objects_buffer Device texture-object array.
+         */
+        void load_scene(const optix::Context &cuda_context,
+                        std::span<const Mesh> meshes,
+                        std::span<const MeshInstance> instances,
+                        const optix::CudaBuffer<Material> &material_buffer,
+                        const optix::CudaBuffer<cudaTextureObject_t> &texture_objects_buffer);
+
+        /**
          * @brief Rebuilds resolution-dependent resources after a swapchain resize.
          *
          * Resizes and clears the accumulation buffers on the context's stream so the
@@ -172,6 +201,19 @@ namespace qualquer::renderer {
         static void record_vulkan(const RenderInput &input);
 
     private:
+        /**
+         * @brief Re-packs the hit-group SBT record with the given data pointers
+         *        and re-uploads it on stream.
+         *
+         * The record buffer is allocated once in init(); load_scene calls this
+         * whenever the scene's data pointers change, including the empty-scene
+         * null-pointer case.
+         */
+        void rebuild_hitgroup_sbt(cudaStream_t stream,
+                                  const GPUGeometryInfo *geometry_infos,
+                                  const Material *materials,
+                                  const cudaTextureObject_t *texture_objects);
+
         /** @brief OptiX pipeline (module, program groups, linked handle). */
         optix::Pipeline pipeline_;
 
@@ -181,6 +223,12 @@ namespace qualquer::renderer {
         optix::CudaBuffer<SbtRecord> sbt_miss_;
         /** @brief Hit-group SBT record buffer (single record, carries HitGroupData). */
         optix::CudaBuffer<HitGroupSbtRecord> sbt_hit_;
+
+        /** @brief Scene acceleration structures (BLAS per group_id + single TLAS). */
+        optix::AccelStructure accel_;
+
+        /** @brief Device-side per-geometry RT query data (GPUGeometryInfo[]). */
+        optix::CudaBuffer<GPUGeometryInfo> geometry_info_buffer_;
 
         /**
          * @brief Ping-pong HDR accumulation buffers (RGBA32F, CUDA-owned).

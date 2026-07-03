@@ -5,6 +5,10 @@
 
 #include <qualquer/renderer/renderer.h>
 
+#include <algorithm>
+#include <cstdint>
+#include <vector>
+
 #include <cuda_runtime.h>
 
 #include <vulkan/vulkan.h>
@@ -23,6 +27,169 @@
 #include <spdlog/spdlog.h>
 
 namespace qualquer::renderer {
+    namespace {
+        /**
+         * @brief Per-group intermediate data shared across the AS build stages.
+         *
+         * Produced by group_meshes(); group_to_blas is filled by
+         * build_blas_groups(). The remaining fields are complete after group_meshes().
+         */
+        struct SceneGrouping {
+            /** @brief Per-group BLAS geometry inputs (one glTF mesh = one multi-geometry BLAS). */
+            std::vector<std::vector<optix::BLASGeometry>> group_geometries;
+
+            /** @brief Per-group material ids, parallel to group_geometries. */
+            std::vector<std::vector<uint32_t>> group_mat_ids;
+
+            /** @brief Per-group primitive count including degenerate ones (TLAS stepping). */
+            std::vector<uint32_t> group_prim_count;
+
+            /** @brief group_id -> index into AccelStructure::blas_handles() (UINT32_MAX = none). */
+            std::vector<uint32_t> group_to_blas;
+
+            /** @brief group_id -> starting index in the geometry-info array (= TLAS instanceId). */
+            std::vector<uint32_t> group_base_offset;
+
+            /** @brief Total non-degenerate geometry count (geometry-info array length). */
+            uint32_t total_geometries = 0;
+        };
+
+        /**
+         * @brief Groups meshes by group_id and computes the geometry-info layout.
+         *
+         * A degenerate primitive (no vertices or fewer than 3 indices) still
+         * occupies a primitive slot in group_prim_count — SceneLoader emits
+         * same-node primitives contiguously, so TLAS stepping advances by this
+         * count to skip a whole mesh instance in one stride — but contributes no
+         * geometry to its group's BLAS.
+         */
+        SceneGrouping group_meshes(const std::span<const Mesh> meshes) {
+            uint32_t max_group = 0;
+            for (const auto &mesh : meshes) {
+                max_group = std::max(max_group, mesh.group_id);
+            }
+            const uint32_t group_count = max_group + 1;
+
+            SceneGrouping grouping;
+            grouping.group_geometries.resize(group_count);
+            grouping.group_mat_ids.resize(group_count);
+            grouping.group_prim_count.assign(group_count, 0);
+
+            for (const auto &mesh : meshes) {
+                if (mesh.vertex_count == 0 || mesh.index_count < 3) {
+                    ++grouping.group_prim_count[mesh.group_id];
+                    continue;
+                }
+                grouping.group_geometries[mesh.group_id].push_back({
+                    .vertex_buffer = mesh.vertex_buffer.device_ptr(),
+                    .index_buffer = mesh.index_buffer.device_ptr(),
+                    .vertex_count = mesh.vertex_count,
+                    .index_count = mesh.index_count,
+                    .vertex_stride = sizeof(Vertex),
+                    .opaque = true,
+                });
+                grouping.group_mat_ids[mesh.group_id].push_back(mesh.material_id);
+                ++grouping.group_prim_count[mesh.group_id];
+            }
+
+            // Geometries are laid out contiguously per group; group_base_offset[g]
+            // becomes the TLAS instance's instanceId so closest-hit resolves a hit
+            // via instanceId + the GAS-relative geometry index.
+            grouping.group_base_offset.assign(group_count, 0);
+            for (uint32_t g = 0; g < group_count; ++g) {
+                grouping.group_base_offset[g] = grouping.total_geometries;
+                grouping.total_geometries += static_cast<uint32_t>(grouping.group_geometries[g].size());
+            }
+            return grouping;
+        }
+
+        /**
+         * @brief Builds one BLAS per non-empty group, filling group_to_blas.
+         */
+        void build_blas_groups(optix::AccelStructure &accel,
+                               const optix::Context &cuda_context,
+                               SceneGrouping &grouping) {
+            grouping.group_to_blas.assign(grouping.group_geometries.size(), UINT32_MAX);
+            for (uint32_t g = 0; g < grouping.group_geometries.size(); ++g) {
+                if (grouping.group_geometries[g].empty()) {
+                    continue;
+                }
+                grouping.group_to_blas[g] = static_cast<uint32_t>(accel.blas_handles().size());
+                accel.build_blas(cuda_context.device_context,
+                                 cuda_context.compute_stream,
+                                 grouping.group_geometries[g]);
+            }
+        }
+
+        /**
+         * @brief Builds and uploads the geometry-info array from the grouping.
+         */
+        void build_geometry_info(optix::CudaBuffer<GPUGeometryInfo> &buffer,
+                                 // ReSharper disable once CppParameterMayBeConst
+                                 cudaStream_t stream,
+                                 const SceneGrouping &grouping) {
+            std::vector<GPUGeometryInfo> geometry_infos(grouping.total_geometries);
+            for (uint32_t g = 0; g < grouping.group_geometries.size(); ++g) {
+                const auto &geoms = grouping.group_geometries[g];
+                const auto &mat_ids = grouping.group_mat_ids[g];
+                const uint32_t base = grouping.group_base_offset[g];
+                for (uint32_t j = 0; j < static_cast<uint32_t>(geoms.size()); ++j) {
+                    geometry_infos[base + j] = {
+                        .vertex_buffer_address = geoms[j].vertex_buffer,
+                        .index_buffer_address = geoms[j].index_buffer,
+                        .material_buffer_offset = mat_ids[j],
+                        .padding = 0,
+                    };
+                }
+            }
+            buffer.alloc(grouping.total_geometries);
+            buffer.upload(geometry_infos.data(), grouping.total_geometries, stream);
+        }
+
+        /**
+         * @brief Assembles TLAS instances, folding same-node primitives (contiguous,
+         *        shared transform) into one instance per mesh instance.
+         */
+        std::vector<OptixInstance> build_tlas_instances(const std::span<const Mesh> meshes,
+                                                        const std::span<const MeshInstance> instances,
+                                                        const SceneGrouping &grouping,
+                                                        const optix::AccelStructure &accel) {
+            const auto &blas_handles = accel.blas_handles();
+            std::vector<OptixInstance> tlas_instances;
+            uint32_t inst_idx = 0;
+            while (inst_idx < static_cast<uint32_t>(instances.size())) {
+                const auto &first_inst = instances[inst_idx];
+                const uint32_t mesh_id = first_inst.mesh_id;
+                const uint32_t group_id = meshes[mesh_id].group_id;
+                const uint32_t prim_count = grouping.group_prim_count[group_id];
+
+                // Skip instances whose group yielded no BLAS (all primitives degenerate).
+                if (grouping.group_to_blas[group_id] == UINT32_MAX || prim_count == 0) {
+                    inst_idx += prim_count;
+                    continue;
+                }
+
+                OptixInstance inst{};
+                // glm is column-major (m[col][row]); OptixInstance.transform is a
+                // row-major 3x4 laid out as float[12] — transposing element-wise.
+                for (int row = 0; row < 3; ++row) {
+                    for (int col = 0; col < 4; ++col) {
+                        inst.transform[row * 4 + col] = first_inst.transform[col][row];
+                    }
+                }
+                inst.instanceId = grouping.group_base_offset[group_id];
+                inst.sbtOffset = 0;
+                inst.visibilityMask = 0xFF;
+                inst.flags = OPTIX_INSTANCE_FLAG_NONE;
+                inst.traversableHandle = blas_handles[grouping.group_to_blas[group_id]].handle;
+                tlas_instances.push_back(inst);
+
+                inst_idx += prim_count;
+            }
+            return tlas_instances;
+        }
+    } // namespace
+
     void Renderer::init(const optix::Context &cuda_context,
                         const uint32_t width,
                         const uint32_t height,
@@ -45,8 +212,8 @@ namespace qualquer::renderer {
         sbt_miss_.alloc(1);
         sbt_miss_.upload(&record, 1, cuda_context.compute_stream);
 
-        // Hit-group record carries scene data pointers (zeroed until Step 7
-        // Renderer::init receives SceneLoader data and rebuilds the SBT).
+        // Hit-group record carries scene data pointers; load_scene rebuilds
+        // this record with the loaded scene's device pointers.
         HitGroupSbtRecord hit_record{};
         OPTIX_CHECK(optixSbtRecordPackHeader(pipeline_.hitgroup_program, &hit_record));
         hit_record.data = {};
@@ -56,7 +223,7 @@ namespace qualquer::renderer {
         // Two accumulation buffers for ping-pong HDR accumulation, cleared so the
         // first frame reads a defined zero background.
         const std::size_t pixel_count = static_cast<std::size_t>(width) * height;
-        for (auto &buffer : accum_buffers_) {
+        for (auto &buffer: accum_buffers_) {
             buffer.alloc(pixel_count);
             buffer.clear(cuda_context.compute_stream);
         }
@@ -67,11 +234,11 @@ namespace qualquer::renderer {
         // Events start recorded on compute_stream so the first frame's waits
         // (on slot 1, the "previous" slot) pass immediately — the stream ordering
         // guarantees the records complete after the buffer clears above.
-        for (auto &event : event_raygen_done_) {
+        for (auto &event: event_raygen_done_) {
             CUDA_CHECK(cudaEventCreateWithFlags(&event, cudaEventDisableTiming));
             CUDA_CHECK(cudaEventRecord(event, cuda_context.compute_stream));
         }
-        for (auto &event : event_tonemap_done_) {
+        for (auto &event: event_tonemap_done_) {
             CUDA_CHECK(cudaEventCreateWithFlags(&event, cudaEventDisableTiming));
             CUDA_CHECK(cudaEventRecord(event, cuda_context.compute_stream));
         }
@@ -88,7 +255,7 @@ namespace qualquer::renderer {
         // A size change invalidates prior HDR accumulation. Pipeline, SBT records,
         // and the params buffer are resolution-independent and stay.
         const std::size_t pixel_count = static_cast<std::size_t>(width) * height;
-        for (auto &buffer : accum_buffers_) {
+        for (auto &buffer: accum_buffers_) {
             buffer.resize(pixel_count);
             buffer.clear(cuda_context.compute_stream);
         }
@@ -98,10 +265,10 @@ namespace qualquer::renderer {
         // clears above. Without this, the wait would see the stale event from
         // the last pre-resize raygen (recorded before the clears) and start
         // tonemap before the clears finish.
-        for (auto &event : event_raygen_done_) {
+        for (auto &event: event_raygen_done_) {
             CUDA_CHECK(cudaEventRecord(event, cuda_context.compute_stream));
         }
-        for (auto &event : event_tonemap_done_) {
+        for (auto &event: event_tonemap_done_) {
             CUDA_CHECK(cudaEventRecord(event, cuda_context.compute_stream));
         }
 
@@ -119,22 +286,85 @@ namespace qualquer::renderer {
         sbt_raygen_.free();
         sbt_miss_.free();
         sbt_hit_.free();
-        for (auto &buffer : accum_buffers_) {
+        accel_.destroy();
+        geometry_info_buffer_.free();
+        for (auto &buffer: accum_buffers_) {
             buffer.free();
         }
         params_buffer_.free();
-        for (auto &event : event_raygen_done_) {
+        for (auto &event: event_raygen_done_) {
             if (event != nullptr) {
                 CUDA_CHECK(cudaEventDestroy(event));
                 event = nullptr;
             }
         }
-        for (auto &event : event_tonemap_done_) {
+        for (auto &event: event_tonemap_done_) {
             if (event != nullptr) {
                 CUDA_CHECK(cudaEventDestroy(event));
                 event = nullptr;
             }
         }
+    }
+
+    // ReSharper disable once CppParameterMayBeConst
+    void Renderer::rebuild_hitgroup_sbt(cudaStream_t stream,
+                                        const GPUGeometryInfo *geometry_infos,
+                                        const Material *materials,
+                                        const cudaTextureObject_t *texture_objects) {
+        // init() allocated sbt_hit_ once with a zeroed HitGroupData; load_scene
+        // rewrites only the record contents — the header is unchanged because the
+        // hit-group program stays the same — so a plain upload suffices (no realloc).
+        HitGroupSbtRecord hit_record{};
+        OPTIX_CHECK(optixSbtRecordPackHeader(pipeline_.hitgroup_program, &hit_record));
+        hit_record.data.geometry_infos = geometry_infos;
+        hit_record.data.materials = materials;
+        hit_record.data.texture_objects = texture_objects;
+        sbt_hit_.upload(&hit_record, 1, stream);
+    }
+
+    void Renderer::load_scene(const optix::Context &cuda_context,
+                              const std::span<const Mesh> meshes,
+                              const std::span<const MeshInstance> instances,
+                              const optix::CudaBuffer<Material> &material_buffer,
+                              const optix::CudaBuffer<cudaTextureObject_t> &texture_objects_buffer) {
+        // Runtime scene switching: tear down the previous scene's AS and
+        // geometry-info buffer before rebuilding. sbt_hit_ is allocated once in
+        // init() and reused (only its contents are rewritten below).
+        accel_.destroy();
+        geometry_info_buffer_.free();
+
+        if (meshes.empty()) {
+            // No geometry to trace: SBT data pointers stay null, and submit_cuda
+            // is responsible for keeping the traversable at 0 so raygen skips optixTrace.
+            rebuild_hitgroup_sbt(cuda_context.compute_stream, nullptr, nullptr, nullptr);
+            spdlog::warn("Renderer::load_scene: empty scene, no acceleration structures built");
+            return;
+        }
+
+        // Group meshes by group_id, build a multi-geometry BLAS per group, and
+        // upload the per-geometry query data. See the anonymous-namespace helpers
+        // above for the grouping invariants (degenerate primitives, layout offsets).
+        SceneGrouping grouping = group_meshes(meshes);
+        build_blas_groups(accel_, cuda_context, grouping);
+        build_geometry_info(geometry_info_buffer_, cuda_context.compute_stream, grouping);
+
+        rebuild_hitgroup_sbt(cuda_context.compute_stream,
+                             geometry_info_buffer_.data(),
+                             material_buffer.data(),
+                             texture_objects_buffer.data());
+
+        std::vector<OptixInstance> tlas_instances = build_tlas_instances(meshes, instances, grouping, accel_);
+        if (tlas_instances.empty()) {
+            spdlog::warn("Renderer::load_scene: no TLAS instances (all meshes degenerate?)");
+            return;
+        }
+
+        accel_.build_tlas(cuda_context.device_context,
+                          cuda_context.compute_stream,
+                          tlas_instances);
+
+        spdlog::info("Renderer::load_scene: {} meshes, {} instances, {} BLAS, {} TLAS instances",
+                     meshes.size(), instances.size(), accel_.blas_handles().size(), tlas_instances.size());
     }
 
     void Renderer::submit_cuda(const optix::Context &cuda_context,
@@ -180,11 +410,11 @@ namespace qualquer::renderer {
         // traversable=0 is valid: raygen does not call optixTrace, so no
         // acceleration structure is traversed.
         OPTIX_CHECK(optixLaunch(pipeline_.handle,
-                                cuda_context.compute_stream,
-                                params_buffer_.device_ptr(),
-                                sizeof(LaunchParams),
-                                &sbt,
-                                width, height, 1));
+            cuda_context.compute_stream,
+            params_buffer_.device_ptr(),
+            sizeof(LaunchParams),
+            &sbt,
+            width, height, 1));
 
         CUDA_CHECK(cudaEventRecord(event_raygen_done_[slot], cuda_context.compute_stream));
 
