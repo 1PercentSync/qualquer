@@ -224,15 +224,15 @@ KTX2 缓存模块支持实际需要缓存的格式集：BC7 UNORM/SRGB、BC5 UNO
 
 **Default Textures**：
 
-三个 1×1 纹理，R8G8B8A8_UNORM（不压缩，极值处 sRGB/linear 结果一致）：
+三个 1×1 纹理，R16G16B16A16_FLOAT（fp16，不压缩；0/0.5/1.0 在 fp16 下精确可表示）：
 
 | 名称 | RGBA 值 | 用途 |
 |------|---------|------|
-| white | (255,255,255,255) | 默认 baseColor / metallic-roughness / occlusion |
-| flat_normal | (128,128,255,255) | 默认法线（Z-up，无扰动） |
-| black | (0,0,0,255) | 默认 emissive（无发光） |
+| white | (1, 1, 1, 1) | 默认 baseColor / metallic-roughness / occlusion |
+| flat_normal | (0.5, 0.5, 1, 1) | 默认法线（Z-up，无扰动） |
+| black | (0, 0, 0, 1) | 默认 emissive（无发光） |
 
-缺失纹理槽用对应 default 的 `cudaTextureObject_t` 填充，shader 无条件采样。
+缺失纹理槽用对应 default 的 `cudaTextureObject_t` 填充，shader 无条件采样。default 纹理与 BC 纹理统一使用 `cudaReadModeElementType`，`tex2D<float4>()` 直接对 fp16 原始值升 float 返回。
 
 ### 材质系统
 
