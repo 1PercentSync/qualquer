@@ -10,6 +10,8 @@
 
 #include <qualquer/optix/cuda_check.h>
 
+#include <cuda_fp16.h>
+
 #include <algorithm>
 #include <cassert>
 #include <filesystem>
@@ -506,11 +508,11 @@ namespace qualquer::renderer {
     // ---- Default textures ----
 
     namespace {
-        /// Creates a 1×1 float32x4 CUDA texture with the given solid color.
+        /// Creates a 1×1 fp16×4 CUDA texture with the given solid color.
         optix::CudaTexture create_solid_texture(
             const float r, const float g, const float b, const float a) {
             const auto channel_desc = cudaCreateChannelDesc(
-                32, 32, 32, 32, cudaChannelFormatKindFloat);
+                16, 16, 16, 16, cudaChannelFormatKindFloat);
 
             // Allocate a 1-level mipmapped array (keeps CudaTexture::destroy uniform).
             cudaMipmappedArray_t mipmap_array = nullptr;
@@ -520,13 +522,16 @@ namespace qualquer::renderer {
             cudaArray_t level_array = nullptr;
             CUDA_CHECK(cudaGetMipmappedArrayLevel(&level_array, mipmap_array, 0));
 
-            const float pixels[4] = {r, g, b, a};
+            // fp16 RGBA: 4 channels × 2 bytes = 8 bytes per texel. The source
+            // values (0/0.5/1.0) are all exactly representable in half precision.
+            const __half pixels[4] = {
+                __float2half(r), __float2half(g), __float2half(b), __float2half(a)};
             CUDA_CHECK(cudaMemcpy2DToArray(
                 level_array, 0, 0,
                 pixels,
-                16, // srcPitch (1 pixel × 4 floats × 4 bytes)
-                16, // width in bytes
-                1,  // height in rows
+                8, // srcPitch (1 pixel × 4 halves × 2 bytes)
+                8, // width in bytes
+                1, // height in rows
                 cudaMemcpyHostToDevice));
 
             cudaResourceDesc res_desc = {};

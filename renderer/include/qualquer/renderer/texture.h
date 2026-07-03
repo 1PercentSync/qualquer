@@ -234,11 +234,12 @@ namespace qualquer::renderer {
     };
 
     /**
-     * @brief Creates three default 1×1 R8G8B8A8 textures for material fallback.
+     * @brief Creates three default 1×1 fp16×4 textures for material fallback.
      *
-     * Each texture is a single float32×4 texel allocated via
+     * Each texture is a single half-precision (fp16) RGBA texel allocated via
      * @c cudaMallocMipmappedArray (1 level) with @c cudaReadModeElementType,
-     * matching BC textures' read mode so @c tex2D<float4>() works uniformly.
+     * matching BC textures' read mode so @c tex2D<float4>() works uniformly
+     * (the hardware reads fp16 and promotes it to float on the texture fetch).
      * Sampler is point-filter + clamp (1×1 has only one texel, so filter/wrap
      * mode has no practical effect).
      *

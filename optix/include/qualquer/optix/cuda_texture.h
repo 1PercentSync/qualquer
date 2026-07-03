@@ -14,7 +14,7 @@ namespace qualquer::optix {
      * @brief Owning handle to a single CUDA texture's GPU resources.
      *
      * Pairs a @c cudaMipmappedArray_t (the backing storage, BC-compressed for
-     * authored textures or R8G8B8A8 for 1x1 defaults) with the
+     * authored textures or fp16 for 1×1 defaults) with the
      * @c cudaTextureObject_t that devices sample through. Creation is performed
      * by the renderer layer (BC upload + @c cudaCreateTextureObject); this
      * struct only owns the lifecycle of whatever was created.
