@@ -417,28 +417,13 @@ Phase 3 primary ray 不需要 bounce，payload 用于 closest hit → raygen 回
 
 ### SBT 变化
 
-Phase 2 的 SBT record 只有 header（32 字节），无用户数据。Phase 3 的 hitgroup record 需要携带数据指针：
+Phase 3 的 SBT record 全部保持 header-only（32 字节），与 Phase 2 一致：raygen、miss、hitgroup 三类 record 都不含用户数据。
 
-```cpp
-struct HitGroupData {
-    const GPUGeometryInfo *geometry_infos;
-    const Material *materials;
-    const cudaTextureObject_t *texture_objects;
-};
-
-struct HitGroupSbtRecord {
-    alignas(OPTIX_SBT_RECORD_ALIGNMENT) char header[OPTIX_SBT_RECORD_HEADER_SIZE];
-    HitGroupData data;
-};
-```
-
-raygen 和 miss record 仍保持 header-only（这些程序通过 `LaunchParams` 访问全局数据）。
-
-**替代方案考量**：这些指针在 `LaunchParams` 中已有，hitgroup record 里再放一份看似冗余。但 SBT data 是 OptiX 中 per-geometry 数据传递的标准方式（未来多 hit group 时每组可以有不同数据），现在统一放入 SBT 符合 OptiX 惯例，且 closest hit shader 读 SBT data 比读 launch params 更直接（OptiX 内部可能有优化路径）。保持这个设计。
+场景数据指针（`geometry_infos`、`materials`、`texture_objects`）走 `LaunchParams`：closesthit 通过 `params.geometry_infos[optixGetInstanceId() + optixGetSbtGASIndex()]` 等查表访问。这些是 launch 级全局数据，按 OptiX 惯例放 LaunchParams（SBT data 才是 per-geometry record 数据）。单 hitgroup 下 SBT data 无 per-geometry 价值，放进 SBT 属过度设计，故不采用。
 
 ### Renderer 变化
 
-- **新增 `load_scene` 公开方法**：接收 SceneLoader 的公开接口（meshes、mesh_instances、material_buffer、texture_objects_buffer），构建 AS，构建 GeometryInfo buffer，重建 SBT。独立于 init（pipeline + accumulation buffer），支持运行时场景切换（destroy 旧数据 → 重建）
+- **新增 `load_scene` 公开方法**：接收 SceneLoader 的 meshes、mesh_instances，构建 AS、构建 GeometryInfo buffer。独立于 init（pipeline + accumulation buffer），支持运行时场景切换（destroy 旧数据 → 重建）
 - **submit_cuda 更新**：LaunchParams 填入相机矩阵 + TLAS handle + 数据指针，`optixLaunch` 的 traversable 从 0 变为 TLAS handle
 - **resize 扩展**：累积 buffer 重建（不变），AS / 材质 / 纹理不受 resize 影响
 
