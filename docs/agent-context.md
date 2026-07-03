@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 3 — 场景加载 + 完整材质系统 + 加速结构 + Primary Ray
-- **进度**：Phase 3 Step 4 完成（MikkTSpace tangent 生成、SceneLoader 三阶段加载：load_meshes / load_materials / build_mesh_instances，编译通过；ISPC 运行时验证移至 Step 7 集成后）
+- **进度**：Phase 3 Step 5 第一小项完成：AccelStructure 类骨架已创建（BLASGeometry/BLASHandle/TLASHandle 数据类型 + AccelStructure 类 build_blas/build_tlas/destroy 接口，build 方法为骨架待填充）
 
 ### 下一个任务
 
-Phase 3 Step 5 第一小项：AccelStructure 类骨架（accel_structure.h + accel_structure.cpp）
+Phase 3 Step 5 第二小项：BLAS 构建实现（multi-geometry per group_id、PREFER_FAST_TRACE + ALLOW_COMPACTION、compaction）
 
 > Phase 1、Phase 2 全部完成并归档。
 
