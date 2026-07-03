@@ -142,10 +142,104 @@ namespace qualquer::optix {
         OptixDeviceContext context, CUstream stream,
         // ReSharper restore CppParameterMayBeConst
         const std::span<const OptixInstance> instances) {
-        // Skeleton — implementation in Step 5 checkbox 3.
-        (void)context;
-        (void)stream;
-        (void)instances;
+        const auto instance_count = static_cast<unsigned int>(instances.size());
+
+        // --- Upload instance array to device ---
+
+        CudaBuffer<OptixInstance> instance_buffer;
+        instance_buffer.alloc(instance_count);
+        CUDA_CHECK(cudaMemcpy(instance_buffer.data(), instances.data(),
+                              instance_buffer.size_bytes(), cudaMemcpyHostToDevice));
+
+        // --- Build input ---
+
+        OptixBuildInput build_input{};
+        build_input.type = OPTIX_BUILD_INPUT_TYPE_INSTANCES;
+        build_input.instanceArray.instances = instance_buffer.device_ptr();
+        build_input.instanceArray.numInstances = instance_count;
+
+        // --- Build options ---
+
+        constexpr OptixAccelBuildOptions accel_options{
+            .buildFlags = OPTIX_BUILD_FLAG_PREFER_FAST_TRACE
+                          | OPTIX_BUILD_FLAG_ALLOW_COMPACTION,
+            .operation = OPTIX_BUILD_OPERATION_BUILD,
+            .motionOptions = {},
+        };
+
+        // --- Query memory sizes ---
+
+        OptixAccelBufferSizes buffer_sizes{};
+        OPTIX_CHECK(optixAccelComputeMemoryUsage(
+            context, &accel_options,
+            &build_input, 1,
+            &buffer_sizes));
+
+        // --- Allocate temp and output buffers ---
+
+        CudaBuffer<uint8_t> temp_buffer;
+        temp_buffer.alloc(buffer_sizes.tempSizeInBytes);
+
+        CudaBuffer<uint8_t> output_buffer;
+        output_buffer.alloc(buffer_sizes.outputSizeInBytes);
+
+        // --- Build, emitting compacted size ---
+
+        CudaBuffer<uint64_t> compacted_size_buffer;
+        compacted_size_buffer.alloc(1);
+
+        const OptixAccelEmitDesc emit_desc{
+            .result = compacted_size_buffer.device_ptr(),
+            .type = OPTIX_PROPERTY_TYPE_COMPACTED_SIZE,
+        };
+
+        OPTIX_CHECK(optixAccelBuild(
+            context, stream,
+            &accel_options,
+            &build_input, 1,
+            temp_buffer.device_ptr(), temp_buffer.size_bytes(),
+            output_buffer.device_ptr(), output_buffer.size_bytes(),
+            &tlas_.handle,
+            &emit_desc, 1));
+
+        CUDA_CHECK(cudaStreamSynchronize(stream));
+
+        temp_buffer.free();
+
+        // --- Read back compacted size ---
+
+        uint64_t compacted_size = 0;
+        CUDA_CHECK(cudaMemcpy(&compacted_size, compacted_size_buffer.data(),
+                              sizeof(uint64_t), cudaMemcpyDeviceToHost));
+        compacted_size_buffer.free();
+
+        // --- Compact ---
+
+        if (compacted_size < output_buffer.size_bytes()) {
+            tlas_.buffer.alloc(compacted_size);
+
+            const auto uncompacted_handle = tlas_.handle;
+            OPTIX_CHECK(optixAccelCompact(
+                context, stream,
+                uncompacted_handle,
+                tlas_.buffer.device_ptr(), tlas_.buffer.size_bytes(),
+                &tlas_.handle));
+
+            CUDA_CHECK(cudaStreamSynchronize(stream));
+
+            spdlog::info("TLAS: {} instances, {:.1f} KB -> {:.1f} KB (compacted {:.0f}%)",
+                         instance_count,
+                         static_cast<double>(output_buffer.size_bytes()) / 1024.0,
+                         static_cast<double>(compacted_size) / 1024.0,
+                         (1.0 - static_cast<double>(compacted_size)
+                              / static_cast<double>(output_buffer.size_bytes())) * 100.0);
+        } else {
+            tlas_.buffer = std::move(output_buffer);
+
+            spdlog::info("TLAS: {} instances, {:.1f} KB (compaction skipped)",
+                         instance_count,
+                         static_cast<double>(tlas_.buffer.size_bytes()) / 1024.0);
+        }
     }
 
     void AccelStructure::destroy() {
