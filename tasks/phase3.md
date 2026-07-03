@@ -50,8 +50,7 @@
 - [x] 创建 `optix/include/qualquer/optix/accel_structure.h` + `optix/src/accel_structure.cpp`（AccelStructure 类：build_blas / build_tlas / destroy_blas / destroy_tlas），并注册 accel_structure.cpp 到 `optix/CMakeLists.txt`
 - [x] BLAS 构建：multi-geometry per group_id、PREFER_FAST_TRACE + ALLOW_COMPACTION、compaction
 - [x] TLAS 构建：OptixInstance 组装（instanceId = group base offset、transform 转 3×4 row-major）、按 (group_id, transform) 去重
-- [ ] GeometryInfo buffer 构建（per-group 连续排列，与 instanceId 对应）
-- [ ] 请求用户在 CLion 中编译验证
+- [x] 请求用户在 CLion 中编译验证
 
 ## Step 6：LaunchParams + 设备程序 + Pipeline 更新
 
@@ -66,7 +65,7 @@ MUSTREAD:4
 
 ## Step 7：Renderer + Application 集成
 
-- [ ] Renderer::init 扩展：接收 SceneLoader 公开接口（meshes、mesh_instances、material_buffer、texture_objects_buffer），构建 AS，构建 geometry info buffer，重建 SBT
+- [ ] Renderer::init 扩展：接收 SceneLoader 公开接口（meshes、mesh_instances、material_buffer、texture_objects_buffer），构建 AS（按 group_id 分组 BLAS、按 (group_id, transform) 去重组装 OptixInstance、构建 TLAS），构建 GeometryInfo buffer（per-group 连续排列，与 instanceId 对应），重建 SBT
 - [ ] Renderer::submit_cuda 更新：LaunchParams 填入相机矩阵 + TLAS handle + 数据指针
 - [ ] Application 新增：Camera + CameraController 初始化、SceneLoader 加载、delta time 计算
 - [ ] Application 帧循环：CameraController::update → Camera 矩阵更新 → submit_cuda

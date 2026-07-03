@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 3 — 场景加载 + 完整材质系统 + 加速结构 + Primary Ray
-- **进度**：Phase 3 Step 5 第三小项完成：build_tlas 已实现（instance array 上传 + IAS 构建 + compaction；去重和 OptixInstance 组装涉及 renderer 类型，归 Step 7 调用方）
+- **进度**：Phase 3 Step 5 完成（AccelStructure 类：build_blas with compaction + per-geometry opaque flag、build_tlas with compaction；GeometryInfo buffer 构建和 TLAS 去重/组装移至 Step 7 Renderer 集成；编译通过）
 
 ### 下一个任务
 
-Phase 3 Step 5 第四小项：GeometryInfo buffer 构建（per-group 连续排列，与 instanceId 对应）
+Phase 3 Step 6 第一小项：launch_params.h 新增 float4x4 类型定义 + 扩展 LaunchParams
 
 > Phase 1、Phase 2 全部完成并归档。
 
