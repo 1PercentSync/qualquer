@@ -35,6 +35,15 @@ namespace qualquer::optix {
 
         /** @brief Byte stride between consecutive vertices (sizeof(Vertex)). */
         uint32_t vertex_stride;
+
+        /**
+         * @brief Whether this geometry is fully opaque (no alpha testing).
+         *
+         * true  → OPTIX_GEOMETRY_FLAG_DISABLE_ANYHIT (hardware skips anyhit).
+         * false → OPTIX_GEOMETRY_FLAG_REQUIRE_SINGLE_ANYHIT_CALL (anyhit
+         *         invoked at most once per primitive for alpha test).
+         */
+        bool opaque;
     };
 
     /**
