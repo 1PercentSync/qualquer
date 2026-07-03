@@ -154,6 +154,15 @@ __global__ void __raygen__rg() { // NOLINT(*-reserved-identifier)
     const uint3 idx = optixGetLaunchIndex();
     const uint32_t linear_index = idx.y * params.width + idx.x;
 
+    // Empty scene (no geometry loaded → traversable == 0): optixTrace on a null
+    // traversable is undefined behavior, so write the miss background color
+    // directly and skip tracing. Matches __miss__ms output, keeping the frame
+    // consistent with a fully-miss scene.
+    if (params.traversable == 0) {
+        params.accumulation_buffer[linear_index] = make_float4(0.1f, 0.1f, 0.1f, 1.0f);
+        return;
+    }
+
     // Pixel center → NDC ([-1,1], Y flipped so +Y = up)
     const float u = (static_cast<float>(idx.x) + 0.5f) / static_cast<float>(params.width);
     const float v = (static_cast<float>(idx.y) + 0.5f) / static_cast<float>(params.height);

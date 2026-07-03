@@ -16,6 +16,7 @@
 #include <qualquer/optix/accel_structure.h>
 #include <qualquer/optix/cuda_buffer.h>
 #include <qualquer/optix/pipeline.h>
+#include <qualquer/renderer/camera.h>
 #include <qualquer/renderer/launch_params.h>
 #include <qualquer/renderer/material.h>
 #include <qualquer/renderer/scene_types.h>
@@ -71,6 +72,25 @@ namespace qualquer::renderer {
 
         /** @brief ImGui backend for overlay recording. */
         ImGuiBackend &imgui;
+    };
+
+    /**
+     * @brief Per-frame scene state passed to Renderer::submit_cuda.
+     *
+     * Every member is owned elsewhere (Application owns the Camera, SceneLoader
+     * owns the material and texture-object buffers); this struct only borrows
+     * references for the duration of one submit_cuda call, per the ownership
+     * principle (no handle caching by users).
+     */
+    struct SceneRenderInput {
+        /** @brief Camera providing inverse view/projection for primary-ray generation. */
+        const Camera &camera;
+
+        /** @brief Device material array (indexed via GPUGeometryInfo::material_buffer_offset). */
+        const optix::CudaBuffer<Material> &materials;
+
+        /** @brief Device texture-object array (indexed via Material tex fields). */
+        const optix::CudaBuffer<cudaTextureObject_t> &texture_objects;
     };
 
     /**
@@ -152,11 +172,16 @@ namespace qualquer::renderer {
          * ping-pong buffer dependencies, the reverse semaphore protects the display
          * surface's write-after-read dependency (blit read before tonemap write).
          * @param cuda_context CUDA context (surface, streams, external semaphores).
+         * @param scene        Camera and scene data (materials, texture objects).
          * @param width        Display buffer width in pixels.
          * @param height       Display buffer height in pixels.
          * @param frame_index  Current frame-in-flight slot, indexing external_semaphores.
          */
-        void submit_cuda(const optix::Context &cuda_context, uint32_t width, uint32_t height, uint32_t frame_index);
+        void submit_cuda(const optix::Context &cuda_context,
+                         const SceneRenderInput &scene,
+                         uint32_t width,
+                         uint32_t height,
+                         uint32_t frame_index);
 
         /**
          * @brief Records the Vulkan command sequence (blit, ImGui, layout transitions).

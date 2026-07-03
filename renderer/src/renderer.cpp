@@ -9,6 +9,8 @@
 #include <cstdint>
 #include <vector>
 
+#include <glm/glm.hpp>
+
 #include <cuda_runtime.h>
 
 #include <vulkan/vulkan.h>
@@ -17,6 +19,7 @@
 #include <qualquer/optix/cuda_check.h>
 #include <qualquer/optix/optix_check.h>
 #include <qualquer/optix/pipeline.h>
+#include <qualquer/renderer/camera.h>
 #include <qualquer/renderer/imgui_backend.h>
 #include <qualquer/renderer/launch_params.h>
 #include <qualquer/renderer/tonemap.h>
@@ -28,6 +31,24 @@
 
 namespace qualquer::renderer {
     namespace {
+        /**
+         * @brief Converts a glm column-major mat4 to the row-major float4x4 the
+         *        device reads (rows[i] = i-th row).
+         *
+         * glm stores m[col][row]; float4x4::rows[i] is the i-th row, so each
+         * output row gathers the i-th component across all four columns.
+         */
+        float4x4 to_float4x4(const glm::mat4 &m) {
+            return {
+                .rows = {
+                    make_float4(m[0][0], m[1][0], m[2][0], m[3][0]),
+                    make_float4(m[0][1], m[1][1], m[2][1], m[3][1]),
+                    make_float4(m[0][2], m[1][2], m[2][2], m[3][2]),
+                    make_float4(m[0][3], m[1][3], m[2][3], m[3][3]),
+                },
+            };
+        }
+
         /**
          * @brief Per-group intermediate data shared across the AS build stages.
          *
@@ -339,6 +360,7 @@ namespace qualquer::renderer {
     }
 
     void Renderer::submit_cuda(const optix::Context &cuda_context,
+                               const SceneRenderInput &scene,
                                const uint32_t width,
                                const uint32_t height,
                                const uint32_t frame_index) {
@@ -361,6 +383,12 @@ namespace qualquer::renderer {
             .width = width,
             .height = height,
             .frame_index = frame_counter_,
+            .traversable = accel_.tlas_handle(),
+            .geometry_infos = geometry_info_buffer_.data(),
+            .materials = scene.materials.data(),
+            .texture_objects = scene.texture_objects.data(),
+            .inv_view = to_float4x4(scene.camera.inv_view),
+            .inv_projection = to_float4x4(scene.camera.inv_projection),
         };
         params_buffer_.upload(&params, 1, cuda_context.compute_stream);
 
