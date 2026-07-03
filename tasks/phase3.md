@@ -60,7 +60,7 @@ MUSTREAD:4
 - [x] `__raygen__rg`：inverse matrix primary ray 生成 → `optixTrace` → payload 读取 → 写累积 buffer
 - [x] `__closesthit__ch`：geometry info 查找 → 顶点插值 → 材质采样（全部 PBR 纹理）→ normal mapping → ambient 着色（baseColor × occlusion）→ payload 写入
 - [x] `__miss__ms`：输出背景色
-- [ ] SBT 更新：HitGroupSbtRecord 新增 HitGroupData（geometry_infos、materials、texture_objects 指针）
+- [x] SBT 更新：HitGroupSbtRecord 新增 HitGroupData（geometry_infos、materials、texture_objects 指针）
 - [ ] 请求用户在 CLion 中编译验证
 
 ## Step 7：Renderer + Application 集成

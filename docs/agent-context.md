@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 3 — 场景加载 + 完整材质系统 + 加速结构 + Primary Ray
-- **进度**：Phase 3 Step 6 第四、五小项完成：`__closesthit__ch`（geometry info 查找 + 顶点插值 + 全 PBR 纹理采样 + TBN normal mapping + ambient 着色）和 `__miss__ms`（固定背景色）已实现
+- **进度**：Phase 3 Step 6 第六小项完成：SBT 更新（HitGroupSbtRecord 新增 HitGroupData；data 暂置零待 Step 7 接入场景数据）
 
 ### 下一个任务
 
-Phase 3 Step 6 第六小项：SBT 更新（HitGroupSbtRecord 新增 HitGroupData：geometry_infos、materials、texture_objects 指针）
+Phase 3 Step 6 编译验证：请求用户在 CLion 中编译
 
 > Phase 1、Phase 2 全部完成并归档。
 
