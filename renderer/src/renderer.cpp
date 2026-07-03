@@ -35,9 +35,7 @@ namespace qualquer::renderer {
                        sizeof(LaunchParams),
                        "params");
 
-        // One SBT record per program group, header-only. Packing reuses one host
-        // record since only the opaque header (written by the API) differs between
-        // groups.
+        // Raygen and miss SBT records are header-only (global data via LaunchParams).
         SbtRecord record{};
         OPTIX_CHECK(optixSbtRecordPackHeader(pipeline_.raygen_program, &record));
         sbt_raygen_.alloc(1);
@@ -47,9 +45,13 @@ namespace qualquer::renderer {
         sbt_miss_.alloc(1);
         sbt_miss_.upload(&record, 1, cuda_context.compute_stream);
 
-        OPTIX_CHECK(optixSbtRecordPackHeader(pipeline_.hitgroup_program, &record));
+        // Hit-group record carries scene data pointers (zeroed until Step 7
+        // Renderer::init receives SceneLoader data and rebuilds the SBT).
+        HitGroupSbtRecord hit_record{};
+        OPTIX_CHECK(optixSbtRecordPackHeader(pipeline_.hitgroup_program, &hit_record));
+        hit_record.data = {};
         sbt_hit_.alloc(1);
-        sbt_hit_.upload(&record, 1, cuda_context.compute_stream);
+        sbt_hit_.upload(&hit_record, 1, cuda_context.compute_stream);
 
         // Two accumulation buffers for ping-pong HDR accumulation, cleared so the
         // first frame reads a defined zero background.
@@ -168,7 +170,7 @@ namespace qualquer::renderer {
             .missRecordStrideInBytes = sizeof(SbtRecord),
             .missRecordCount = 1,
             .hitgroupRecordBase = sbt_hit_.device_ptr(),
-            .hitgroupRecordStrideInBytes = sizeof(SbtRecord),
+            .hitgroupRecordStrideInBytes = sizeof(HitGroupSbtRecord),
             .hitgroupRecordCount = 1,
             .callablesRecordBase = 0,
             .callablesRecordStrideInBytes = 0,

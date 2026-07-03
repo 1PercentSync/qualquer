@@ -32,14 +32,41 @@ namespace qualquer::renderer {
     /**
      * @brief OptiX SBT record carrying only the opaque program header.
      *
-     * The raygen/miss/hit records carry no user data, so the record is the
-     * 32-byte header alone. Defined at namespace scope because it appears as a
-     * CudaBuffer template argument in the Renderer members. An explicit
-     * alignment replaces the OptiX example's @c __align__ compiler extension so
-     * the same record type is well-formed in host C++20.
+     * Used for raygen and miss records, which access global data through
+     * LaunchParams and carry no per-program user data.
      */
     struct SbtRecord {
         alignas(OPTIX_SBT_RECORD_ALIGNMENT) char header[OPTIX_SBT_RECORD_HEADER_SIZE];
+    };
+
+    /**
+     * @brief Per-hit-group data pointers embedded in the SBT record.
+     *
+     * The closest-hit shader reads these via optixGetSbtDataPointer() to access
+     * the scene's geometry, material, and texture arrays. Redundant with
+     * LaunchParams (which carries the same pointers), but SBT data is the
+     * standard OptiX mechanism for per-hit-group data delivery and allows
+     * independent hit groups in the future.
+     */
+    struct HitGroupData {
+        /** @brief Device pointer to the GPUGeometryInfo array. */
+        const GPUGeometryInfo *geometry_infos;
+
+        /** @brief Device pointer to the Material array. */
+        const Material *materials;
+
+        /** @brief Device pointer to the cudaTextureObject_t array. */
+        const cudaTextureObject_t *texture_objects;
+    };
+
+    /**
+     * @brief Hit-group SBT record: opaque header + HitGroupData payload.
+     */
+    struct HitGroupSbtRecord {
+        alignas(OPTIX_SBT_RECORD_ALIGNMENT) char header[OPTIX_SBT_RECORD_HEADER_SIZE];
+
+        /** @brief User data read by the closest-hit shader. */
+        HitGroupData data;
     };
 
     /**
@@ -152,8 +179,8 @@ namespace qualquer::renderer {
         optix::CudaBuffer<SbtRecord> sbt_raygen_;
         /** @brief Miss SBT record buffer (single record, no user data). */
         optix::CudaBuffer<SbtRecord> sbt_miss_;
-        /** @brief Hit-group SBT record buffer (single record, no user data). */
-        optix::CudaBuffer<SbtRecord> sbt_hit_;
+        /** @brief Hit-group SBT record buffer (single record, carries HitGroupData). */
+        optix::CudaBuffer<HitGroupSbtRecord> sbt_hit_;
 
         /**
          * @brief Ping-pong HDR accumulation buffers (RGBA32F, CUDA-owned).
