@@ -335,12 +335,11 @@
 - closesthit bounce==0 时可选写入 aux data（albedo、normal、depth 对两条路线都需要）
 - motion vectors 不在 Phase 4 范围，但 LaunchParams 中可预留指针位置
 
-**讨论点**：
-- Phase 4 是否实际写入 aux data（作为 debug view 验证）？
-- 还是仅预留指针/buffer，后续再填充？
-- depth 输出的格式（linear Z vs 其他）
-
-**决策**：
+**决策**：✅ **Phase 4 实际写入 aux data + debug view**。
+1. LaunchParams 增加 aux buffer 指针（albedo + normal + depth），motion vectors 指针预留位置不分配
+2. 分配 aux buffers（跟随 render_width × render_height）
+3. closesthit bounce==0 时写入 albedo、world normal、linear depth（`optixGetRayTmax()`）
+4. UI 提供 debug view 切换（显示 aux buffer 内容），提前验证数据正确性
 
 ---
 
