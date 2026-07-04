@@ -210,11 +210,10 @@ __global__ void __raygen__rg() { // NOLINT(*-reserved-identifier)
     const float g = __uint_as_float(p1);
     const float b = __uint_as_float(p2);
 
-    // Overwrite accumulation buffer each frame (no temporal accumulation yet)
     params.accumulation_buffer[linear_index] = make_float4(r, g, b, 1.0f);
 }
 
-/// Miss: fixed dark-grey background, no IBL yet (added in Phase 4).
+/// Emits a constant background color on miss.
 __global__ void __miss__ms() { // NOLINT(*-reserved-identifier)
     optixSetPayload_0(__float_as_uint(0.1f));
     optixSetPayload_1(__float_as_uint(0.1f));
@@ -300,7 +299,7 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
     optixSetPayload_2(__float_as_uint(color.z));
 }
 
-/// Any-hit: empty (all geometry treated as opaque in Phase 3).
+/// Intentionally empty — opaque geometry disables any-hit.
 __global__ void __anyhit__ah() { // NOLINT(*-reserved-identifier)
 }
 

@@ -1,3 +1,8 @@
+/**
+ * @file cache.cpp
+ * @brief Shared cache infrastructure implementation (renderer layer).
+ */
+
 #include <qualquer/renderer/cache.h>
 
 #include <fstream>

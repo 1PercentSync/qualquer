@@ -46,7 +46,7 @@ namespace qualquer::renderer {
      * @param category  Subdirectory name (e.g. "textures", "ibl").
      * @param hash      Content hash string used as the filename stem.
      * @param extension File extension including the leading dot (e.g. ".ktx2").
-     * @return Absolute path to the cache file (not yet created).
+     * @return Absolute path to the cache file.
      */
     std::filesystem::path cache_path(std::string_view category,
                                      std::string_view hash,

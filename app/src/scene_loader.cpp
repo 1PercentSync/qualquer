@@ -244,7 +244,6 @@ namespace qualquer::app {
 
                 std::vector<renderer::Vertex> vertices(vertex_count);
 
-                // Compute local AABB from position data
                 glm::vec3 local_min(std::numeric_limits<float>::max());
                 glm::vec3 local_max(std::numeric_limits<float>::lowest());
 
@@ -321,7 +320,6 @@ namespace qualquer::app {
                     renderer::generate_tangents(vertices, indices);
                 }
 
-                // Create CUDA vertex and index buffers
                 optix::CudaBuffer<renderer::Vertex> vb;
                 vb.alloc(vertices.size());
                 vb.upload(vertices.data(), vertices.size(), nullptr);
@@ -330,7 +328,6 @@ namespace qualquer::app {
                 ib.alloc(indices.size());
                 ib.upload(indices.data(), indices.size(), nullptr);
 
-                // Material index
                 if (!primitive.materialIndex.has_value()) {
                     throw std::runtime_error("Mesh '" + std::string(gltf_mesh.name)
                                              + "' primitive has no material (required by renderer)");
@@ -367,7 +364,7 @@ namespace qualquer::app {
         texture_objects_.push_back(default_textures.flat_normal.texture_object);
         texture_objects_.push_back(default_textures.black.texture_object);
 
-        // ---- Phase 1: Collect unique (texture_index, role) pairs ----
+        // ---- Collect unique (texture_index, role) pairs ----
         using TexKey = std::pair<size_t, renderer::TextureRole>;
         std::map<TexKey, size_t> unique_tex_map;
 
@@ -393,7 +390,7 @@ namespace qualquer::app {
             collect(mat.emissiveTexture, renderer::TextureRole::Color);
         }
 
-        // ---- Phase 2a: Hash source bytes + cache check (serial, fast) ----
+        // ---- Hash source bytes + cache check (serial, fast) ----
         const auto tex_count = static_cast<int>(unique_entries.size());
 
         std::vector<std::string> source_hashes(tex_count);
@@ -411,7 +408,7 @@ namespace qualquer::app {
             }
         }
 
-        // ---- Phase 2b: Decode only cache-miss images (serial) ----
+        // ---- Decode cache-miss images (serial) ----
         std::vector<renderer::ImageData> decoded_images(tex_count);
         for (int i = 0; i < tex_count; ++i) {
             if (cache_hit[i]) { continue; }
@@ -419,7 +416,7 @@ namespace qualquer::app {
             decoded_images[i] = decode_gltf_image(gltf, gltf.images[*tex.imageIndex]);
         }
 
-        // ---- Phase 2c: Parallel BC compression for cache misses only ----
+        // ---- Parallel BC compression for cache misses only ----
         #pragma omp parallel for schedule(dynamic)
         for (int i = 0; i < tex_count; ++i) {
             if (cache_hit[i]) { continue; }
@@ -429,7 +426,7 @@ namespace qualquer::app {
 
         decoded_images.clear();
 
-        // ---- Phase 3: Serial GPU upload ----
+        // ---- Serial GPU upload ----
         constexpr renderer::SamplerDesc default_sampler{
             .filter_mode = cudaFilterModeLinear,
             .mipmap_filter_mode = cudaFilterModeLinear,
@@ -511,7 +508,6 @@ namespace qualquer::app {
                                                       renderer::TextureRole::Color)
                                     : UINT32_MAX;
 
-            // Fill unset texture slots with default indices
             if (data.base_color_tex == UINT32_MAX) { data.base_color_tex = kDefaultWhiteIdx; }
             if (data.metallic_roughness_tex == UINT32_MAX) { data.metallic_roughness_tex = kDefaultWhiteIdx; }
             if (data.normal_tex == UINT32_MAX) {
@@ -527,13 +523,11 @@ namespace qualquer::app {
             gpu_materials_.push_back(data);
         }
 
-        // Upload material array to device
         if (!gpu_materials_.empty()) {
             material_buffer_.alloc(gpu_materials_.size());
             material_buffer_.upload(gpu_materials_.data(), gpu_materials_.size(), nullptr);
         }
 
-        // Upload texture-object array to device
         if (!texture_objects_.empty()) {
             texture_objects_buffer_.alloc(texture_objects_.size());
             texture_objects_buffer_.upload(texture_objects_.data(), texture_objects_.size(), nullptr);
@@ -575,7 +569,6 @@ namespace qualquer::app {
         spdlog::info("Created {} mesh instances from {} nodes",
                      mesh_instances_.size(), gltf.nodes.size());
 
-        // Compute scene AABB (union of all instance world_bounds)
         if (!mesh_instances_.empty()) {
             scene_bounds_ = mesh_instances_[0].world_bounds;
             for (size_t i = 1; i < mesh_instances_.size(); ++i) {
@@ -586,13 +579,11 @@ namespace qualquer::app {
     }
 
     void SceneLoader::destroy() {
-        // Destroy scene textures
         for (auto &tex: textures_) {
             tex.destroy();
         }
         textures_.clear();
 
-        // Destroy device buffers
         material_buffer_.free();
         texture_objects_buffer_.free();
 

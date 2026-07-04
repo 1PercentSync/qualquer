@@ -1,3 +1,8 @@
+/**
+ * @file ktx2.cpp
+ * @brief Minimal KTX2 reader/writer implementation (renderer layer).
+ */
+
 #include <qualquer/renderer/ktx2.h>
 
 #include <qualquer/renderer/cache.h>
