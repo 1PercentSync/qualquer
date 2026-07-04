@@ -184,7 +184,7 @@
   - 但目标说"不做性能优化"
 - 可能的分界线：NEE = 让 PT 在合理时间内产出可接受结果的必要机制；importance sampling = 加速收敛的优化
 
-**决策**：
+**决策**：✅ **全做**。Env importance sampling（alias table）、emissive 三角形 NEE、MIS（power heuristic）、shadow ray。与 D8 同理——不是优化，而是让 PT 在小光源/HDR 环境下产出可用结果的必要机制。
 
 ---
 
