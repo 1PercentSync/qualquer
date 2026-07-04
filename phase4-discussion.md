@@ -86,7 +86,10 @@
 
 **注意**：未来 DLSS Ray Reconstruction 可在 1 spp 下直接产出高质量画面，届时实时预览模式可能不走累积管线。但 Phase 4 的累积系统仍然是物理收敛渲染的基础，两者互补而非替代。
 
-**决策**：
+**决策**：✅
+1. **Separate Sum 累积**：`sum_new = sum_old + frame_total`，tonemap 中 `display = sum / total_sample_count`。count 是全局值（全帧均匀采样），无需 per-pixel buffer。精度略优于 running average，与现有 ping-pong 架构兼容。
+2. **累积重置**：camera/PT 参数/渲染分辨率/场景切换时 `sample_count_ = 0`，实现参考 Himalaya。
+3. **语义拆分**：`frame_counter_`（slot 索引，永不 reset）、`sample_count_`（累积总量，reset 时归零）、`frame_seed_`（RNG temporal scramble，永不 reset——避免重置后噪声序列重复）。
 
 ---
 
