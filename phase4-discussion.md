@@ -84,6 +84,8 @@
 3. **检测方式**：逐帧比较 inv_view + inv_projection（exact float compare）
 4. **frame_counter_ / sample_count_ / frame_seed_ 语义拆分**：当前 frame_counter_ 混用了 slot 索引和 frame index
 
+**注意**：未来 DLSS Ray Reconstruction 可在 1 spp 下直接产出高质量画面，届时实时预览模式可能不走累积管线。但 Phase 4 的累积系统仍然是物理收敛渲染的基础，两者互补而非替代。
+
 **决策**：
 
 ---
@@ -283,6 +285,8 @@
 - Phase 4 是否实现自适应，还是仅暴露手动 `samples_per_frame` 参数？
 - 自适应逻辑本身不复杂，但帧时间测量需要新增 timing events
 
+**注意**：未来 DLSS-RR 在 1 spp 实时预览模式下，自适应 sample 数不再关键（固定 1 spp）。但对物理收敛渲染模式仍然有价值。
+
 **决策**：
 
 ---
@@ -300,18 +304,24 @@
 
 ---
 
-### D18. Denoiser 预留
+### D18. Denoiser / DLSS-RR 预留
 
-**核心问题**：Phase 4 为 Phase 6 的 OptiX Denoiser 预留什么？
+**核心问题**：Phase 4 为后续降噪/重建系统预留什么？
 
-**建议预留项**：
-- LaunchParams 携带 aux buffer 指针（albedo + normal）
+**两条技术路线**：
+- **OptiX Denoiser**（Phase 6）：需要 albedo + normal aux buffer
+- **DLSS Ray Reconstruction**（未来）：需要 albedo + normal + depth + motion vectors。Motion vectors 需要时域数据（前帧 hit position），Phase 4 不实现
+
+**Phase 4 可预留项**：
+- LaunchParams 携带 aux buffer 指针（albedo + normal + depth）
 - 分配 aux buffers（跟随渲染分辨率）
-- closesthit bounce==0 时可选写入 aux data
+- closesthit bounce==0 时可选写入 aux data（albedo、normal、depth 对两条路线都需要）
+- motion vectors 不在 Phase 4 范围，但 LaunchParams 中可预留指针位置
 
 **讨论点**：
 - Phase 4 是否实际写入 aux data（作为 debug view 验证）？
-- 还是仅预留指针/buffer，Phase 6 再填充？
+- 还是仅预留指针/buffer，后续再填充？
+- depth 输出的格式（linear Z vs 其他）
 
 **决策**：
 
