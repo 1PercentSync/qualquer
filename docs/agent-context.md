@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 3 — 场景加载 + 完整材质系统 + 加速结构 + Primary Ray
-- **进度**：Phase 3 Step 7 第4小项（Config 模块）完成：新建 config.h/config.cpp（AppConfig 仅 scene_path；config_file_path/load_config/save_config；Windows-only 直接 SHGetKnownFolderPath，无条件编译；nlohmann/json 序列化；临时文件 + 原子 rename）；app/CMakeLists.txt 注册 config.cpp + nlohmann_json；vcpkg.json 加 nlohmann-json 3.12.0#2
+- **进度**：Phase 3 Step 7 第5小项（Application init + destroy 扩展）完成：application.h 新增 camera_/camera_controller_/scene_loader_/default_textures_/config_ 成员 + auto_position_camera 声明；init 顺序 load_config → camera aspect/update_all → controller init → renderer init → default_textures → scene_loader load（空路径跳过、失败写 error_message_）→ renderer load_scene → set_focus_target + auto_position；destroy 在 renderer 后、cuda_context 前销毁 scene_loader + default_textures；auto_position_camera 照搬 Himalaya（degenerate AABB no-op）
 
 ### 下一个任务
 
-Phase 3 Step 7 第5小项：Application init + destroy 扩展（Config 加载、DefaultTextures 创建与持有、Camera + CameraController 初始化、SceneLoader 加载、Renderer load_scene、Camera 初始定位；destroy 同步扩展）
+Phase 3 Step 7 第6小项：Application 帧 循环（delta time 用 glfwGetTime、camera.aspect 从 swapchain 更新、CameraController::update → submit_cuda 传相机 + 场景数据，更新 submit_cuda 调用点）
 
 > Phase 1、Phase 2 全部完成并归档。
 

@@ -69,7 +69,7 @@ MUSTREAD:4
 - [x] 修复：SBT 死数据清理——closesthit 读 LaunchParams（非 SBT），HitGroupSbtRecord 回归 header-only（SbtRecord），移除 HitGroupData 与 rebuild_hitgroup_sbt 及 load_scene 的 material/texture 参数（仅服务 SBT 重建），更新 current-phase.md SBT 设计节
 - [x] Renderer::submit_cuda 更新：LaunchParams 填入相机矩阵 + TLAS handle + 数据指针
 - [x] `vcpkg.json` 新增 nlohmann-json；创建 `app/include/qualquer/app/config.h` + `app/src/config.cpp`（AppConfig + load_config + save_config，`%LOCALAPPDATA%\qualquer\config.json`），注册到 `app/CMakeLists.txt`
-- [ ] Application init + destroy 扩展：Config 加载、DefaultTextures 创建与持有、Camera + CameraController 初始化（aspect 从 swapchain）、SceneLoader 加载（config.scene_path + default_textures）、Renderer load_scene、Camera 初始定位（auto_position_camera + set_focus_target）；destroy 同步扩展（DefaultTextures 销毁 + SceneLoader::destroy）
+- [x] Application init + destroy 扩展：Config 加载、DefaultTextures 创建与持有、Camera + CameraController 初始化（aspect 从 swapchain）、SceneLoader 加载（config.scene_path + default_textures）、Renderer load_scene、Camera 初始定位（auto_position_camera + set_focus_target）；destroy 同步扩展（DefaultTextures 销毁 + SceneLoader::destroy）
 - [ ] Application 帧循环：delta time（glfwGetTime）、camera.aspect 从 swapchain 更新、CameraController::update → submit_cuda（传入相机 + 场景数据指针）
 - [ ] 请求用户在 CLion 中编译验证（窗口显示场景 PBR ambient 着色 + ImGui，交互式相机可浏览，resize 不崩溃）
 
