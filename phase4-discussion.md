@@ -315,7 +315,9 @@
 2. **Exposure 控制**：固定值 / auto-exposure / UI 可调？
 3. **与渲染分辨率解耦的交互**：tonemap kernel 处理 render_width × render_height 子区域
 
-**决策**：
+**决策**：✅
+1. **Tonemap 函数**：Khronos PBR Neutral。专为 PBR 设计，baseColor 低于阈值时 1:1 精确还原，仅压缩高亮，无风格化色偏。
+2. **Exposure 控制**：手动 `exposure` 参数，`color *= exp2(exposure)`。
 
 ---
 
