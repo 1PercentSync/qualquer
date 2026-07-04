@@ -76,11 +76,10 @@ MUSTREAD:4
 ## Step 8：场景切换 + 清理 + 最终验证
 
 - [x] DebugUI 场景路径输入 + 加载按钮；Application switch_scene（GPU idle → destroy 旧场景 → 加载新场景 → load_scene → auto_position → save_config）
-- [ ] 请求用户在 CLion 中编译验证（场景切换正常）
-- [ ] 验证 ISPC 压缩运行时正确（BC7/BC5 via bc7enc、BC6H via ISPCTextureCompressor，确认 ISPC dispatch 与压缩产出正常；场景加载后端到端可验证）
-- [ ] 确认无 validation / OptiX / CUDA 报错
-- [ ] 确认纹理缓存生效（第二次加载从 KTX2 读取）
-- [ ] 确认 BLAS compaction 生效（日志对比 compaction 前后大小）
-- [ ] 确认 resize 正常（累积 buffer 重建，AS / 材质 / 纹理无影响）
+- [x] 请求用户在 CLion 中编译验证（场景切换正常）
+- [x] 验证 ISPC 压缩运行时正确（BC7/BC5 via bc7enc、BC6H via ISPCTextureCompressor，确认 ISPC dispatch 与压缩产出正常；场景加载后端到端可验证）
+- [x] 确认无 validation / OptiX / CUDA 报错
+- [x] 确认纹理缓存生效（第二次加载从 KTX2 读取）
+- [x] 确认 BLAS compaction 生效（日志对比 compaction 前后大小）
+- [x] 确认 resize 正常（累积 buffer 重建，AS / 材质 / 纹理无影响）
 - [ ] 代码文档检查（所有新增公开接口有 Doxygen 注释）
-- [ ] 请求用户做最终编译 + 运行验证
