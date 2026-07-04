@@ -43,6 +43,11 @@ Phase 4 启动：归档 Phase 3 文档（`docs/current-phase.md` + `tasks/phase3
 | `tasks/archive/phase1.md` | Phase 1 可执行任务清单（已归档） |
 | `docs/archive/phase2.md` | Phase 2 目标、范围、实现指南（已归档） |
 | `tasks/archive/phase2.md` | Phase 2 可执行任务清单（已归档） |
+| `docs/archive/phase3.md` | Phase 3 目标、范围、实现指南（已归档） |
+| `tasks/archive/phase3.md` | Phase 3 可执行任务清单（已归档） |
+| `docs/archive/phase4-research-part1.md` | Phase 4 研究：Himalaya PT 特性差异清单（已归档） |
+| `docs/archive/phase4-research-part2.md` | Phase 4 研究：架构选项文档（已归档） |
+| `docs/archive/latest-nvidia-tech-deep-research-report.md` | NVIDIA 新技术影响分析（已归档） |
 ---
 
 ## 维护规则
