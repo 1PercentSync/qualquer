@@ -368,7 +368,7 @@
 - Himalaya：bounce ≥ 2 启用，存活概率 = clamp(max_component(throughput), 0.05, 0.95)
 - Phase 4 是否纳入？（减少不必要的长路径计算，但本质上是"优化"）
 
-**决策**：
+**决策**：✅ **纳入**。无偏终止（存活时 throughput /= survival_prob），不改变期望值。是避免浪费而非加速收敛。
 
 ---
 
