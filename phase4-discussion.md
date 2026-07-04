@@ -253,7 +253,7 @@
 - Ray cone 减少 texture aliasing noise → 每个 sample 质量更高 → 自适应 spp 更高效
 - 2 floats 已包含在 Himalaya 的 18 register payload 内
 
-**决策**：
+**决策**：✅ **A. Ray Cone**。payload 已有 2 floats 位置，mipmap 基础设施就绪，`tex2DLod` 直接可用。减少高频纹理 aliasing → 每 sample 质量更高。
 
 ---
 
