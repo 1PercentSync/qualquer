@@ -395,7 +395,7 @@
 - 达到 target_samples 后停止累积
 - 简单的收敛停止条件
 
-**决策**：
+**决策**：✅ **纳入**。`sample_count_ >= target_sample_count` 时跳过 launch。UI 暴露 `target_sample_count`（0 = 无限累积）。
 
 ---
 
