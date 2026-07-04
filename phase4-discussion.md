@@ -53,7 +53,7 @@
 - **A. 单 .cu + 多 .cuh 头文件**：保持一个 module，`__forceinline__ __device__` 函数拆入 brdf.cuh / rng.cuh / ray_utils.cuh / nee.cuh 等。编译器全局优化。构建流程零改动
 - **B. 多 .cu → 多 Module → OptiX Module Linking**：增量编译，但实现复杂度高，跨 module 调用受限
 
-**决策**：
+**决策**：✅ **A. 单 .cu + 多 .cuh**。1500 行量级编译不构成瓶颈；全局内联对 megakernel 性能关键；构建流程零改动。
 
 ---
 
