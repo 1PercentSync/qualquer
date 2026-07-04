@@ -8,9 +8,13 @@
 #include <array>
 #include <vector>
 
+#include <glm/glm.hpp>
 #include <imgui.h>
 #include <GLFW/glfw3.h>
 #include <spdlog/spdlog.h>
+
+#include <qualquer/app/config.h>
+#include <qualquer/renderer/texture.h>
 
 namespace qualquer::app {
     namespace {
@@ -71,10 +75,33 @@ namespace qualquer::app {
         };
         VK_CHECK(vkQueueSubmit2(context_.graphics_queue, 1, &presignal_submit, VK_NULL_HANDLE));
         imgui_backend_.init(context_, swapchain_, window_);
+
+        // --- Configuration (scene path) ---
+        config_ = load_config();
+
+        // --- Camera (aspect from the swapchain, controller bound to the window) ---
+        camera_.aspect = static_cast<float>(swapchain_.extent.width) / static_cast<float>(swapchain_.extent.height);
+        camera_.update_all();
+        camera_controller_.init(window_, &camera_);
+
+        // --- Renderer (pipeline + accumulation buffers) ---
         renderer_.init(cuda_context_,
                        swapchain_.extent.width,
                        swapchain_.extent.height,
                        "shaders/programs.optixir");
+
+        // --- Scene (default textures → glTF load → AS build → camera framing) ---
+        default_textures_ = renderer::create_default_textures();
+        if (!config_.scene_path.empty()) {
+            if (!scene_loader_.load(config_.scene_path, default_textures_)) {
+                error_message_ = "Failed to load scene: " + config_.scene_path;
+            }
+        }
+        renderer_.load_scene(cuda_context_,
+                             scene_loader_.meshes(),
+                             scene_loader_.mesh_instances());
+        camera_controller_.set_focus_target(&scene_loader_.scene_bounds());
+        auto_position_camera(scene_loader_.scene_bounds());
     }
 
     void Application::run() {
@@ -339,6 +366,20 @@ namespace qualquer::app {
                                             display_buffer_.size);
     }
 
+    void Application::auto_position_camera(const renderer::AABB &bounds) {
+        // Skip framing for a degenerate AABB (empty/failed scene): leave the
+        // default camera pose rather than snapping to an undefined position.
+        const float diagonal = glm::length(bounds.max - bounds.min);
+        constexpr float kEpsilon = 1e-4f;
+        if (diagonal < kEpsilon) {
+            return;
+        }
+        camera_.yaw = 0.0f;
+        camera_.pitch = glm::radians(-45.0f);
+        camera_.position = camera_.compute_focus_position(bounds);
+        camera_.update_all();
+    }
+
     void Application::release_display_buffer_to_external() {
         const auto &frame = context_.current_frame();
         // ReSharper disable once CppLocalVariableMayBeConst
@@ -402,6 +443,14 @@ namespace qualquer::app {
         // Renderer's OptiX pipeline and CUDA buffers are torn down before the CUDA
         // context they were created against.
         renderer_.destroy();
+        // Scene resources (mesh/material/texture buffers + scene textures) follow
+        // the renderer: its acceleration structures referenced these device
+        // pointers. Default textures likewise precede the CUDA context they were
+        // created against.
+        scene_loader_.destroy();
+        default_textures_.white.destroy();
+        default_textures_.flat_normal.destroy();
+        default_textures_.black.destroy();
         // CUDA releases its imported surface/semaphores before the Vulkan resources
         // they wrap: the surface backs the display-buffer image memory, and the
         // imported semaphores back the Vulkan external semaphores.

@@ -8,10 +8,15 @@
 #include <array>
 #include <string>
 
+#include <qualquer/app/camera_controller.h>
+#include <qualquer/app/config.h>
+#include <qualquer/app/scene_loader.h>
 #include <qualquer/optix/context.h>
+#include <qualquer/renderer/camera.h>
 #include <qualquer/renderer/debug_ui.h>
 #include <qualquer/renderer/imgui_backend.h>
 #include <qualquer/renderer/renderer.h>
+#include <qualquer/renderer/texture.h>
 #include <qualquer/vulkan/context.h>
 #include <qualquer/vulkan/interop.h>
 #include <qualquer/vulkan/swapchain.h>
@@ -86,6 +91,15 @@ namespace qualquer::app {
          */
         void recreate_swapchain();
 
+        /**
+         * @brief Positions the camera to overlook the given bounds.
+         *
+         * Sets yaw=0, pitch=-45° and derives position from the AABB via
+         * compute_focus_position. No-op if the AABB is degenerate (near-zero
+         * diagonal), so an empty scene leaves the default camera pose.
+         */
+        void auto_position_camera(const renderer::AABB &bounds);
+
         /** @brief GLFW window handle. */
         GLFWwindow *window_ = nullptr;
 
@@ -136,6 +150,21 @@ namespace qualquer::app {
 
         /** @brief Debug panel (frame stats, GPU info, present-mode/log-level controls). */
         renderer::DebugUI debug_ui_;
+
+        /** @brief Camera state (position, orientation, derived matrices). */
+        renderer::Camera camera_{};
+
+        /** @brief Free-roaming camera controller (WASD + mouse rotation). */
+        CameraController camera_controller_{};
+
+        /** @brief glTF scene loader and resource owner. */
+        SceneLoader scene_loader_{};
+
+        /** @brief Default 1×1 textures filling missing material slots. */
+        renderer::DefaultTextures default_textures_{};
+
+        /** @brief Persistent application configuration (scene path). */
+        AppConfig config_{};
 
         /**
          * @brief Current error message for the debug panel's dismissable banner.
