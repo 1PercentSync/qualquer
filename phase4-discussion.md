@@ -235,7 +235,7 @@
 
 **关键考量**：alias table 从 equirect 像素构建（与采样方式无关）；环境旋转两种方式都是对 ray direction 做 Y 轴旋转
 
-**决策**：
+**决策**：✅ **A. Cubemap**。`texCubemap` 硬件选面零数学开销、无极地畸变、边界无缝 filtering。代价仅为一次性 equirect→cubemap 转换 kernel + ~1.5× 显存。
 
 ---
 
