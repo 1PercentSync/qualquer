@@ -436,3 +436,66 @@
 1. **PathState 结构体**：定义 path 完整状态（origin, direction, throughput, radiance, cone, pixel/sample/bounce index, alive）。Phase 4 作为 raygen 局部变量，迁移时变为全局 buffer 元素类型。
 2. **Payload pack/unpack helpers**：closesthit→raygen 的 18 register 编解码封装在 `payload_helpers.cuh`，改布局只需改一处。
 3. **Bounce loop body 隔离**：raygen bounce loop 体抽为 `__device__` 函数。迁移时从 for-loop 调用变为每次 launch 调用一次。
+
+---
+
+## Phase 划分
+
+> 基于 D1-D26 决策结果，按"4000 spp 大致收敛"标准划分 Phase 4 与 Phase 4.5 的特性边界。
+
+### Phase 4：核心 PT（4000 spp 可收敛）
+
+Phase 4 的目标是实现一个功能完整的 PT 渲染器，在 4000 spp 下对各类场景（含 HDR 环境光、小面积 emissive）能大致收敛。
+
+**包含特性**：
+- 多 bounce 循环（Megakernel + SER）— D1
+- 全信息 Payload（18 registers）— D2
+- 单 .cu + 多 .cuh 代码组织 — D3
+- Raygen 内 sample 循环（max 64 spp/frame）— D4
+- Separate Sum 累积 + reset + 语义拆分 — D5
+- 2 miss + 2 hitgroup（opaque + non-opaque）— D6（由 D11 推导）
+- **PCG hash RNG**（D7 决策的 Sobol + Blue Noise 推迟到 4.5，Phase 4 用 PCG 替代）
+- BRDF 全集（D_GGX, V_SmithGGX, F_Schlick, Lambertian, VNDF, cosine hemisphere, multi-lobe selection, combined PDF）— D8
+- NEE + MIS 全集（env alias table, emissive alias table, power heuristic, shadow ray）— D9
+- Shadow ray with any-hit — D10（由 D9+D11 推导）
+- Alpha mask + double-sided pass-through — D11（stochastic alpha 推迟到 4.5）
+- Env cubemap — D12
+- Subpixel jitter
+- Ray origin offset + shading normal consistency — D14
+- Tonemap（Khronos PBR Neutral）+ 手动 exposure — D17
+- Multi-launch 迁移预留（PathState / payload helpers / bounce isolation）— D26
+- UI 参数暴露（max_bounces, samples_per_frame, exposure）— D25 子集
+
+**不包含（推迟到 Phase 4.5）**：
+- Sobol + Blue Noise RNG（用 PCG hash 替代）
+- Ray Cone LOD（使用 LOD 0）
+- Russian Roulette（所有 path 跑满 max_bounces）
+- Firefly Clamping
+- Stochastic Alpha
+- IBL 旋转
+- Target sample count + auto-stop
+- Render resolution decoupling
+- Aux data 写入 + debug view
+- Denoiser
+
+### Phase 4.5：收敛质量 + Denoiser
+
+#### 第一部分：收敛质量与性能
+
+| # | 特性 | 来源决策 | 效果 |
+|---|------|---------|------|
+| 1 | Sobol + Blue Noise RNG | D7 | 低差异序列替代 PCG，等效 sample 效率提升 4-8× |
+| 2 | Ray Cone LOD | D13 | 减少高频纹理 aliasing noise |
+| 3 | Russian Roulette | D20 | 无偏终止低 throughput 路径，减少无效计算 |
+| 4 | Firefly Clamping | D21 | 抑制 firefly 伪影（有 bias 但视觉改善大） |
+| 5 | Stochastic Alpha | D11 | blend 材质的正确半透明处理 |
+| 6 | IBL 旋转 | D22 | UX：环境光 Y 轴旋转 |
+| 7 | Target sample count + auto-stop | D23 | UX：达到目标 sample 数后停止 |
+| 8 | Render resolution decoupling | D15 | 渲染分辨率独立于 swapchain，为自适应/DLSS-RR 预留 |
+
+#### 第二部分：Denoiser 集成
+
+| # | 特性 | 来源决策 | 说明 |
+|---|------|---------|------|
+| 9 | Aux data 写入 + debug view | D18 | closesthit bounce==0 写入 albedo/normal/depth，UI debug view |
+| 10 | OptiX Denoiser 集成 | — | 原 Phase 6 内容，提前到 4.5 |
