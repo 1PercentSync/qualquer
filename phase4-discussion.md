@@ -70,7 +70,7 @@
 
 **关键考量**：TDR 安全（Windows 2s 限制），寄存器压力（A 只多 3 floats + 1 counter）
 
-**决策**：
+**决策**：✅ **A. Raygen 内 sample 循环**。单次 launch，寄存器内局部累积，每帧 1 读 + 1 写 accum buffer。硬上限 max_samples_per_frame=64（TDR 安全）。
 
 ---
 
