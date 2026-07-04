@@ -166,7 +166,7 @@
 - VNDF sampling 和 cosine hemisphere 是 importance sampling，但它们属于"让 PT 正确/可用的基本采样"还是"性能优化"？
 - 如果不做 importance sampling，uniform hemisphere sampling 是否能在合理时间内收敛？
 
-**决策**：
+**决策**：✅ **全做**。上述全集是完整 PT 的最小 BRDF 集，不是优化。Cosine hemisphere / VNDF / multi-lobe selection 是让 PT 在可行时间内产出可辨识结果的基本采样策略——没有它们 specular 材质实际不可用。
 
 ---
 
