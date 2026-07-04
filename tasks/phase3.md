@@ -82,4 +82,4 @@ MUSTREAD:4
 - [x] 确认纹理缓存生效（第二次加载从 KTX2 读取）
 - [x] 确认 BLAS compaction 生效（日志对比 compaction 前后大小）
 - [x] 确认 resize 正常（累积 buffer 重建，AS / 材质 / 纹理无影响）
-- [ ] 代码文档检查（所有新增公开接口有 Doxygen 注释）
+- [x] 代码文档检查（所有新增公开接口有 Doxygen 注释）

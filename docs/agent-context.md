@@ -10,13 +10,12 @@
 
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
-- **Phase**：M1 Phase 3 — 场景加载 + 完整材质系统 + 加速结构 + Primary Ray
-- **进度**：Phase 3 Step 8 验证项大部分通过：场景切换正常、ISPC 压缩正确（186 纹理加载成功）、无 CUDA/OptiX 报错、纹理缓存生效（二次加载 <1s）、BLAS compaction 生效（日志可见 43%–70%）、resize 正常。修复了 CUDA 13.x 下 `cudaChannelFormatKindUnsignedBlockCompressed7SRGB` 不可用问题（改用 plain BC7 kind + `tex_desc.sRGB` + `cudaReadModeNormalizedFloat`）
-- **实现偏差（已同步文档）**：delta time 实际用 ImGui::GetIO().DeltaTime（非 glfwGetTime）——方案 A 将 begin_frame 提前到 submit_cuda 前，ImGui DeltaTime 在 controller.update 时已当帧有效；current-phase.md 帧循环/delta time 节已更新
+- **Phase**：M1 Phase 3 完成 — 场景加载 + 完整材质系统 + 加速结构 + Primary Ray
+- **进度**：Phase 3 全部完成。场景加载（glTF + BC 纹理 + KTX2 缓存）、完整 PBR 材质、BLAS/TLAS（含 compaction）、交互式相机、ambient 着色、运行时场景切换、代码文档检查均通过。CUDA 13.x 下 BC7_SRGB kind 不可用的处理已同步进 current-phase.md
 
 ### 下一个任务
 
-Phase 3 Step 8 倒数第2小项：代码文档检查（所有新增公开接口有 Doxygen 注释）
+Phase 4 启动：归档 Phase 3 文档（`docs/current-phase.md` + `tasks/phase3.md` → `archive/`）→ 创建 Phase 4 设计文档（PT 核心 + IBL，见 `docs/roadmap.md`）→ 更新本文件必读列表
 
 > Phase 1、Phase 2 全部完成并归档。
 
