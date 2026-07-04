@@ -137,7 +137,10 @@
 - **A. CUDA Texture Object**（走 texture cache，硬件归一化）
 - **B. Global memory buffer**（手动归一化，但 16KB 几乎全在 L2）
 
-**决策**：
+**决策**：✅
+1. **Sobol + Blue Noise**：128 维低差异序列 + Cranley-Patterson rotation + golden-ratio temporal scramble，dim ≥ 128 降级 PCG hash。
+2. **Sobol Table → `__constant__` memory**：warp 内同维度查询命中 constant cache 广播，16KB 远低于 64KB 限制。
+3. **Blue Noise → CUDA Texture Object**：`tex2D<float>` 硬件归一化，走 texture cache，与已有纹理管线一致。
 
 ---
 
