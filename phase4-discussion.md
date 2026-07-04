@@ -200,7 +200,7 @@
 - Ray origin offset（Wächter & Binder）是 shadow ray 和 bounce ray 的前置需求
 - Emissive shadow ray 的 tMax = `dist * (1 - 1e-4)`
 
-**决策**：
+**结论**：由 D9 + D11 直接推导。B（with any-hit）——shadow ray 经过 non-opaque 几何体时走 anyhit 做 alpha test，opaque 几何体仍然 TERMINATE_ON_FIRST_HIT。
 
 ---
 
