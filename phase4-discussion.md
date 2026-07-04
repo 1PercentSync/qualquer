@@ -432,9 +432,7 @@
 
 **核心问题**：Phase 4 的 Megakernel 实现中，需要做哪些设计上的预留以降低未来迁移到 Multi-launch 的成本？
 
-**潜在预留方向**：
-- 着色逻辑的封装方式（是否可从 closesthit 和 CUDA kernel 共用）
-- Ray state 的结构化定义
-- Payload 编解码的隔离
-
-**决策**：
+**决策**：✅ **三项代码组织原则**（零额外运行时/架构开销）：
+1. **PathState 结构体**：定义 path 完整状态（origin, direction, throughput, radiance, cone, pixel/sample/bounce index, alive）。Phase 4 作为 raygen 局部变量，迁移时变为全局 buffer 元素类型。
+2. **Payload pack/unpack helpers**：closesthit→raygen 的 18 register 编解码封装在 `payload_helpers.cuh`，改布局只需改一处。
+3. **Bounce loop body 隔离**：raygen bounce loop 体抽为 `__device__` 函数。迁移时从 for-loop 调用变为每次 launch 调用一次。
