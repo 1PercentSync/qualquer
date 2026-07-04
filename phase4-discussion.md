@@ -377,7 +377,7 @@
 - indirect bounces (bounce > 0) 对 contribution 做 `min(value, max_clamp)`
 - 这是画质改善而非优化。Phase 4 是否纳入？阈值如何暴露？
 
-**决策**：
+**决策**：✅ **纳入**。画质改善（去除 firefly 伪影），非性能优化。阈值 `max_clamp` 通过 UI 暴露。
 
 ---
 
