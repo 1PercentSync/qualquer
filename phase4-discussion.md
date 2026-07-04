@@ -41,7 +41,7 @@
 
 **关键约束**：OptiX 上限 32 registers；SER 对 payload-based 有优化
 
-**决策**：
+**决策**：✅ **A. 全信息 Payload（~18 registers）**。SER 重排后 payload 随线程移动、零全局内存访问；B/C 的 global buffer 在 SER 重排后访问变为 non-coalesced，反而更差。
 
 ---
 
