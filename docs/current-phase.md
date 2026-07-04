@@ -181,7 +181,7 @@ struct CudaTexture {
    | BC5_UNORM | 8 | 8 | 0 | 0 | `cudaChannelFormatKindUnsignedBlockCompressed5` |
    | BC6H_UFLOAT | 16 | 16 | 16 | 0 | `cudaChannelFormatKindUnsignedBlockCompressed6H` |
    | BC7_UNORM | 8 | 8 | 8 | 8 | `cudaChannelFormatKindUnsignedBlockCompressed7` |
-   | BC7_SRGB | 8 | 8 | 8 | 8 | `cudaChannelFormatKindUnsignedBlockCompressed7SRGB` |
+   | BC7_SRGB | 8 | 8 | 8 | 8 | `cudaChannelFormatKindUnsignedBlockCompressed7`（plain BC7；CUDA 13.x 下 SRGB kind 不可用，sRGB 由 `tex_desc.sRGB` 触发） |
 
 2. **分配**：`cudaMallocMipmappedArray(&mipmap_array, &channel_desc, extent, level_count, flags)`
    - extent 用**纹素**维度（运行时内部处理块布局）
@@ -203,8 +203,8 @@ struct CudaTexture {
    - `tex_desc.filterMode = cudaFilterModeLinear`（硬件双线性过滤）
    - `tex_desc.mipmapFilterMode = cudaFilterModeLinear`（trilinear）
    - `tex_desc.normalizedCoords = 1`（mipmapped array 必须用归一化坐标）
-   - `tex_desc.readMode = cudaReadModeElementType`（BC 硬件解压直接产出 float，无需 normalize 转换）
-   - `tex_desc.sRGB = 0`（BC7_SRGB kind 自身已编码 sRGB 信息，避免双重转换）
+   - `tex_desc.readMode`：BC5/BC7（整数解压）用 `cudaReadModeNormalizedFloat`（线性过滤需要归一化），BC6H（半浮点解压）用 `cudaReadModeElementType`
+   - `tex_desc.sRGB = 1`（仅 BC7_SRGB；其余 0）
    - `tex_desc.maxMipmapLevelClamp = level_count - 1`
    - `tex_desc.addressMode[0..2] = cudaAddressModeWrap`
    - `pResViewDesc` 传 `nullptr`（runtime API 文档明确：BC 格式 mipmapped array 不可指定 resource view desc）
@@ -345,7 +345,7 @@ struct TLASHandle {
 
 **AS Compaction**：
 
-BLAS 构建后执行 compaction（查询压缩后大小 → 分配新 buffer → `optixAccelCompact` → 释放原 buffer）。Compaction 通常节省 ~50% AS 内存，对大场景显著。TLAS 不做 compaction（instance 数量少，收益不值得额外 pass）。
+BLAS 和 TLAS 构建后均执行 compaction（查询压缩后大小 → 分配新 buffer → `optixAccelCompact` → 释放原 buffer）。Compaction 通常节省 ~50% AS 内存，对大场景显著。
 
 ### LaunchParams 扩展
 
@@ -375,20 +375,18 @@ struct LaunchParams {
 
 | 参数 | Phase 2 | Phase 3 |
 |------|---------|---------|
-| `numPayloadValues` | 0 | 6（见下方 payload 定义） |
+| `numPayloadValues` | 0 | 3（shading color RGB float3） |
 | `numAttributeValues` | 2 | 2（三角形重心坐标，不变） |
 | `maxTraceDepth`（link options） | 0 | 1（primary ray only） |
 | `pipelineLaunchParamsSizeInBytes` | `sizeof(LaunchParams)`（旧） | `sizeof(LaunchParams)`（新，更大） |
 
-**Payload 寄存器**（32-bit × 6）：
+**Payload 寄存器**（32-bit × 3）：
 
-Phase 3 primary ray 不需要 bounce，payload 用于 closest hit → raygen 回传着色结果：
+primary ray 不需要 bounce，payload 用于 closest hit → raygen 回传着色结果：
 
 | 寄存器 | 用途 |
 |--------|------|
 | p0-p2 | shading color（float3，RGBA 的 RGB） |
-| p3 | hit distance（float，miss 时 -1） |
-| p4-p5 | 预留（为 Phase 5 多 bounce 的 throughput、next direction 等做空间准备） |
 
 ### 设备程序更新
 
