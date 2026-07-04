@@ -432,8 +432,8 @@ Phase 3 的 SBT record 全部保持 header-only（32 字节），与 Phase 2 一
 - **新增成员**：`Camera`、`CameraController`、`SceneLoader`、`AppConfig`、`DefaultTextures`
 - **init 流程扩展**：Config 加载 → Camera 初始化（aspect 从 swapchain）→ CameraController init → Renderer init → DefaultTextures 创建 → SceneLoader 加载（config.scene_path）→ Renderer load_scene → Camera 初始定位（auto_position_camera + set_focus_target）
 - **destroy 扩展**：DefaultTextures 销毁 + SceneLoader::destroy
-- **帧循环**：Camera aspect 从 swapchain 更新 → `CameraController::update(delta_time)` → submit_cuda（传入相机 + 场景数据指针）
-- **delta time**：GLFW `glfwGetTime()` 计算帧间隔
+- **帧循环**：`begin_frame` 提前到 submit_cuda 前（CameraController::update 依赖 ImGui IO，NewFrame 后才当帧有效；ImGui 在 CPU 端构建 draw data，begin_frame 不依赖 acquire）→ Camera aspect 从 swapchain 更新 → `CameraController::update`（内部 update_all 应用新 aspect 到 projection + 更新 view）→ submit_cuda（SceneRenderInput：相机 + materials/texture_objects buffer，仍先于 acquire，保持 CUDA-acquire 重叠）→ acquire（失败则 `imgui_backend_.discard_frame()` rollback 丢弃已 begin_frame 的 ImGui 帧）
+- **delta time**：`ImGui::GetIO().DeltaTime`（begin_frame 提前后当帧有效，与 DebugUI 同源；不再用 glfwGetTime 手算）
 - **场景路径**：从 `%LOCALAPPDATA%\qualquer\config.json` 读取（照搬 Himalaya config 模块，nlohmann/json）。首次运行无 config → 空场景
 
 ### Config 模块（Step 7）

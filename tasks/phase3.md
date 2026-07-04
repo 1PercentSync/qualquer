@@ -70,8 +70,8 @@ MUSTREAD:4
 - [x] Renderer::submit_cuda 更新：LaunchParams 填入相机矩阵 + TLAS handle + 数据指针
 - [x] `vcpkg.json` 新增 nlohmann-json；创建 `app/include/qualquer/app/config.h` + `app/src/config.cpp`（AppConfig + load_config + save_config，`%LOCALAPPDATA%\qualquer\config.json`），注册到 `app/CMakeLists.txt`
 - [x] Application init + destroy 扩展：Config 加载、DefaultTextures 创建与持有、Camera + CameraController 初始化（aspect 从 swapchain）、SceneLoader 加载（config.scene_path + default_textures）、Renderer load_scene、Camera 初始定位（auto_position_camera + set_focus_target）；destroy 同步扩展（DefaultTextures 销毁 + SceneLoader::destroy）
-- [ ] Application 帧循环：delta time（glfwGetTime）、camera.aspect 从 swapchain 更新、CameraController::update → submit_cuda（传入相机 + 场景数据指针）
-- [ ] 请求用户在 CLion 中编译验证（窗口显示场景 PBR ambient 着色 + ImGui，交互式相机可浏览，resize 不崩溃）
+- [x] Application 帧循环：camera.aspect 从 swapchain 更新、CameraController::update（ImGui DeltaTime）→ submit_cuda（传入相机 + 场景数据指针）
+- [x] 请求用户在 CLion 中编译验证（编译通过；空场景运行：不崩溃 / resize 正常 / 退出干净；场景 PBR 着色 + 交互相机浏览场景待配置 scene_path 端到端验证，顺延 Step 8）
 
 ## Step 8：场景切换 + 清理 + 最终验证
 

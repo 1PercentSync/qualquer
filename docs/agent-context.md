@@ -11,11 +11,14 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 3 — 场景加载 + 完整材质系统 + 加速结构 + Primary Ray
-- **进度**：Phase 3 Step 7 第5小项（Application init + destroy 扩展）完成：application.h 新增 camera_/camera_controller_/scene_loader_/default_textures_/config_ 成员 + auto_position_camera 声明；init 顺序 load_config → camera aspect/update_all → controller init → renderer init → default_textures → scene_loader load（空路径跳过、失败写 error_message_）→ renderer load_scene → set_focus_target + auto_position；destroy 在 renderer 后、cuda_context 前销毁 scene_loader + default_textures；auto_position_camera 照搬 Himalaya（degenerate AABB no-op）
+- **进度**：Phase 3 Step 7 完成（Renderer + Application 核心集成）。第3小项 submit_cuda 填 LaunchParams（相机矩阵 + TLAS + 数据指针）+ raygen 空 scene guard；第4小项 config 模块；第5小项 Application init/destroy 集成（camera/controller/scene_loader/default_textures/config）；第6小项帧循环：begin_frame 提前到 submit_cuda 前 → controller.update（ImGui DeltaTime，内部 update_all）→ submit_cuda（SceneRenderInput）→ acquire 失败 discard_frame rollback。编译通过；空场景运行验证：不崩溃 / resize 正常 / 退出干净
+
+- **验证 gap**：场景 PBR ambient 着色 + 交互式相机浏览场景待配置 scene_path 端到端验证（顺延 Step 8 场景切换）
+- **实现偏差（已同步文档）**：delta time 实际用 ImGui::GetIO().DeltaTime（非 glfwGetTime）——方案 A 将 begin_frame 提前到 submit_cuda 前，ImGui DeltaTime 在 controller.update 时已当帧有效；current-phase.md 帧循环/delta time 节已更新
 
 ### 下一个任务
 
-Phase 3 Step 7 第6小项：Application 帧 循环（delta time 用 glfwGetTime、camera.aspect 从 swapchain 更新、CameraController::update → submit_cuda 传相机 + 场景数据，更新 submit_cuda 调用点）
+Phase 3 Step 8 第1小项：DebugUI 场景路径输入 + 加载按钮；Application switch_scene（GPU idle → destroy 旧场景 → 加载新场景 → load_scene → auto_position → save_config）
 
 > Phase 1、Phase 2 全部完成并归档。
 
