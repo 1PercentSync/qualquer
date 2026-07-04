@@ -417,8 +417,12 @@ namespace qualquer::renderer {
                     return cudaCreateChannelDesc(8, 8, 8, 8,
                                                  cudaChannelFormatKindUnsignedBlockCompressed7);
                 case TextureFormat::BC7_SRGB:
+                    // Allocate as plain BC7; sRGB→linear conversion is requested
+                    // via cudaTextureDesc::sRGB at texture object creation.
+                    // cudaChannelFormatKindUnsignedBlockCompressed7SRGB is broken
+                    // in CUDA 13.x (rejects all readMode combinations).
                     return cudaCreateChannelDesc(8, 8, 8, 8,
-                                                 cudaChannelFormatKindUnsignedBlockCompressed7SRGB);
+                                                 cudaChannelFormatKindUnsignedBlockCompressed7);
             }
             // ReSharper disable once CppDFAUnreachableCode
             return cudaCreateChannelDesc(8, 8, 8, 8,
@@ -490,7 +494,13 @@ namespace qualquer::renderer {
         tex_desc.addressMode[2] = sampler.address_mode_u; // W axis: reuse U (no glTF W wrap)
         tex_desc.filterMode = sampler.filter_mode;
         tex_desc.mipmapFilterMode = sampler.mipmap_filter_mode;
-        tex_desc.readMode = cudaReadModeElementType;
+        // BC UNORM formats (BC5/BC7) decompress to 8-bit integers; linear
+        // filtering requires cudaReadModeNormalizedFloat for integer types.
+        // BC6H decompresses to half-float and must use cudaReadModeElementType.
+        tex_desc.readMode = (prepared.format == TextureFormat::BC6H_UFLOAT)
+                                ? cudaReadModeElementType
+                                : cudaReadModeNormalizedFloat;
+        tex_desc.sRGB = (prepared.format == TextureFormat::BC7_SRGB) ? 1 : 0;
         tex_desc.normalizedCoords = 1;
         tex_desc.maxMipmapLevelClamp = static_cast<float>(prepared.level_count - 1);
         tex_desc.seamlessCubemap = is_cubemap ? 1 : 0;
