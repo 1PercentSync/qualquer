@@ -119,7 +119,6 @@ namespace qualquer::app {
 
         /** @brief Loads samplers, textures, and materials from the glTF asset. */
         void load_materials(const fastgltf::Asset &gltf,
-                            const std::string &base_dir,
                             const renderer::DefaultTextures &default_textures);
 
         /** @brief Traverses the scene graph and creates MeshInstances with world transforms. */

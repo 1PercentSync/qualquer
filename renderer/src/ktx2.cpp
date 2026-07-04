@@ -49,7 +49,6 @@ namespace qualquer::renderer {
     struct Ktx2LevelIndexEntry {
         uint64_t byte_offset;
         uint64_t byte_length;
-        // ReSharper disable once CppDeclaratorNeverUsed
         uint64_t uncompressed_byte_length;
     };
 #pragma pack(pop)

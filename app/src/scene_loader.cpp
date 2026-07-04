@@ -213,7 +213,7 @@ namespace qualquer::app {
                          gltf.nodes.size());
 
             const auto mesh_data = load_meshes(gltf);
-            load_materials(gltf, file_path.parent_path().string(), default_textures);
+            load_materials(gltf, default_textures);
             build_mesh_instances(gltf, mesh_data);
             return true;
         } catch (const std::exception &e) {
@@ -356,7 +356,6 @@ namespace qualquer::app {
     }
 
     void SceneLoader::load_materials(const fastgltf::Asset &gltf,
-                                     const std::string &,
                                      const renderer::DefaultTextures &default_textures) {
         // ---- Default texture indices (reserved at the front of texture_objects_) ----
 
