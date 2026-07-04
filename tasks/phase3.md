@@ -75,7 +75,7 @@ MUSTREAD:4
 
 ## Step 8：场景切换 + 清理 + 最终验证
 
-- [ ] DebugUI 场景路径输入 + 加载按钮；Application switch_scene（GPU idle → destroy 旧场景 → 加载新场景 → load_scene → auto_position → save_config）
+- [x] DebugUI 场景路径输入 + 加载按钮；Application switch_scene（GPU idle → destroy 旧场景 → 加载新场景 → load_scene → auto_position → save_config）
 - [ ] 请求用户在 CLion 中编译验证（场景切换正常）
 - [ ] 验证 ISPC 压缩运行时正确（BC7/BC5 via bc7enc、BC6H via ISPCTextureCompressor，确认 ISPC dispatch 与压缩产出正常；场景加载后端到端可验证）
 - [ ] 确认无 validation / OptiX / CUDA 报错
