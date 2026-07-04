@@ -109,7 +109,13 @@
 - 影响 shadow ray 对 alpha 物体的行为
 - 数据链已完整：`BLASGeometry::opaque` 字段已存在，Material 有 `alpha_mode`
 
-**决策**：
+**决策**：✅ **2 miss + 2 hitgroup，stride=1**（由 D11 决策驱动）。
+- Miss：`__miss__env`（missIndex=0）+ `__miss__shadow`（missIndex=1）
+- Hitgroup 0（opaque）：closesthit only，`DISABLE_ANYHIT`
+- Hitgroup 1（non-opaque）：closesthit + anyhit（alpha mask / stochastic alpha）
+- 几何体通过 `sbtOffset` 选择 hitgroup（`opaque = alpha_mode == 0`）
+- Shadow ray 通过 ray flag `DISABLE_CLOSESTHIT` 跳过 closesthit，与 bounce ray 共享 hitgroup
+- BLAS 构建改动：`BLASGeometry::opaque` 从硬编码 `true` 改为按 `material.alpha_mode` 判断
 
 ---
 
@@ -209,7 +215,10 @@
 - Alpha mask 是许多 glTF 场景（树叶、栅栏等）的基础正确性需求
 - Stochastic alpha 更偏优化/高级特性
 
-**决策**：
+**决策**：✅ **三个全做**。
+1. **Alpha Mask**：any-hit 中 `texel alpha < cutoff → optixIgnoreIntersection()`。
+2. **Stochastic Alpha**：any-hit 中 `hash(pixel, sample, primitive_id) > alpha → optixIgnoreIntersection()`。用 hash 而非 Sobol——any-hit 调用次数和顺序不确定，Sobol 的维度分配模式不适用。
+3. **Double-sided pass-through**：closesthit 中判断 back-face + !double_sided → 穿透（throughput 不变，消耗一次 bounce）。
 
 ---
 
