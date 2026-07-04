@@ -117,18 +117,37 @@ namespace qualquer::app {
             }
 
             wait_frame_slot();
+
+            // begin_frame before submit_cuda: CameraController::update reads ImGui IO
+            // (WantCaptureMouse / IsKeyPressed) that is current only after NewFrame.
+            // ImGui builds draw data on the CPU, so begin_frame needs no acquired image.
+            imgui_backend_.begin_frame();
+
+            // aspect may change on resize; update_all (inside controller.update) applies
+            // the new aspect to the projection along with the view. DeltaTime is current
+            // after begin_frame's NewFrame — the same value DebugUI displays.
+            camera_.aspect = static_cast<float>(swapchain_.extent.width) / static_cast<float>(swapchain_.extent.height);
+            camera_controller_.update(ImGui::GetIO().DeltaTime);
+
             // CUDA submit before acquire so the CUDA starts computing while the CPU
             // waits on acquire — submission order decides when the engine starts, hence
             // whether the acquire wait overlaps CUDA compute (async submit alone does not).
             renderer_.submit_cuda(cuda_context_,
+                                  renderer::SceneRenderInput{
+                                      .camera = camera_,
+                                      .materials = scene_loader_.material_buffer(),
+                                      .texture_objects = scene_loader_.texture_objects_buffer(),
+                                  },
                                   swapchain_.extent.width,
                                   swapchain_.extent.height,
                                   context_.frame_index);
 
             if (!acquire_image()) {
+                // Acquisition failed (OUT_OF_DATE → recreated): the ImGui frame begun
+                // above must be discarded so the next iteration's NewFrame is valid.
+                imgui_backend_.discard_frame();
                 continue;
             }
-            imgui_backend_.begin_frame();
 
             // DeltaTime is only valid after imgui begin_frame has advanced ImGui's IO.
             renderer::DebugUIContext ui_ctx{

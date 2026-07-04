@@ -95,4 +95,11 @@ namespace qualquer::renderer {
         ImGui::Render();
         ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
     }
+
+    // ReSharper disable once CppMemberFunctionMayBeStatic
+    void ImGuiBackend::discard_frame() { // NOLINT(*-convert-member-functions-to-static)
+        // ImGui::Render() internally calls EndFrame(); discarding a frame without
+        // rendering calls it directly so the next NewFrame() sees a clean state.
+        ImGui::EndFrame();
+    }
 } // namespace qualquer::renderer

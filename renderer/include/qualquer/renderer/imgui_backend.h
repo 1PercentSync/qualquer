@@ -75,5 +75,16 @@ namespace qualquer::renderer {
          * @param cmd Command buffer to record ImGui draw commands into.
          */
         void render(VkCommandBuffer cmd);
+
+        /**
+         * @brief Discards the current ImGui frame without rendering.
+         *
+         * Counterpart to begin_frame() for frames that must be dropped after
+         * begin_frame() already ran (e.g. swapchain acquisition failed and the
+         * frame is skipped). Finalizes the begun frame via ImGui::EndFrame() so
+         * the next begin_frame()'s NewFrame is valid; produces no draw data and
+         * records nothing.
+         */
+        void discard_frame();
     };
 } // namespace qualquer::renderer
