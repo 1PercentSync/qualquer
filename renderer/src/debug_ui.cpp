@@ -6,11 +6,19 @@
 #include <qualquer/renderer/debug_ui.h>
 
 #include <algorithm>
+#include <filesystem>
 #include <ranges>
 #include <string>
 
 #include <imgui.h>
 #include <spdlog/spdlog.h>
+
+// WIN32_LEAN_AND_MEAN trims windows.h to the dialog API; NOMINMAX prevents the
+// min/max macros from corrupting std::max used in FrameStats::compute.
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <Windows.h>
+#include <commdlg.h>
 
 namespace qualquer::renderer {
     namespace {
@@ -18,6 +26,28 @@ namespace qualquer::renderer {
         constexpr const char *kLogLevelNames[] = {
             "Trace", "Debug", "Info", "Warn", "Error", "Critical", "Off",
         };
+
+        /**
+         * @brief Opens a native file dialog and returns the selected path.
+         * @param filter GetOpenFileNameW double-null-terminated filter string.
+         * @param title  Dialog title.
+         * @return Selected path (UTF-8), or empty if the user cancelled.
+         */
+        std::string open_file_dialog(const wchar_t *filter, const wchar_t *title) {
+            wchar_t file_path[MAX_PATH] = {};
+            OPENFILENAMEW ofn = {};
+            ofn.lStructSize = sizeof(ofn);
+            ofn.lpstrFilter = filter;
+            ofn.lpstrFile = file_path;
+            ofn.nMaxFile = MAX_PATH;
+            ofn.lpstrTitle = title;
+            ofn.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR;
+
+            if (GetOpenFileNameW(&ofn)) {
+                return std::filesystem::path(file_path).string();
+            }
+            return {};
+        }
     } // namespace
 
     // ---- FrameStats ----
@@ -88,6 +118,9 @@ namespace qualquer::renderer {
 
         ImGui::Separator();
         draw_log_level(actions);
+
+        ImGui::Separator();
+        draw_scene(ctx, actions);
 
         ImGui::End();
 
@@ -189,6 +222,29 @@ namespace qualquer::renderer {
             spdlog::set_level(static_cast<spdlog::level::level_enum>(current_log_level));
             action.log_level_changed = true;
             action.new_log_level = current_log_level;
+        }
+    }
+
+    void DebugUI::draw_scene(const DebugUIContext &ctx, DebugUIActions &action) {
+        if (ctx.scene_path.empty()) {
+            ImGui::TextDisabled("No scene loaded");
+        } else {
+            const auto filename = std::filesystem::path(ctx.scene_path).filename().string();
+            ImGui::Text("Scene: %s", filename.c_str());
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("%s", ctx.scene_path.c_str());
+            }
+        }
+
+        ImGui::SameLine();
+        if (ImGui::Button("Load...")) {
+            auto path = open_file_dialog(
+                L"glTF Files (*.gltf;*.glb)\0*.gltf;*.glb\0All Files (*.*)\0*.*\0",
+                L"Load Scene");
+            if (!path.empty()) {
+                action.scene_load_requested = true;
+                action.new_scene_path = std::move(path);
+            }
         }
     }
 } // namespace qualquer::renderer

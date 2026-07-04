@@ -155,11 +155,20 @@ namespace qualquer::app {
                 .context = context_,
                 .swapchain = swapchain_,
                 .error_message = error_message_,
+                .scene_path = config_.scene_path,
             };
             const auto actions = debug_ui_.draw(ui_ctx); // only CPU side, render command is in record()
 
             if (actions.error_dismissed) {
                 error_message_.clear();
+            }
+            if (actions.scene_load_requested) {
+                // switch_scene drains the CUDA streams, so this frame's already-
+                // submitted raygen/tonemap finish before the old scene buffers are
+                // freed. record()/end_frame() still run on this frame: blit reads
+                // the display buffer that the drained tonemap just finished writing,
+                // and blit/present do not depend on scene data.
+                switch_scene(actions.new_scene_path);
             }
             // present_mode_changed is acted on after end_frame (see below): recreating
             // mid-frame would invalidate the image acquired in acquire_image before it is
@@ -397,6 +406,41 @@ namespace qualquer::app {
         camera_.pitch = glm::radians(-45.0f);
         camera_.position = camera_.compute_focus_position(bounds);
         camera_.update_all();
+    }
+
+    void Application::switch_scene(const std::string &path) {
+        // Drain both CUDA streams: this frame's submit_cuda already launched raygen
+        // (compute_stream) and tonemap (display_stream) referencing the current
+        // scene's buffers. They must finish before those buffers are freed. Vulkan
+        // queue idle is unnecessary — scene resources are all CUDA-owned with no
+        // Vulkan-queue binding (unlike Himalaya).
+        CUDA_CHECK(cudaStreamSynchronize(cuda_context_.compute_stream));
+        CUDA_CHECK(cudaStreamSynchronize(cuda_context_.display_stream));
+
+        scene_loader_.destroy();
+
+        if (!path.empty()) {
+            if (scene_loader_.load(path, default_textures_)) {
+                error_message_.clear();
+            } else {
+                error_message_ = "Failed to load scene: " + path;
+            }
+        } else {
+            error_message_.clear();
+        }
+
+        // Rebuild AS unconditionally: load_scene destroys the previous AS first,
+        // and an empty/failed load leaves TLAS=0 so raygen skips optixTrace
+        // instead of tracing a freed traversable.
+        renderer_.load_scene(cuda_context_,
+                             scene_loader_.meshes(),
+                             scene_loader_.mesh_instances());
+
+        camera_controller_.set_focus_target(&scene_loader_.scene_bounds());
+        auto_position_camera(scene_loader_.scene_bounds());
+
+        config_.scene_path = path;
+        save_config(config_);
     }
 
     void Application::release_display_buffer_to_external() {

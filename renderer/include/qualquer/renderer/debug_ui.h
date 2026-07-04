@@ -45,6 +45,15 @@ namespace qualquer::renderer {
 
         /** @brief Error message to show in the banner (empty = no error). */
         const std::string &error_message;
+
+        /**
+         * @brief Currently loaded scene file path (empty = no scene).
+         *
+         * Display-only: the Scene section shows the filename and a tooltip with
+         * the full path. Loading is triggered via a native file dialog and
+         * surfaced through DebugUIActions::scene_load_requested.
+         */
+        const std::string &scene_path;
     };
 
     /**
@@ -72,6 +81,12 @@ namespace qualquer::renderer {
 
         /** @brief True if the user clicked the error-banner dismiss button. */
         bool error_dismissed = false;
+
+        /** @brief True if the user picked a scene file via the Load dialog. */
+        bool scene_load_requested = false;
+
+        /** @brief Scene path picked by the user (valid only when scene_load_requested). */
+        std::string new_scene_path;
     };
 
     /**
@@ -197,5 +212,18 @@ namespace qualquer::renderer {
          * @param action Receives log_level_changed and new_log_level on change.
          */
         static void draw_log_level(DebugUIActions &action);
+
+        /**
+         * @brief Renders the Scene section: current file name and a Load button.
+         *
+         * Shows "No scene loaded" when ctx.scene_path is empty, otherwise the
+         * filename with a full-path tooltip. The Load button opens a native file
+         * dialog (glTF/GlB); on a non-empty selection sets
+         * action.scene_load_requested and action.new_scene_path.
+         *
+         * @param ctx    Provides the current scene path.
+         * @param action Receives the load request and the picked path.
+         */
+        static void draw_scene(const DebugUIContext &ctx, DebugUIActions &action);
     };
 } // namespace qualquer::renderer

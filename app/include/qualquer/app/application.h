@@ -100,6 +100,20 @@ namespace qualquer::app {
          */
         void auto_position_camera(const renderer::AABB &bounds);
 
+        /**
+         * @brief Switches to a new scene at runtime.
+         *
+         * Drains the CUDA streams (so in-flight raygen/tonemap finish before their
+         * referenced scene buffers are freed), destroys the current scene, loads
+         * the new one (or leaves an empty scene on failure), rebuilds the
+         * acceleration structures, reframes the camera, and persists the path.
+         * No vkQueueWaitIdle is needed: scene resources are all CUDA-owned with no
+         * Vulkan-queue binding (unlike Himalaya).
+         *
+         * @param path Path to the new .gltf/.glb file (empty = unload to empty scene).
+         */
+        void switch_scene(const std::string &path);
+
         /** @brief GLFW window handle. */
         GLFWwindow *window_ = nullptr;
 
