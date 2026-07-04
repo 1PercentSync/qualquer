@@ -1,10 +1,12 @@
 find_package(fastgltf CONFIG REQUIRED)
+find_package(nlohmann_json CONFIG REQUIRED)
 find_package(OpenMP REQUIRED)
 
 add_executable(qualquer_app
     src/main.cpp
     src/application.cpp
     src/camera_controller.cpp
+    src/config.cpp
     src/scene_loader.cpp
 )
 
@@ -16,6 +18,7 @@ target_link_libraries(qualquer_app
     PRIVATE qualquer_renderer
     PRIVATE qualquer_optix
     PRIVATE fastgltf::fastgltf
+    PRIVATE nlohmann_json::nlohmann_json
     PRIVATE OpenMP::OpenMP_CXX
 )
 
