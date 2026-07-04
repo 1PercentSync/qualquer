@@ -411,17 +411,16 @@
 ### D25. UI 参数暴露
 
 **需要在 Phase 4 暴露的运行时参数（依赖上述决策）**：
-- max_bounces
-- samples_per_frame（或自适应时的 target_fps）
-- render_scale（如果做分辨率解耦）
-- max_clamp（firefly clamping 阈值）
-- tonemap 函数选择
-- exposure
-- IBL rotation
-- target_sample_count
-- 其他取决于各决策结果
+- max_bounces（int, 默认 16）
+- samples_per_frame（int, 1~64）
+- render_scale（float, 0.25~1.0）
+- max_clamp（float, 默认 10.0）
+- exposure（float）
+- ibl_rotation（float, 0~2π）
+- target_sample_count（int, 0=无限）
+- debug view 切换（enum: final / albedo / normal / depth）
 
-**决策**：
+**决策**：✅ **上述清单即最终参数集**。无 indirect_intensity（D24）、无 tonemap 切换（D17 仅 PBR Neutral）、无自适应参数（D16）。
 
 ---
 
