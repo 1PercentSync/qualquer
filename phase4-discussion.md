@@ -109,7 +109,7 @@
 - 影响 shadow ray 对 alpha 物体的行为
 - 数据链已完整：`BLASGeometry::opaque` 字段已存在，Material 有 `alpha_mode`
 
-**决策**：✅ **2 miss + 2 hitgroup，stride=1**（由 D11 决策驱动）。
+**结论**：由 D11 决策直接推导，无独立决策空间。2 miss + 2 hitgroup，stride=1。
 - Miss：`__miss__env`（missIndex=0）+ `__miss__shadow`（missIndex=1）
 - Hitgroup 0（opaque）：closesthit only，`DISABLE_ANYHIT`
 - Hitgroup 1（non-opaque）：closesthit + anyhit（alpha mask / stochastic alpha）
