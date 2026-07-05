@@ -2,6 +2,8 @@
 
 > 跟踪文档。讨论过程中对每个问题做出决策后标记 ✅ 并记录决策结论。
 > 因决策而失去讨论意义的问题标记 ~~删除线~~。新衍生问题追加到相应位置。
+>
+> **关于决策文字与 Phase 边界**：各 D 决策文字是在讨论当时记录的早期决策（“纳入 Phase 4”）。后续 Phase 划分（见末尾 §Phase 划分）将部分特性调整到 Phase 4.5 推迟实现。特性最终归属以 §Phase 划分为准，决策文字的“纳入”不必然意味着 Phase 4 实现——若两者冲突，以 Phase 边界为准。
 
 ---
 
@@ -334,7 +336,7 @@
 **核心问题**：Phase 4 为后续降噪/重建系统预留什么？
 
 **两条技术路线**：
-- **OptiX Denoiser**（Phase 6）：需要 albedo + normal aux buffer
+- **OptiX Denoiser**（原 Phase 6，现提前到 Phase 4.5）：需要 albedo + normal aux buffer
 - **DLSS Ray Reconstruction**（未来）：需要 albedo + normal + depth + motion vectors。Motion vectors 需要时域数据（前帧 hit position），Phase 4 不实现
 
 **Phase 4 可预留项**：
@@ -608,5 +610,5 @@ MUSTREAD:7
 
 | # | 特性 | 来源决策 | 说明 |
 |---|------|---------|------|
-| 9 | Aux data 写入 + debug view | D18 | closesthit bounce==0 写入 albedo/normal/depth，UI debug view |
-| 10 | OptiX Denoiser 集成 | — | 原 Phase 6 内容，提前到 4.5 |
+| 11 | Aux data 写入 + debug view | D18 | closesthit bounce==0 写入 albedo/normal/depth，UI debug view |
+| 12 | OptiX Denoiser 集成 | — | 原 Phase 6 内容，提前到 4.5 |
