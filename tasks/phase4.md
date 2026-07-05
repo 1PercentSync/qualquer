@@ -25,7 +25,7 @@
 
 ## Step 3：BRDF 函数
 
-- [ ] 创建 `brdf.cuh`：GGX NDF（D）、Smith height-correlated G2、Fresnel Schlick（F0 + F90）、Lambertian diffuse、metallic/dielectric lobe weighting、VNDF 采样（GGX visible normal）、cosine hemisphere 采样、combined multi-lobe PDF
+- [ ] 创建 `brdf.cuh`：GGX NDF（D）、Smith height-correlated G2、Fresnel Schlick（F0 + F90）、EON diffuse（single-scatter FON + multi-scatter 补偿 lobe + CLTC 采样）、metallic/dielectric lobe weighting、VNDF 采样（GGX visible normal）、combined multi-lobe PDF
 - [ ] BRDF eval + sample 接口：specular_probability、sample + throughput_update 计算（specular lobe 和 diffuse lobe）、build_orthonormal_basis
 - [ ] 多散射能量补偿：E_ss 有理多项式求值函数（Sforza & Pellacini 19 系数）+ Turquin 补偿系数计算（`1 + F0 * (1 - E_ss) / E_ss`），集成到 specular throughput_update 和 BRDF eval
 - [ ] 请求用户在 CLion 中编译验证（函数编译通过，Step 5 集成到 closesthit）
