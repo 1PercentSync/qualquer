@@ -519,9 +519,15 @@ Phase 4 完整采纳 EON + CLTC 采样（掠射角方差降 100×）。
 
 **决策**：✅ **纳入**，与 Turquin 补偿在 Step 3 同一小项中实现。
 
-**问题**：Turquin 补偿增加了 specular 能量，但 diffuse 权重 `(1-F)` 未相应减少，dielectric 总能量略超 1.0（最大 2.4%）。
+**问题**：Turquin 补偿增加了 specular 能量，但 diffuse 权重 `(1-F)` 未相应减少。更根本地，`(1-F)` 忽略了微面元间多次弹跳后穿透到 diffuse 层的光——roughness 高 + 掠射角时偏差显著。
 
-**修复**：将 diffuse 权重从 `(1-F)` 改为 `(1 - E_spec_compensated)`，其中 E_spec_compensated 为 Turquin 补偿后的 specular 方向反照率。已有 E_ss 多项式，额外开销仅一次乘法。
+**修复**：将 diffuse 权重从 `(1-F)` 改为 `(1 - E_glossy)`，其中 `E_glossy(NdotV, roughness, F0)` 为 Sforza 39 系数有理多项式，直接输出 Turquin 补偿后含 Fresnel 的 specular 方向反照率。代价 ~39 FMA/着色点，GPU PT 中可忽略。
+
+**勘误**：此前文档曾写 `E_spec_compensated = E_ss + F0*(1-E_ss)` 给出 0.808，这是错误的——E_ss 是 F=1 几何反照率（~0.8），不含 Fresnel；正确的 specular 方向反照率对 dielectric（F0=0.04）在正视角约 0.032。39 系数多项式直接对含 Fresnel 的积分拟合，避免了这个错误。
+
+**specular_probability**：不需要调整。E_glossy 对 dielectric 在正视角约 0.032，与 F_Schlick(NdotV) ≈ 0.04 差距极小，对采样方差影响可忽略（非上一轮分析中基于错误公式得出的"8% vs 89%"）。
+
+**参考**：github.com/dsforza96/energy-preservation（MIT 许可，`glossy.csv` 系数 + `glossy.py` 生成表）。
 
 #### 28d. Normal Map Specular Anti-Aliasing
 
