@@ -1,0 +1,11 @@
+# https://clangd.llvm.org/config
+#
+# Give clangd CUDA context for .cuh device headers.
+# Modeled after NVIDIA CCCL / CUTLASS .clangd configs.
+
+If:
+  PathMatch: .*\.cuh$
+CompileFlags:
+  Add:
+    - "--cuda-path=C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.2"
+    - "-ID:/CLionProjects/qualquer/renderer/include"
