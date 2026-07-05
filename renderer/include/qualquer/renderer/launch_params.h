@@ -146,7 +146,11 @@ struct LaunchParams {
     /** @brief Total samples accumulated so far; the Separate-Sum divisor at tonemap. */
     uint32_t sample_count;
 
-    /** @brief Exposure applied before tonemap (linear multiplier). */
+    /** @brief Exposure as a linear color multiplier applied before tonemap.
+     *
+     * The app stores an EV value and converts it to this linear multiplier
+     * (pow(2, ev)) before upload; device code multiplies color directly.
+     */
     float exposure;
 
     // ---- Environment light ----
