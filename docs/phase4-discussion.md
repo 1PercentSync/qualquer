@@ -176,6 +176,11 @@
 
 **combined_lobe_pdf 独立函数**：combined multi-lobe PDF 的组装 `p_spec·pdf_spec + (1−p_spec)·pdf_diff` 抽成 `__forceinline__ __device__ combined_lobe_pdf(pdf_spec, pdf_diff, p_spec)` 独立函数，而非 Himalaya 的 closesthit 内联组装。理由：Qualquer 拆成 brdf.cuh + closesthit + NEE eval 多处调用点（brdf_sample 两分支 + 两个 NEE eval，共 4 处），独立函数让 combined PDF 与 lobe 选择概率的一致性在代码上显而易见（4 处调用同一函数，不可能漏改某处破坏 MIS 无偏性）；`__forceinline__` 零运行时开销；轻量抽象（3 参数、一行公式）不违反 KISS。
 
+**实现查验义务**：以下实现细节文档未预先记录，实现时必须实际查验参考项目源码，不得凭推导、印象或现有文档内容臆测：
+- E_glossy / Turquin 补偿系数对金属 RGB F0 的逐通道处理方式（查 Sforza repo 拟合代码 + Himalaya closesthit 的 F0 vec3 调用点）
+- EON 公式中 ρ（diffuse 反照率）的取值来源（查 EON repo GLSL 实现）
+- CLTC 采样的 PDF 求值公式（查 EON repo GLSL 实现，与 combined_lobe_pdf 的 pdf_diff 一致）
+
 ---
 
 ### D9. 光源系统：环境光 + Emissive 三角形
