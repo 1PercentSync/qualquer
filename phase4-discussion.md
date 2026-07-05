@@ -186,6 +186,8 @@
 
 **决策**：✅ **全做**。Env importance sampling（alias table）、emissive 三角形 NEE、MIS（power heuristic）、shadow ray。与 D8 同理——不是优化，而是让 PT 在小光源/HDR 环境下产出可用结果的必要机制。
 
+**光源策略**：仅 IBL（环境贴图）+ emissive 三角形。不实现任何解析光源（glTF KHR_lights_punctual 的 directional / point / spot 不纳入）。所有照明均通过 env miss shader 和 emissive 表面 NEE 提供。
+
 ---
 
 ### D10. Shadow Ray 策略
