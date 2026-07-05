@@ -403,8 +403,6 @@ c36 =  25.947954    c37 =  75.77901     c38 =  49.348934
 | Qualquer 模块 | Himalaya 源 | 适配说明 |
 |---------------|------------|---------|
 | BRDF specular（brdf.cuh） | `shaders/rt/pt_common.glsl` | GLSL → CUDA intrinsics |
-| BRDF diffuse（brdf.cuh） | `D:\Github\EON-diffuse`（github.com/portsmouth/EON-diffuse） | GLSL → CUDA，替代 Himalaya 的 Lambertian |
-| 能量补偿 + 耦合（brdf.cuh） | `D:\Github\energy-preservation`（github.com/dsforza96/energy-preservation） | 19 系数（E_ss）+ 39 系数（E_glossy）多项式 |
 | Closesthit | `shaders/rt/closesthit.rchit` | payload registers 替代 rayPayload struct |
 | Raygen bounce loop | `shaders/rt/reference_view.rgen trace_path()` | 加 sample loop + SER |
 | Miss shader | `miss.rmiss` + `shadow_miss.rmiss` | GLSL → CUDA |
