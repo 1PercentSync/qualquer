@@ -20,6 +20,7 @@
 
 - [ ] 创建 `tonemap.cuh`：Khronos PBR Neutral tonemap 函数、exposure 应用（pre-tonemap multiply）
 - [ ] tonemap kernel 更新：累积 buffer 读取时除以 sample_count（Separate Sum）、应用 exposure + PBR Neutral
+- [ ] Raygen 改 Separate Sum 累加：LaunchParams 加 `accumulation_buffer_read` 指针（读旧总和），raygen 读旧总和 + 本帧 contribution 写新 buffer；与 tonemap 除法配对，保证 sample_count 与 buffer 内容一致
 - [ ] 请求用户在 CLion 中编译验证（ambient 着色经 tonemap 正确显示）
 
 ## Step 3：BRDF 函数
@@ -47,7 +48,7 @@
 - [ ] 创建 `payload_helpers.cuh`：18-register payload pack/unpack 内联函数（float↔uint bit cast helpers + per-field set/get）
 - [ ] Closesthit 重写（基础）：顶点插值 + normal mapping + material 参数提取 + back-face flip + ray offset + normal consistency + 18-register payload 写回（emissive 直写 emissive_factor，throughput_update = 0 终止 path）
 - [ ] Closesthit 重写（BRDF 采样）：build_orthonormal_basis + specular_probability + lobe selection + VNDF/cosine sampling + throughput_update 计算 + env_mis_weight + last_brdf_pdf 写入 payload
-- [ ] Raygen 重写（单 sample 骨架）：单 sample + bounce loop + PathState 驱动 + Separate Sum 累积（验证多 bounce + 累积正确性）
+- [ ] Raygen 重写（单 sample 骨架）：单 sample + bounce loop + PathState 驱动
 - [ ] Raygen 完整：sample loop（samples_per_frame 次）+ subpixel jitter + sample_count 递增
 - [ ] SER 集成：optixTraverse + optixReorder + optixInvoke 替换 optixTrace
 - [ ] 请求用户在 CLion 中编译验证（多 bounce PT 在 HDR env 下工作，累积收敛可见）
