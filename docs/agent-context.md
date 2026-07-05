@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4 — 核心 Path Tracer
-- **进度**：Phase 4 Step 1 第 2 小项完成：Pipeline 配置更新（numPayloadValues=18、maxTraceDepth=2、stack size 同步）
+- **进度**：Phase 4 Step 1 第 3 小项完成：Renderer 语义拆分（frame_counter_ 永不 reset 兼任 device temporal 源；新增 sample_count_ 作 Separate-Sum 除数）
 
 ### 下一个任务
 
-Phase 4 Step 1 第 3 小项：Renderer 语义拆分（frame_counter_ slot 索引 / sample_count_ 累积总量 / frame_seed_ temporal scramble）
+Phase 4 Step 1 第 4 小项：Renderer 累积 reset 逻辑（camera 或渲染参数变化时 sample_count_ = 0、清零累积 buffer）
 
 ---
 
