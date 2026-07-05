@@ -239,7 +239,7 @@ NEE 采样发光三角形时需要插值 UV 并采样 emissive 纹理，因此 E
 
 ### EON Diffuse（Energy-Preserving Oren–Nayar）
 
-**参考实现**：github.com/portsmouth/EON-diffuse（GLSL → CUDA 移植）
+**参考实现**：`D:\Github\EON-diffuse`（github.com/portsmouth/EON-diffuse，GLSL → CUDA 移植）
 
 替代 Lambertian diffuse。EON = FON 单散射 + Kulla-Conty 式多散射补偿 lobe，能量守恒且保持（通过 furnace test）、互易、捕捉粗糙回射效应。
 
@@ -390,7 +390,7 @@ c36 =  25.947954    c37 =  75.77901     c38 =  49.348934
 
 **F0 映射**：glTF 材质不直接提供 F0，需从 IOR 计算：`F0 = ((IOR-1)/(IOR+1))²`。对 glTF 核心 PBR metallic-roughness 材质，非金属默认 IOR=1.5 → F0=0.04。多项式输入直接用 F0。
 
-**参考实现**：github.com/dsforza96/energy-preservation（`scripts/glossy.py` 生成表，`scripts/fit.py` 拟合多项式）
+**参考实现**：`D:\Github\energy-preservation`（github.com/dsforza96/energy-preservation，`scripts/glossy.py` 生成表，`scripts/fit.py` 拟合多项式）
 
 ### Env Cubemap
 
@@ -403,8 +403,8 @@ c36 =  25.947954    c37 =  75.77901     c38 =  49.348934
 | Qualquer 模块 | Himalaya 源 | 适配说明 |
 |---------------|------------|---------|
 | BRDF specular（brdf.cuh） | `shaders/rt/pt_common.glsl` | GLSL → CUDA intrinsics |
-| BRDF diffuse（brdf.cuh） | github.com/portsmouth/EON-diffuse | GLSL → CUDA，替代 Himalaya 的 Lambertian |
-| 能量补偿 + 耦合（brdf.cuh） | github.com/dsforza96/energy-preservation | 19 系数（E_ss）+ 39 系数（E_glossy）多项式 |
+| BRDF diffuse（brdf.cuh） | `D:\Github\EON-diffuse`（github.com/portsmouth/EON-diffuse） | GLSL → CUDA，替代 Himalaya 的 Lambertian |
+| 能量补偿 + 耦合（brdf.cuh） | `D:\Github\energy-preservation`（github.com/dsforza96/energy-preservation） | 19 系数（E_ss）+ 39 系数（E_glossy）多项式 |
 | Closesthit | `shaders/rt/closesthit.rchit` | payload registers 替代 rayPayload struct |
 | Raygen bounce loop | `shaders/rt/reference_view.rgen trace_path()` | 加 sample loop + SER |
 | Miss shader | `miss.rmiss` + `shadow_miss.rmiss` | GLSL → CUDA |
