@@ -168,7 +168,7 @@ namespace qualquer::optix {
 
         // CUcontext 0 = use the current CUDA context (set by cudaSetDevice above).
         // Log level 4 includes all messages (fatal through informational).
-        const OptixDeviceContextOptions ctx_options{
+        constexpr OptixDeviceContextOptions ctx_options{
             .logCallbackFunction = optix_log_callback,
             .logCallbackData = nullptr,
             .logCallbackLevel = 4,
