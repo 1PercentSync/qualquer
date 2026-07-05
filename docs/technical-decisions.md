@@ -192,8 +192,8 @@ CUDA 侧通过 `cudaExternalMemoryGetMappedMipmappedArray` → `cudaArray_t` →
 
 ### 后续改进方向
 
-1. **单帧多 sample 累积**：每帧累积多个 sample 以提高收敛速度
-2. **自适应采样**：根据实际帧率动态调整每帧 sample 数
+1. **单帧多 sample 累积**：Phase 4 已决策（D4），raygen 内 sample 循环，max 64 spp/frame
+2. **自适应采样**：D16 决策仅手动 `samples_per_frame` 参数，自适应逻辑不纳入 Phase 4/4.5
 
 ---
 

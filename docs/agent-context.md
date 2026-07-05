@@ -10,14 +10,14 @@
 
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
-- **Phase**：M1 Phase 3 完成 — 场景加载 + 完整材质系统 + 加速结构 + Primary Ray
-- **进度**：Phase 3 全部完成。场景加载（glTF + BC 纹理 + KTX2 缓存）、完整 PBR 材质、BLAS/TLAS（含 compaction）、交互式相机、ambient 着色、运行时场景切换、代码文档检查均通过。CUDA 13.x 下 BC7_SRGB kind 不可用的处理已同步进 current-phase.md
+- **Phase**：M1 Phase 4 — 核心 Path Tracer
+- **进度**：Phase 4 文档创建完成。Phase 3 已归档，Phase 4 设计文档（`docs/current-phase.md`）、任务清单（`tasks/phase4.md`）、决策记录（`phase4-discussion.md` D1-D26）就绪。即将开始实现
 
 ### 下一个任务
 
-Phase 4 启动：归档 Phase 3 文档（`docs/current-phase.md` + `tasks/phase3.md` → `archive/`）→ 创建 Phase 4 设计文档（PT 核心 + IBL，见 `docs/roadmap.md`）→ 更新本文件必读列表
+Phase 4 Step 1 第 1 小项：扩展 `launch_params.h` 新增 PT / 环境光 / emissive 参数与结构体
 
-> Phase 1、Phase 2 全部完成并归档。
+> Phase 1、Phase 2、Phase 3 全部完成并归档。
 
 ---
 
@@ -28,8 +28,9 @@ Phase 4 启动：归档 Phase 3 文档（`docs/current-phase.md` + `tasks/phase3
 | 文档 | 说明 |
 |------|------|
 | `docs/roadmap.md` | Phase 概览与顺序 |
-| `docs/current-phase.md` | 当前阶段目标、范围、实现指南（Phase 3） |
-| `tasks/phase3.md` | Phase 3 可执行任务清单 |
+| `docs/current-phase.md` | 当前阶段目标、范围、实现指南（Phase 4） |
+| `tasks/phase4.md` | Phase 4 可执行任务清单 |
+| `phase4-discussion.md` | Phase 4 决策记录（D1-D26） |
 | `docs/architecture.md` | 渲染器架构与设计理念 |
 | `docs/technical-decisions.md` | 技术选型与决策 |
 
