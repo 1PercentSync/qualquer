@@ -172,6 +172,8 @@
 
 **命名（V_SmithGGXCorrelated）**：Qualquer 用 `V_SmithGGXCorrelated` 而非 Himalaya 的 `V_SmithGGX`，显式标注 height-correlated（Heitz 2014）实现。理由：诚实标注实现形态（"GGX" 只描述 NDF，不描述 G2 的 correlated/separable 选择），并为日后对比 separable 版本预留无歧义命名空间。
 
+**combined_lobe_pdf 独立函数**：combined multi-lobe PDF 的组装 `p_spec·pdf_spec + (1−p_spec)·pdf_diff` 抽成 `__forceinline__ __device__ combined_lobe_pdf(pdf_spec, pdf_diff, p_spec)` 独立函数，而非 Himalaya 的 closesthit 内联组装。理由：Qualquer 拆成 brdf.cuh + closesthit + NEE eval 多处调用点（brdf_sample 两分支 + 两个 NEE eval，共 4 处），独立函数让 combined PDF 与 lobe 选择概率的一致性在代码上显而易见（4 处调用同一函数，不可能漏改某处破坏 MIS 无偏性）；`__forceinline__` 零运行时开销；轻量抽象（3 参数、一行公式）不违反 KISS。
+
 ---
 
 ### D9. 光源系统：环境光 + Emissive 三角形
