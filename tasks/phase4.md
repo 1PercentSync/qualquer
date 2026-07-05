@@ -9,7 +9,7 @@
 
 ## Step 1：Infrastructure & 代码重组
 
-- [ ] 扩展 `launch_params.h`：新增 PT 参数（max_bounces、samples_per_frame、sample_count、frame_seed、exposure）、环境光参数（env_cubemap、env_alias_table、env_alias_count、env_alias_width、env_alias_height、env_total_luminance）、emissive 参数（emissive_triangles、emissive_alias_table、emissive_count、emissive_total_power）。定义 EnvAliasEntry（prob + alias + luminance）、AliasEntry（prob + alias）、EmissiveTriangle 结构体
+- [x] 扩展 `launch_params.h`：新增 PT 参数（max_bounces、samples_per_frame、sample_count、frame_seed、exposure）、环境光参数（env_cubemap、env_alias_table、env_alias_count、env_alias_width、env_alias_height、env_total_luminance）、emissive 参数（emissive_triangles、emissive_alias_table、emissive_count、emissive_total_power）。定义 EnvAliasEntry（prob + alias + luminance）、AliasEntry（prob + alias）、EmissiveTriangle 结构体
 - [ ] Pipeline 更新：numPayloadValues=18、numAttributeValues=2、maxTraceDepth 更新、stack size 调整
 - [ ] Renderer 语义拆分：frame_counter_（slot 索引，永不 reset）、sample_count_（总累积数，camera/config 变化时 reset）、frame_seed_（temporal scramble，永不 reset）
 - [ ] Renderer 累积 reset 逻辑：camera 或渲染参数变化时 sample_count_ = 0、清零累积 buffer

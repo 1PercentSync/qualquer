@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4 — 核心 Path Tracer
-- **进度**：Phase 4 文档创建完成。
+- **进度**：Phase 4 Step 1 第 1 小项完成：`launch_params.h` 已扩展（新增 AliasEntry/EnvAliasEntry/EmissiveTriangle 结构体 + LaunchParams PT/env/emissive 字段）
 
 ### 下一个任务
 
-Phase 4 Step 1 第 1 小项：扩展 `launch_params.h` 新增 PT / 环境光 / emissive 参数与结构体
+Phase 4 Step 1 第 2 小项：Pipeline 更新（numPayloadValues=18、numAttributeValues=2、maxTraceDepth 更新、stack size 调整）
 
 ---
 
