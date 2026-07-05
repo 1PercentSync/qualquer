@@ -379,7 +379,7 @@
 - indirect bounces (bounce > 0) 对 contribution 做 `min(value, max_clamp)`
 - 这是画质改善而非优化。Phase 4 是否纳入？阈值如何暴露？
 
-**决策**：✅ **纳入**。画质改善（去除 firefly 伪影），非性能优化。阈值 `max_clamp` 通过 UI 暴露。
+**决策**：❌ **不纳入**。Firefly clamping 有 bias（截掉能量）；Himalaya 实践中默认禁用（`max_clamp = 0`，注释 "OIDN denoise suffices"）——降噪器本身能处理 firefly，极亮点是合法辐射度信息。等出现可见 firefly 问题再考虑加入。
 
 ---
 
@@ -416,7 +416,6 @@
 - max_bounces（int, 默认 16）
 - samples_per_frame（int, 1~64）
 - render_scale（float, 0.25~1.0）
-- max_clamp（float, 默认 10.0）
 - exposure（float）
 - ibl_rotation（float, 0~2π）
 - target_sample_count（int, 0=无限）
@@ -490,7 +489,7 @@ MUSTREAD:7
 | 1 | Sobol + Blue Noise RNG | D7 | 低差异序列替代 PCG，等效 sample 效率提升 4-8× |
 | 2 | Ray Cone LOD | D13 | 减少高频纹理 aliasing noise |
 | 3 | Russian Roulette | D20 | 无偏终止低 throughput 路径，减少无效计算 |
-| 4 | Firefly Clamping | D21 | 抑制 firefly 伪影（有 bias 但视觉改善大） |
+| ~~4~~ | ~~Firefly Clamping~~ | D21 | 不纳入（有 bias，降噪器足以处理） |
 | 5 | Stochastic Alpha | D11 | blend 材质的正确半透明处理 |
 | 6 | IBL 旋转 | D22 | UX：环境光 Y 轴旋转 |
 | 7 | Target sample count + auto-stop | D23 | UX：达到目标 sample 数后停止 |
