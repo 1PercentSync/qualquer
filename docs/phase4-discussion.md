@@ -472,6 +472,16 @@ Heitz 太慢（7-15×）排除。Kulla-Conty 需要修改采样策略。Turquin 
 - 适用范围：specular lobe（导体/电介质共用，电介质因 F0 低补偿量自然小）
 - 实现位置：`brdf.cuh`，纯代码增量
 
+**精度验证（White Furnace Test，F=1，target E=1.0）**：
+
+| 指标 | 无补偿 | 本方案 |
+|------|--------|--------|
+| 均值误差 | 0.194 | 0.006 |
+| 最大误差 | 0.693 | 0.082 |
+| 中位误差 | 0.139 | 0.003 |
+
+5.7%（58/1024）的点本方案误差大于无补偿，全部位于低粗糙度区域（r < 0.13）——该区域能量损失本身极小（无补偿误差 < 0.013），多项式近似误差导致微小过补偿，最大额外误差 0.012，视觉不可见。在真正需要补偿的高粗糙度区域始终大幅优于无补偿。
+
 **参考文献**：
 - Turquin 2019, "Practical multiple scattering compensation for microfacet models"
 - Sforza & Pellacini 2022, "Enforcing Energy Preservation in Microfacet Models"（代码：github.com/dsforza96/energy-preservation，MIT 许可）
