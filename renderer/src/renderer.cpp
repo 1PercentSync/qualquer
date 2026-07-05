@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <cstring>
 #include <vector>
 
 #include <glm/glm.hpp>
@@ -382,6 +383,24 @@ namespace qualquer::renderer {
         // Wait until the previous frame's tonemap finished reading the buffer
         // that this frame's raygen is about to overwrite.
         CUDA_CHECK(cudaStreamWaitEvent(cuda_context.compute_stream, event_tonemap_done_[prev_slot]));
+
+        // Accumulation reset on camera change: exact byte-compare of the inverse
+        // view/projection against the previous frame. Any change (camera move,
+        // fov/aspect/near/far) invalidates prior accumulation — sample_count_
+        // is zeroed and both ping-pong buffers are cleared on compute_stream
+        // before this frame's raygen runs. Render-config changes (max_bounces,
+        // exposure, ...) are not tracked here yet; they arrive through a separate
+        // input channel in a later step.
+        const bool camera_changed =
+            std::memcmp(&scene.camera.inv_view, &prev_inv_view_, sizeof(glm::mat4)) != 0 ||
+            std::memcmp(&scene.camera.inv_projection, &prev_inv_projection_, sizeof(glm::mat4)) != 0;
+        if (camera_changed) {
+            sample_count_ = 0;
+            accum_buffers_[0].clear(cuda_context.compute_stream);
+            accum_buffers_[1].clear(cuda_context.compute_stream);
+        }
+        prev_inv_view_ = scene.camera.inv_view;
+        prev_inv_projection_ = scene.camera.inv_projection;
 
         const LaunchParams params{
             .accumulation_buffer = accum_buffers_[1 - accum_index_].data(),

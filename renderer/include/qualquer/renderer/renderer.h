@@ -13,6 +13,8 @@
 #include <span>
 #include <string>
 
+#include <glm/glm.hpp>
+
 #include <qualquer/optix/accel_structure.h>
 #include <qualquer/optix/cuda_buffer.h>
 #include <qualquer/optix/pipeline.h>
@@ -237,6 +239,22 @@ namespace qualquer::renderer {
          * are cleared in lockstep so the sum and count stay consistent.
          */
         uint32_t sample_count_ = 0;
+
+        /**
+         * @brief Previous-frame inverse view matrix (accumulation-reset detection).
+         *
+         * Exact byte-compare against the current frame's inv_view; any change
+         * (camera move) zeros sample_count_ and clears the accum buffers.
+         */
+        glm::mat4 prev_inv_view_{1.0f};
+
+        /**
+         * @brief Previous-frame inverse projection matrix (accumulation-reset detection).
+         *
+         * Exact byte-compare against the current frame's inv_projection; any change
+         * (fov/aspect/near/far) zeros sample_count_ and clears the accum buffers.
+         */
+        glm::mat4 prev_inv_projection_{1.0f};
 
         /**
          * @brief Recorded after raygen completes on compute_stream.
