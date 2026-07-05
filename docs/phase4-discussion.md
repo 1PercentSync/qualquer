@@ -319,7 +319,7 @@
 
 **决策**：✅
 1. **Tonemap 函数**：Khronos PBR Neutral。专为 PBR 设计，baseColor 低于阈值时 1:1 精确还原，仅压缩高亮，无风格化色偏。
-2. **Exposure 控制**：手动 `exposure` 参数，`color *= exp2(exposure)`。
+2. **Exposure 控制**：手动 exposure，线性倍率语义。app 层存 EV stops 并转换为线性倍率 `pow(2, ev)` 后传入渲染层；渲染层直接线性乘 `color * exposure`，不关心 EV 摄影/摄影概念。转换点在 app 层，与 Himalaya 一致（其 RenderInput.exposure 注释“linear scale, from pow(2, EV)”）。（原方案 `color *= exp2(exposure)` 让渲染层做 EV 转换，按“决策可更新性”调整为渲染层只接收线性倍率，职责更单一。）
 
 ---
 

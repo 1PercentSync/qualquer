@@ -143,7 +143,7 @@ Phase 3 基础上新增：
 uint32_t max_bounces;
 uint32_t samples_per_frame;
 uint32_t sample_count;
-float exposure;
+float exposure;  // 线性倍率（app 层由 EV 转换 pow(2, ev)）；渲染层直接 color *= exposure
 
 // 环境光
 cudaTextureObject_t env_cubemap;
