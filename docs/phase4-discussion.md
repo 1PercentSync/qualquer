@@ -82,14 +82,14 @@
 1. **Running Average vs Separate Accumulator**：`mix(old, frame_avg, N/(total+N))` vs `sum[pixel] += total; count[pixel] += N; display = sum/count`
 2. **累积重置触发条件**：camera 变化、PT 参数变化、渲染分辨率变化、场景切换
 3. **检测方式**：逐帧比较 inv_view + inv_projection（exact float compare）
-4. **frame_counter_ / sample_count_ / frame_seed_ 语义拆分**：当前 frame_counter_ 混用了 slot 索引和 frame index
+4. **frame_counter_ / sample_count_ 语义拆分**：当前 frame_counter_ 混用了 slot 索引和 frame index
 
 **注意**：未来 DLSS Ray Reconstruction 可在 1 spp 下直接产出高质量画面，届时实时预览模式可能不走累积管线。但 Phase 4 的累积系统仍然是物理收敛渲染的基础，两者互补而非替代。
 
 **决策**：✅
 1. **Separate Sum 累积**：`sum_new = sum_old + frame_total`，tonemap 中 `display = sum / total_sample_count`。count 是全局值（全帧均匀采样），无需 per-pixel buffer。精度略优于 running average，与现有 ping-pong 架构兼容。
 2. **累积重置**：camera/PT 参数/渲染分辨率/场景切换时 `sample_count_ = 0`，实现参考 Himalaya。
-3. **语义拆分**：`frame_counter_`（slot 索引，永不 reset）、`sample_count_`（累积总量，reset 时归零）、`frame_seed_`（RNG temporal scramble，永不 reset——避免重置后噪声序列重复）。
+3. **语义拆分**：`frame_counter_`（帧号，永不 reset——%2 选 slot，同时上传为 LaunchParams::frame_index 作 device temporal/RNG 源）、`sample_count_`（累积总量，reset 时归零）。不单设 `frame_seed_`：frame_counter_ 本身单调递增、永不 reset，复用作 RNG temporal scramble 源即可，frame_index 命名已表达「用帧号作种子」意图。（原方案照搬 Himalaya 拆出独立 frame_seed_，在 Qualquer 单 renderer 层下无等价收益，按「决策可更新性」简化。）
 
 ---
 

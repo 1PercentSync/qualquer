@@ -143,7 +143,6 @@ Phase 3 基础上新增：
 uint32_t max_bounces;
 uint32_t samples_per_frame;
 uint32_t sample_count;
-uint32_t frame_seed;
 float exposure;
 
 // 环境光
@@ -165,9 +164,10 @@ float emissive_total_power;
 
 | 字段 | 用途 | Reset 行为 |
 |------|------|-----------|
-| frame_counter_ | 双 stream slot 索引（%2） | 永不 reset |
+| frame_counter_ | 帧号（%2 选 slot；同时上传为 LaunchParams::frame_index 作 device temporal/RNG 源） | 永不 reset |
 | sample_count_ | 总累积 sample 数 | camera/config 变化时 = 0 |
-| frame_seed_ | RNG temporal scramble | 永不 reset |
+
+> 不单独设立 frame_seed：frame_counter_ 本身单调递增、永不 reset，直接复用作 RNG temporal scramble 源（device 经 LaunchParams::frame_index 读取）。frame_index 的命名已表达「用帧号作种子」的意图，无需另立别名字段。
 
 ### Alias Table (Vose's Algorithm)
 
