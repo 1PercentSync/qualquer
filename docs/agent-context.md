@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4 — 核心 Path Tracer
-- **进度**：Phase 4 Step 2 第 2 小项完成：tonemap kernel 除以 sample_count + exposure + PBR Neutral
+- **进度**：Phase 4 Step 2 完成（Tonemap + Exposure：PBR Neutral tonemap.cuh、tonemap kernel 除以 sample_count + exposure、raygen 改 Separate Sum 累加。编译运行通过）
 
 ### 下一个任务
 
-Phase 4 Step 2 第 3 小项：Raygen 改 Separate Sum 累加（LaunchParams 加 accumulation_buffer_read，raygen 读旧总和 + 本帧 contribution 写新 buffer）
+Phase 4 Step 3 第一小项：创建 `brdf.cuh`（GGX NDF、Smith G2、Fresnel Schlick、Lambertian diffuse、VNDF 采样、cosine hemisphere 采样、multi-lobe PDF）
 
 ---
 
