@@ -105,8 +105,16 @@ static_assert(sizeof(EmissiveTriangle) == 96);
  * definition is included on both sides and must stay layout-compatible.
  */
 struct LaunchParams {
-    /** @brief Device pointer to the accumulation buffer (HDR RGBA32F, written by raygen). */
+    /** @brief Device pointer to the accumulation buffer written by raygen (new Separate-Sum total). */
     float4 *accumulation_buffer;
+
+    /**
+     * @brief Device pointer to the previous accumulation total (Separate-Sum read side).
+     *
+     * raygen reads this, adds the current frame's contribution, and writes the
+     * new total to accumulation_buffer. Points to the opposite ping-pong slot.
+     */
+    const float4 *accumulation_buffer_read;
 
     /** @brief Framebuffer width in pixels. */
     uint32_t width;

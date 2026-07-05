@@ -403,7 +403,10 @@ namespace qualquer::renderer {
         prev_inv_projection_ = scene.camera.inv_projection;
 
         const LaunchParams params{
+            // Separate-Sum: raygen reads the previous total and writes the new
+            // total to the opposite ping-pong slot.
             .accumulation_buffer = accum_buffers_[1 - accum_index_].data(),
+            .accumulation_buffer_read = accum_buffers_[accum_index_].data(),
             .width = width,
             .height = height,
             .frame_index = frame_counter_,

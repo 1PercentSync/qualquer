@@ -63,7 +63,9 @@ __global__ void __raygen__rg() { // NOLINT(*-reserved-identifier)
     // directly and skip tracing. Matches __miss__ms output, keeping the frame
     // consistent with a fully-miss scene.
     if (params.traversable == 0) {
-        params.accumulation_buffer[linear_index] = make_float4(0.1f, 0.1f, 0.1f, 1.0f);
+        const float4 old = params.accumulation_buffer_read[linear_index];
+        params.accumulation_buffer[linear_index] =
+            make_float4(old.x + 0.1f, old.y + 0.1f, old.z + 0.1f, 1.0f);
         return;
     }
 
@@ -114,7 +116,9 @@ __global__ void __raygen__rg() { // NOLINT(*-reserved-identifier)
     const float g = __uint_as_float(p1);
     const float b = __uint_as_float(p2);
 
-    params.accumulation_buffer[linear_index] = make_float4(r, g, b, 1.0f);
+    const float4 old = params.accumulation_buffer_read[linear_index];
+    params.accumulation_buffer[linear_index] =
+        make_float4(old.x + r, old.y + g, old.z + b, 1.0f);
 }
 
 /// Emits a constant background color on miss.
