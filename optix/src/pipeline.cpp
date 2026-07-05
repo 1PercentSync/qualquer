@@ -68,11 +68,15 @@ namespace qualquer::optix {
         // traversableGraphFlags selects single-level instancing (TLAS->BLAS), the
         // graph shape used for instanced geometry, over the broader ALLOW_ANY so
         // the traversal shader compiles for the actual graph depth rather than the
-        // most general one. numPayloadValues=3: shading color (RGB float3).
-        // numAttributeValues=2: triangle barycentrics (built-in, unchanged).
+        // most general one.
+        // numPayloadValues=18: the full path payload carried between raygen and
+        // closesthit (next origin/direction, throughput update, radiance, hit
+        // distance, MIS weights, bounce index, etc.). Declaring the upper bound
+        // here; programs may use fewer.
+        // numAttributeValues=2: triangle barycentrics (built-in).
         const OptixPipelineCompileOptions pipeline_options{
             .traversableGraphFlags = OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
-            .numPayloadValues = 3,
+            .numPayloadValues = 18,
             .numAttributeValues = 2,
             .pipelineLaunchParamsVariableName = launch_params_variable_name,
             .pipelineLaunchParamsSizeInBytes = launch_params_size,
@@ -127,10 +131,11 @@ namespace qualquer::optix {
         miss_program = program_groups[1];
         hitgroup_program = program_groups[2];
 
-        // maxTraceDepth=1: primary ray only (raygen → closesthit/miss, no
-        // recursive trace from hit shaders).
+        // maxTraceDepth=2: raygen traces the primary/bounce ray (depth 1), and
+        // closesthit may trace a shadow ray for NEE (depth 2). The bounce loop
+        // itself lives in raygen (megakernel), so it does not add trace depth.
         constexpr OptixPipelineLinkOptions link_options{
-            .maxTraceDepth = 1,
+            .maxTraceDepth = 2,
         };
 
         OPTIX_CHECK(optixPipelineCreate(device_context,
@@ -142,13 +147,13 @@ namespace qualquer::optix {
                                         nullptr,
                                         &handle));
 
-        // maxTraceDepth=1 matches link options (primary ray only).
+        // maxTraceDepth=2 matches link options (primary/bounce + shadow).
         // maxTraversableGraphDepth=0 lets OptiX derive the default from
         // traversableGraphFlags (single-level instancing → depth 2, matching
         // the TLAS→BLAS graph). No callable programs are used.
         OPTIX_CHECK(optixPipelineSetStackSizeFromCallDepths(
             handle,
-            /*maxTraceDepth=*/1,
+            /*maxTraceDepth=*/2,
             /*maxContinuationCallableDepth=*/0,
             /*maxDirectCallableDepthFromState=*/0,
             /*maxDirectCallableDepthFromTraversal=*/0,
