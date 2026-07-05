@@ -336,7 +336,7 @@
 **核心问题**：Phase 4 为后续降噪/重建系统预留什么？
 
 **两条技术路线**：
-- **OptiX Denoiser**（原 Phase 6，现提前到 Phase 4.5）：需要 albedo + normal aux buffer
+- **OptiX Denoiser**（Phase 4.5）：需要 albedo + normal aux buffer
 - **DLSS Ray Reconstruction**（未来）：需要 albedo + normal + depth + motion vectors。Motion vectors 需要时域数据（前帧 hit position），Phase 4 不实现
 
 **Phase 4 可预留项**：
@@ -611,4 +611,4 @@ MUSTREAD:7
 | # | 特性 | 来源决策 | 说明 |
 |---|------|---------|------|
 | 11 | Aux data 写入 + debug view | D18 | closesthit bounce==0 写入 albedo/normal/depth，UI debug view |
-| 12 | OptiX Denoiser 集成 | — | 原 Phase 6 内容，提前到 4.5 |
+| 12 | OptiX Denoiser 集成 | — | — |
