@@ -20,6 +20,9 @@ __forceinline__ __device__ float3 operator-(const float3 a, const float3 b) {
 __forceinline__ __device__ float3 operator-(const float3 a) {
     return make_float3(-a.x, -a.y, -a.z);
 }
+__forceinline__ __device__ float3 operator-(const float3 a, const float s) {
+    return make_float3(a.x - s, a.y - s, a.z - s);
+}
 __forceinline__ __device__ float3 operator*(const float3 a, const float s) {
     return make_float3(a.x * s, a.y * s, a.z * s);
 }
@@ -43,6 +46,7 @@ __forceinline__ __device__ float4 operator*(const float s, const float4 a) { ret
 
 // ---- Scalar float3 math -----------------------------------------------------
 
+// ReSharper disable once CppUnnamedNamespaceInHeaderFile
 namespace {
 
 __forceinline__ __device__ float dot(const float3 a, const float3 b) {
