@@ -114,7 +114,7 @@ struct LaunchParams {
     /** @brief Framebuffer height in pixels. */
     uint32_t height;
 
-    /** @brief Monotonic accumulation counter driving temporal noise variation. */
+    /** @brief Monotonic frame counter; uploaded for device-side temporal variation (e.g. RNG seed). */
     uint32_t frame_index;
 
     /** @brief TLAS handle for optixTrace traversal. */
@@ -145,9 +145,6 @@ struct LaunchParams {
 
     /** @brief Total samples accumulated so far; the Separate-Sum divisor at tonemap. */
     uint32_t sample_count;
-
-    /** @brief Per-frame RNG seed for temporal decorrelation; monotonically increasing. */
-    uint32_t frame_seed;
 
     /** @brief Exposure applied before tonemap (linear multiplier). */
     float exposure;

@@ -247,6 +247,7 @@ namespace qualquer::renderer {
 
         params_buffer_.alloc(1);
         accum_index_ = 0;
+        sample_count_ = 0;
 
         // Events start recorded on compute_stream so the first frame's waits
         // (on slot 1, the "previous" slot) pass immediately — the stream ordering
@@ -277,6 +278,9 @@ namespace qualquer::renderer {
             buffer.clear(cuda_context.compute_stream);
         }
         accum_index_ = 0;
+        // A size change invalidates prior accumulation: sample_count_ must match
+        // the cleared buffers. frame_counter_ is intentionally not reset.
+        sample_count_ = 0;
 
         // Re-record events so the next frame's display_stream wait covers the
         // clears above. Without this, the wait would see the stale event from
@@ -297,8 +301,9 @@ namespace qualquer::renderer {
         // program groups, so it is torn down before the SBT buffers whose device
         // memory it bound. Pipeline::destroy and CudaBuffer::free are both
         // idempotent (null-reset), so a repeat call is a no-op. State members
-        // (accum_index_, frame_counter_) are intentionally not reset here —
-        // release is the sole responsibility; a subsequent init resets them.
+        // (accum_index_, frame_counter_, sample_count_) are intentionally not
+        // reset here — release is the sole responsibility; a subsequent init
+        // resets them.
         pipeline_.destroy();
         sbt_raygen_.free();
         sbt_miss_.free();
@@ -389,6 +394,23 @@ namespace qualquer::renderer {
             .texture_objects = scene.texture_objects.data(),
             .inv_view = to_float4x4(scene.camera.inv_view),
             .inv_projection = to_float4x4(scene.camera.inv_projection),
+            // PT state: sample_count_ is Renderer state advanced per frame.
+            // The rest are config defaults (separate input channel).
+            .max_bounces = 0,
+            .samples_per_frame = 1,
+            .sample_count = sample_count_,
+            .exposure = 0.0f,
+            // Env + emissive NEE resources: null (no env/emissive built).
+            .env_cubemap = 0,
+            .env_alias_table = nullptr,
+            .env_alias_count = 0,
+            .env_alias_width = 0,
+            .env_alias_height = 0,
+            .env_total_luminance = 0.0f,
+            .emissive_triangles = nullptr,
+            .emissive_alias_table = nullptr,
+            .emissive_count = 0,
+            .emissive_total_power = 0.0f,
         };
         params_buffer_.upload(&params, 1, cuda_context.compute_stream);
 
@@ -450,6 +472,7 @@ namespace qualquer::renderer {
 
         accum_index_ = 1 - accum_index_;
         ++frame_counter_;
+        sample_count_ += 1;
     }
 
     void Renderer::record_vulkan(const RenderInput &input) {

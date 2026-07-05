@@ -220,8 +220,23 @@ namespace qualquer::renderer {
         /** @brief Index into accum_buffers_ of the buffer read this frame; flipped per frame. */
         uint32_t accum_index_ = 0;
 
-        /** @brief Monotonic frame counter driving temporal animation. */
+        /**
+         * @brief Monotonic frame counter; never reset.
+         *
+         * Indexes the ping-pong buffers and CUDA events via frame_counter_ % 2,
+         * and is uploaded as LaunchParams::frame_index for device-side temporal
+         * variation (e.g. RNG seed). Never reset so both uses advance
+         * monotonically across the session.
+         */
         uint32_t frame_counter_ = 0;
+
+        /**
+         * @brief Total samples accumulated across frames (Separate-Sum divisor).
+         *
+         * Reset to 0 on camera or render-config change; the accumulation buffers
+         * are cleared in lockstep so the sum and count stay consistent.
+         */
+        uint32_t sample_count_ = 0;
 
         /**
          * @brief Recorded after raygen completes on compute_stream.
