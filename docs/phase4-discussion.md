@@ -168,6 +168,8 @@
 
 **决策**：✅ **全做**。上述全集是完整 PT 的最小 BRDF 集，不是优化。Cosine hemisphere / VNDF / multi-lobe selection 是让 PT 在可行时间内产出可辨识结果的基本采样策略——没有它们 specular 材质实际不可用。Diffuse 模型由 Lambertian 升级为 EON（D28a）。
 
+**参数约定（alpha vs roughness）**：specular 微面元原语（D_GGX、V_SmithGGXCorrelated、sample_ggx_vndf、pdf_ggx_vndf）接收 **alpha**（= roughness²），贴合 Heitz 2018 原文与微面元参数惯例；EON diffuse / E_ss / E_FON / CLTC 拟合接收 **linear roughness r ∈ [0,1]**，贴合多项式拟合变量。两套惯例源于不同数学源头无法统一。closesthit 端同时持有 roughness 和 alpha，alpha 在单点 clamp（D28 NaN 防护），specular 原语内部不重复 clamp。与 Himalaya（全收 roughness、函数内平方）不同——Qualquer 集中算 alpha 避免函数内重复平方、让 clamp 可见。
+
 ---
 
 ### D9. 光源系统：环境光 + Emissive 三角形
@@ -510,6 +512,8 @@ Phase 4 完整采纳 EON + CLTC 采样（掠射角方差降 100×）。
 #### 28b. Schlick Fresnel vs 精确 Fresnel / F82-tint
 
 **决策**：❌ **不纳入**。F82-tint 需要 KHR_materials_specular 扩展提供 F82 参数，无此扩展数据时 Schlick 与 F82-tint 结果完全一致。M1 不解析该扩展，无数据源。
+
+**F_Schlick 函数形态**：仅提供标准形式 `F_Schlick(VdotH, F0)`（F90=1 隐含），**不暴露 F90 参数重载**。理由：F82-tint 不做、涂层/coated 材质不规划、metal energy compensation（D27）走独立 Turquin 增益而非 F90 修正——无任何 F90≠1 的使用场景。任务清单原措辞“F0 + F90”指 Schlick 公式的两个端点形式（描述公式），不构成 API 要求。
 
 #### 28c. Turquin 补偿的 Diffuse-Specular 耦合
 

@@ -270,15 +270,26 @@ g1 = 0.0571085289, g2 = 0.491881867, g3 = -0.332181442, g4 = 0.0714429953
 
 **采样**：CLTC（Clipped Linearly Transformed Cosine）采样，掠射角方差比 cosine hemisphere 降 100×。LTC 矩阵系数 a/b/c/d 为 (μ, r) 的 rational polynomial fit（Listing 2），采样通过 Nusselt analog + 半圆-半椭圆区域均匀采样实现（Listing 3-4）。
 
-**集成**：`f_total = f_specular × turquin_comp + (1 - metallic) × (1 - F) × f_EON`。Specular 和 diffuse 的能量补偿相互独立。
+**集成**：`f_total = f_specular × turquin_comp + (1 - metallic) × (1 - E_spec_compensated) × f_EON`，其中 `E_spec_compensated = E_ss + F0·(1 - E_ss)` 为 Turquin 补偿后的 specular 方向反照率（D28c 耦合修正）。Diffuse 权重改用方向反照率而非 per-sample Fresnel，确保 specular + diffuse 总能量 ≤ 1；F_Schlick 仅在 specular 路径与 specular_probability 中保留，diffuse 路径不再调用。Specular 和 diffuse 的多散射能量补偿相互独立。
+
+### BRDF 参数约定（alpha vs roughness）
+
+Specular 微面元原语（`D_GGX`、`V_SmithGGXCorrelated`、`sample_ggx_vndf`、`pdf_ggx_vndf`）接收 **alpha**（= roughness²），贴合 Heitz 2018 原文与微面元参数惯例；EON diffuse / `E_ss` / `E_FON` / CLTC 拟合接收 **linear roughness r ∈ [0,1]**，贴合多项式拟合变量。
+
+两套惯例并存源于数学源头不同，无法统一到单一参数。closesthit 端同时持有两个变量，各按所属惯例传入：
+
+```cuda
+float roughness = max(mr_texel.g * mat.roughness_factor, 0.04f);  // glTF 下限
+float alpha     = max(roughness * roughness, 1e-4f);               // D28 NaN 防护
+// D_GGX(..., alpha);  sample_ggx_vndf(..., alpha, ...);
+// E_ss(roughness, mu);  E_FON(mu, roughness);
+```
+
+与 Himalaya（全收 roughness、函数内平方）不同：Qualquer 在 closesthit 单点算 alpha 并 clamp，避免函数内重复平方、让 NaN 防护集中可见。EON 多项式按 linear roughness 拟合，不参与 alpha clamp（r=0 有定义不发散，仅需保证 r∈[0,1]）。
 
 ### Roughness 下限 Clamp
 
-GGX NDF 在 α = 0 时退化为 Dirac delta，D(h) → ∞/0 → NaN。所有使用 roughness 的位置需先 clamp：
-
-```cuda
-float alpha = max(roughness * roughness, 1e-4f);
-```
+GGX NDF 在 α = 0 时退化为 Dirac delta，D(h) → ∞/0 → NaN。clamp 对象是 **alpha**，不是 roughness——在 closesthit 端单点完成（见上节参数约定），specular 原语内部不再重复 clamp。
 
 ### 多散射能量补偿（Turquin + Sforza 多项式）
 
