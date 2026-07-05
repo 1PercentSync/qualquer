@@ -488,9 +488,62 @@ Heitz 太慢（7-15×）排除。Kulla-Conty 需要修改采样策略。Turquin 
 
 ---
 
+### D28. 渲染准确性审计（对照物理正确性）
+
+**来源**：Phase 4+4.5 全计划审视，对照物理地面真值（非对标 Himalaya）。
+
+**已处理项**：
+- Shadow Terminator：已加入 Step 7 为单独小项
+- roughness=0 NaN：已补充到 Step 3 brdf.cuh 项
+- Emissive NEE 光源朝向检查：已补充到 Step 7 Emissive NEE 项
+
+**待决议题**（需用户决策是否纳入 Phase 4/4.5）：
+
+#### 28a. Lambertian vs Disney/Burley Diffuse
+
+**问题**：Lambertian 假设漫反射完全均匀（1/π），真实粗糙表面存在粗糙度相关的回射效应（光向光源方向弹回）和掠射角变暗。Disney/Burley diffuse 用简单公式近似这些效应。
+
+**现状**：glTF 2.0 规范的参考实现使用 Lambertian。
+
+**影响**：粗糙非金属表面（如墙面、地面）在光源方向的亮度分布不同。视觉差异在高粗糙度下可辨，但不剧烈。
+
+**修复复杂度**：低。替换 `1/π` 为 Burley 公式（~10 行），不改变采样策略（仍用 cosine hemisphere）。
+
+#### 28b. Schlick Fresnel vs 精确 Fresnel / F82-tint
+
+**问题**：Schlick 用 `F0 + (1-F0)(1-cosθ)⁵` 近似真实 Fresnel 曲线。对大多数材质准确，但某些有色金属（铜、金）在 ~80° 附近存在 Fresnel 下凹（dip），Schlick 无法表达。Lazányi-Szirmay-Kalos（2005）/ Adobe F82-tint 用一个额外参数修正此下凹。
+
+**现状**：glTF 核心规范使用 Schlick。F82-tint 属于 KHR_materials_specular 扩展。
+
+**影响**：铜、金等有色金属在掠射角附近的反射色偏差。需要场景使用 KHR_materials_specular 扩展才能触发。
+
+**修复复杂度**：低。Schlick 公式加一个修正项（~5 行）。但需要材质系统支持读取 specular 扩展参数。
+
+#### 28c. Turquin 补偿的 Diffuse-Specular 耦合
+
+**问题**：Turquin 补偿增加了 specular 能量来恢复多散射损失。对 dielectric，恢复的能量中属于多次反射后透射入表面的部分应贡献给 diffuse 而非 specular。当前公式将全部恢复能量加到 specular。
+
+**影响**：roughness=1、F0=0.04 时，specular 多出约 2.4% 能量（0.04 × 0.6 = 0.024）。总能量略超 1.0。
+
+**修复复杂度**：中。需要将 diffuse 权重从 `(1-F)` 改为 `(1 - E_ss_compensated)`，额外一次 E_ss 求值。或直接将 Turquin 补偿限制为仅在 metallic > 0 时应用。
+
+#### 28d. Normal Map Specular Anti-Aliasing
+
+**问题**：法线贴图在掠射角或远距离时，亚像素级法线变化导致 specular 高光闪烁（firefly）。Ray Cone LOD（Phase 4.5）选择正确的 mip level，但不修正法线分布的方差——即使选了高 mip，采样到的法线仍是单一值而非分布。
+
+**影响**：远距离或掠射角下的高光噪声/闪烁。4000 spp 累积可部分掩盖。
+
+**修复复杂度**：
+- 简单方案：基于法线贴图方差增大 roughness（Kaplanyan 2016 / Filament geometric specular AA），~15 行
+- 完整方案：LEAN/LEADR mapping，需要预处理管线，复杂度高
+
+**决策**：⏳ 待用户决定。
+
+---
+
 ## Phase 划分
 
-> 基于 D1-D27 决策结果，按"4000 spp 大致收敛"标准划分 Phase 4 与 Phase 4.5 的特性边界。
+> 基于 D1-D28 决策结果，按"4000 spp 大致收敛"标准划分 Phase 4 与 Phase 4.5 的特性边界。
 
 ### Phase 4：核心 PT（4000 spp 可收敛）
 
