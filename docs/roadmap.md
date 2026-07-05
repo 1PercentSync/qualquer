@@ -4,6 +4,17 @@
 
 ---
 
+## 项目长期目标
+
+**实时 Path Tracing 渲染器**：游戏级实时性能 + 物理正确性。
+
+- **M1** 移植 himalaya PT，建立物理正确的离线/准实时基础（OptiX RT + CUDA + Vulkan 呈现）。
+- **M2** 引入 ReSTIR DI/GI、SHaRC/NRC、NRD 等现代管线，达到游戏实时性能。
+
+所有 Phase 划分和特性取舍服务于这一长期目标。单个 Phase 的收敛指标（如 Phase 4 的 "4000 spp 大致收敛"）是 **Phase 范围划分判据**，不是项目终点——特性归属判据见各 Phase 文档。
+
+---
+
 ## Milestone 概览
 
 | Milestone | 主题 | 核心技术 |

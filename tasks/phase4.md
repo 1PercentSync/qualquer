@@ -1,6 +1,8 @@
 # Phase 4 任务清单
 
-> 目标：核心 Path Tracer（BRDF、多 bounce、IBL、NEE+MIS、累积收敛。4000 spp 大致收敛）
+> 目标：核心 Path Tracer（BRDF、多 bounce、IBL、NEE+MIS、累积收敛）
+>
+> **范围判据**：4000 spp 大致收敛是 Phase 4/4.5 特性归属判据，非项目终点。项目长期目标是实时 PT 渲染器（见 `docs/roadmap.md`）。
 > 详细设计见 `docs/current-phase.md`，决策记录见 `docs/phase4-discussion.md`，技术决策见 `docs/technical-decisions.md`。
 >
 > 每完成一个复选框暂停等待审查。一个 Step 结束时应请求用户在 CLion 中编译验证。

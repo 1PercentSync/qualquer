@@ -10,6 +10,7 @@
 Qualquer 是基于 CUDA + OptiX 的 Path Tracer，Vulkan 仅用于 swapchain 呈现。
 
 - **性质**：个人长期学习和练习项目
+- **长期方向**：实时 Path Tracing 渲染器（游戏级实时性能 + 物理正确性）。M1 建立物理正确基础，M2 达到游戏实时性能（详见 `roadmap.md`）。
 - **渲染方式**：Path Tracing（glTF mesh）
 - **开发方式**：AI 辅助开发
 
