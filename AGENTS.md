@@ -256,7 +256,9 @@ app_info.apiVersion = VK_API_VERSION_1_4;
 
 ## 第三方库
 
-核心平台（CUDA/OptiX/Vulkan）见「开发环境」；此处为 vcpkg 管理的辅助库：
+核心平台（CUDA/OptiX/Vulkan）见「开发环境」。
+
+### vcpkg 管理
 
 | 库 | 用途 |
 |---|---|
@@ -270,6 +272,13 @@ app_info.apiVersion = VK_API_VERSION_1_4;
 | mikktspace | tangent 生成 |
 | xxhash | 纹理缓存 content hash |
 | nlohmann-json | 配置文件 JSON 序列化 |
+
+### third_party/ 管理
+
+| 库 | 用途 |
+|---|---|
+| bc7enc | BC7 纹理压缩（CPU ISPC） |
+| ispc_texcomp | BC6H 纹理压缩（CPU ISPC） |
 
 ---
 

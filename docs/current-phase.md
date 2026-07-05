@@ -225,7 +225,7 @@ NEE 采样发光三角形时需要插值 UV 并采样 emissive 纹理，因此 E
 | BRDF（brdf.cuh） | `shaders/rt/pt_common.glsl` | GLSL → CUDA intrinsics |
 | Closesthit | `shaders/rt/closesthit.rchit` | payload registers 替代 rayPayload struct |
 | Raygen bounce loop | `shaders/rt/reference_view.rgen trace_path()` | 加 sample loop + SER |
-| Miss shader | `miss_env.rmiss` + `miss_shadow.rmiss` | GLSL → CUDA |
+| Miss shader | `miss.rmiss` + `shadow_miss.rmiss` | GLSL → CUDA |
 | Any-hit alpha | `shaders/rt/anyhit_alpha.rahit` | GLSL → CUDA |
 | Alias table | `framework/alias_table.h` | 照搬 |
 | Emissive collection | `framework/scene_as_builder.cpp` | 适配 CUDA 数据结构 |
