@@ -52,6 +52,7 @@
 - [ ] SER 集成：optixTraverse + optixReorder + optixInvoke 替换 optixTrace
 - [ ] 请求用户在 CLion 中编译验证（多 bounce PT 在 HDR env 下工作，累积收敛可见）
 
+MUSTREAD:4
 ## Step 6：Alpha 处理 + SBT 扩展
 
 - [ ] SBT 扩展为 2 hitgroup：opaque（DISABLE_ANYHIT）+ non-opaque（closesthit + anyhit），SBT record 数组重建

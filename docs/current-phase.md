@@ -94,6 +94,7 @@ __forceinline__ __device__ float rng(uint32_t pixel_index, uint32_t sample_index
 
 ### PathState
 
+MUSTREAD:8
 ```cuda
 struct PathState {
     float3 origin;
