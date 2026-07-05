@@ -513,7 +513,7 @@ Heitz 太慢（7-15×）排除。Kulla-Conty 需要修改采样策略。Turquin 
 
 Phase 4 完整采纳 EON + CLTC 采样（掠射角方差降 100×）。
 
-参考实现：github.com/portsmouth/EON-diffuse（JCGT 2025, CC BY-ND 3.0）。
+参考实现：github.com/portsmouth/EON-diffuse（代码 MIT 许可，允许移植修改；JCGT 2025 论文文本为 CC BY-ND 3.0，与代码许可无关）。
 
 #### 28b. Schlick Fresnel vs 精确 Fresnel / F82-tint
 
