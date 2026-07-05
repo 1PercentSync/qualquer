@@ -19,7 +19,7 @@
 ## Step 2：Tonemap + Exposure
 
 - [ ] 创建 `tonemap.cuh`：Khronos PBR Neutral tonemap 函数、exposure 应用（pre-tonemap multiply）
-- [ ] tonemap kernel 更新：累积 buffer 读取时除以 sample_count（Separate Sum）、应用 exposure + PBR Neutral
+- [x] tonemap kernel 更新：累积 buffer 读取时除以 sample_count（Separate Sum）、应用 exposure + PBR Neutral
 - [ ] Raygen 改 Separate Sum 累加：LaunchParams 加 `accumulation_buffer_read` 指针（读旧总和），raygen 读旧总和 + 本帧 contribution 写新 buffer；与 tonemap 除法配对，保证 sample_count 与 buffer 内容一致
 - [ ] 请求用户在 CLion 中编译验证（ambient 着色经 tonemap 正确显示）
 

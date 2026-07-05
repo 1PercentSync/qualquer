@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4 — 核心 Path Tracer
-- **进度**：Phase 4 Step 1 完成（Infrastructure & 代码重组：LaunchParams 扩展、Pipeline 配置 numPayloadValues=18/maxTraceDepth=2、Renderer 累积状态拆分与 reset、math_utils.cuh 抽取。编译通过，渲染行为不变）
+- **进度**：Phase 4 Step 2 第 2 小项完成：tonemap kernel 除以 sample_count + exposure + PBR Neutral
 
 ### 下一个任务
 
-Phase 4 Step 2 第一小项：创建 `tonemap.cuh`（Khronos PBR Neutral tonemap 函数、exposure 应用）
+Phase 4 Step 2 第 3 小项：Raygen 改 Separate Sum 累加（LaunchParams 加 accumulation_buffer_read，raygen 读旧总和 + 本帧 contribution 写新 buffer）
 
 ---
 
