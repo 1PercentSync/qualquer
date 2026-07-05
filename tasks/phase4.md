@@ -13,7 +13,7 @@
 - [x] Pipeline 更新：numPayloadValues=18、numAttributeValues=2、maxTraceDepth 更新、stack size 调整
 - [x] Renderer 语义拆分：frame_counter_（帧号永不 reset，%2 选 slot 兼上传 LaunchParams::frame_index 作 device temporal/RNG 源）、sample_count_（总累积数，camera/config 变化时 reset）
 - [x] Renderer 累积 reset 逻辑：camera 或渲染参数变化时 sample_count_ = 0、清零累积 buffer
-- [ ] 创建 `math_utils.cuh`：将 programs.cu 中现有 float3/float2/float4 运算符、dot/cross/normalize、矩阵乘法、DeviceVertex 定义、get_shading_normal 移入。programs.cu 改为 `#include` 此文件
+- [x] 创建 `math_utils.cuh`：将 programs.cu 中现有 float3/float2/float4 运算符、dot/cross/normalize、矩阵乘法、DeviceVertex 定义、get_shading_normal 移入。programs.cu 改为 `#include` 此文件
 - [ ] 请求用户在 CLion 中编译验证（现有渲染行为不变）
 
 ## Step 2：Tonemap + Exposure

@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4 — 核心 Path Tracer
-- **进度**：Phase 4 Step 1 第 4 小项完成：累积 reset 逻辑（camera 变化时 sample_count_ = 0 + 清零 accum buffer）
+- **进度**：Phase 4 Step 1 第 5 小项完成：`math_utils.cuh` 已创建（数学工具从 programs.cu 抽取）
 
 ### 下一个任务
 
-Phase 4 Step 1 第 5 小项：创建 `math_utils.cuh`（抽取 programs.cu 的数学工具函数）
+Phase 4 Step 1 第 6 小项：请求用户在 CLion 中编译验证（现有渲染行为不变）
 
 ---
 
