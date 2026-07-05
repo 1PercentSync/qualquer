@@ -9,6 +9,7 @@
 #include <cuda_runtime.h>
 
 #include <qualquer/renderer/tonemap.h>
+#include <qualquer/renderer/tonemap.cuh>
 
 namespace qualquer::renderer {
     namespace {
@@ -31,8 +32,9 @@ namespace qualquer::renderer {
                 }                                                                         \
             } while (0)
 
-        // Hard clamp to [0,1] as the current LDR transform. fminf/fmaxf, not a
-        // clamp() template, to avoid pulling <algorithm> into device code.
+        // PBR Neutral output is already in [0,1]; alpha is not a color and is
+        // clamped directly. fminf/fmaxf, not a clamp() template, to avoid pulling
+        // <algorithm> into device code.
         __device__ __forceinline__ float clamp01(const float v) {
             return fminf(1.0f, fmaxf(0.0f, v));
         }
@@ -43,7 +45,9 @@ namespace qualquer::renderer {
         __global__ void tonemap_kernel(const float4 *accumulation_buffer,
                                         const cudaSurfaceObject_t display_surface,
                                         const uint32_t width,
-                                        const uint32_t height) {
+                                        const uint32_t height,
+                                        const uint32_t sample_count,
+                                        const float exposure) {
             const uint32_t x = blockIdx.x * blockDim.x + threadIdx.x;
             const uint32_t y = blockIdx.y * blockDim.y + threadIdx.y;
             if (x >= width || y >= height) {
@@ -52,10 +56,19 @@ namespace qualquer::renderer {
 
             const float4 hdr = accumulation_buffer[y * width + x];
 
+            // Separate-Sum: divide the accumulated total by the sample count to
+            // recover the mean. sample_count == 0 (pre-first-frame or just reset)
+            // guards against div-by-zero; raygen overwrites on the first sample, so
+            // the buffer already holds a single-sample value.
+            const float inv_count = 1.0f / (sample_count == 0 ? 1.0f : static_cast<float>(sample_count));
+            const float3 mean = make_float3(hdr.x, hdr.y, hdr.z) * inv_count;
+
+            const float3 ldr = apply_tonemap(mean, exposure);
+
             const uchar4 pixel{
-                static_cast<uint8_t>(__float2uint_rn(clamp01(hdr.x) * 255.0f)),
-                static_cast<uint8_t>(__float2uint_rn(clamp01(hdr.y) * 255.0f)),
-                static_cast<uint8_t>(__float2uint_rn(clamp01(hdr.z) * 255.0f)),
+                static_cast<uint8_t>(__float2uint_rn(clamp01(ldr.x) * 255.0f)),
+                static_cast<uint8_t>(__float2uint_rn(clamp01(ldr.y) * 255.0f)),
+                static_cast<uint8_t>(__float2uint_rn(clamp01(ldr.z) * 255.0f)),
                 static_cast<uint8_t>(__float2uint_rn(clamp01(hdr.w) * 255.0f)),
             };
 
@@ -71,12 +84,14 @@ namespace qualquer::renderer {
                         const cudaSurfaceObject_t display_surface,
                         const uint32_t width,
                         const uint32_t height,
+                        const uint32_t sample_count,
+                        const float exposure,
                         cudaStream_t stream) {
         constexpr uint32_t kBlockDim = 16;
         constexpr dim3 block(kBlockDim, kBlockDim);
         const dim3 grid((width + kBlockDim - 1) / kBlockDim, (height + kBlockDim - 1) / kBlockDim);
 
-        tonemap_kernel<<<grid, block, 0, stream>>>(accumulation_buffer, display_surface, width, height);
+        tonemap_kernel<<<grid, block, 0, stream>>>(accumulation_buffer, display_surface, width, height, sample_count, exposure);
 
         CUDA_CHECK_KERNEL(cudaGetLastError());
     }

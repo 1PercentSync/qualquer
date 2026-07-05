@@ -413,12 +413,13 @@ namespace qualquer::renderer {
             .texture_objects = scene.texture_objects.data(),
             .inv_view = to_float4x4(scene.camera.inv_view),
             .inv_projection = to_float4x4(scene.camera.inv_projection),
-            // PT state: sample_count_ is Renderer state advanced per frame.
-            // The rest are config defaults (separate input channel).
+            // PT state: sample_count_ is Renderer state advanced per frame;
+            // exposure defaults to 1.0 (0 EV). The rest are config defaults
+            // (separate input channel arrives in a later step).
             .max_bounces = 0,
             .samples_per_frame = 1,
             .sample_count = sample_count_,
-            .exposure = 0.0f,
+            .exposure = 1.0f,
             // Env + emissive NEE resources: null (no env/emissive built).
             .env_cubemap = 0,
             .env_alias_table = nullptr,
@@ -478,6 +479,8 @@ namespace qualquer::renderer {
         launch_tonemap(accum_buffers_[accum_index_].data(),
                        cuda_context.display_surface,
                        width, height,
+                       sample_count_,
+                       1.0f,
                        cuda_context.display_stream);
 
         CUDA_CHECK(cudaEventRecord(event_tonemap_done_[slot], cuda_context.display_stream));
