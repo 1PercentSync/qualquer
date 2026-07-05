@@ -184,17 +184,19 @@ struct AliasEntry {
 struct EnvAliasEntry {
     float prob;
     uint32_t alias;
-    float luminance;  // 降采样后的 per-pixel luminance（不含 sin_theta）
+    float luminance;  // per-pixel luminance（不含 sin_theta）
 };
 ```
 
 构建：Vose's O(N)。采样：O(1)。
 
 **Env alias table 细节**：
-- 降采样到半分辨率（equirect_width/2 × equirect_height/2），减少 entry 数量
+- 全分辨率（equirect_width × equirect_height），每个像素一个 entry
 - 权重 = luminance × sin(theta)（equirect 投影面积校正）
 - `env_pdf()` 使用 entry 中的 `luminance`（不含 sin_theta）计算 solid-angle PDF，确保与 alias table 采样分布一致
 - alias table 宽高和 total_luminance 通过 LaunchParams 传递（不使用 SSBO header）
+- 暂不做磁盘缓存（构建耗时在可接受范围内，后续按需添加）
+- 若实测发现 hot pixel 导致采样过度集中，再考虑降采样（÷2 box filter）作为缓解手段
 
 ### EmissiveTriangle
 
@@ -212,6 +214,12 @@ struct EmissiveTriangle {
 ```
 
 NEE 采样发光三角形时需要插值 UV 并采样 emissive 纹理，因此 EmissiveTriangle 存储逐顶点 UV。
+
+**Emissive alias table 局限性**：
+
+当前方案的三角形功率仅由 `luminance(emissive_factor) × area` 决定（材质常量，不采样纹理），三角形内部均匀采样。当 emissive 纹理空间变化剧烈时（LED 文字、屏幕内容等），采样分布与实际辐射分布偏差大，方差显著升高。
+
+潜在改进：对 emissive 纹理做低分辨率预积分，为每个三角形建小型条件分布表（先选块，再块内均匀），在内存开销和方差之间取平衡。多数场景中发光体纹理较均匀，纯 factor 粒度通常足够，此优化留作后续按需评估。
 
 ### Env Cubemap
 
