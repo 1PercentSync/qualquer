@@ -509,33 +509,19 @@ Phase 4 完整采纳 EON + CLTC 采样（掠射角方差降 100×）。
 
 #### 28b. Schlick Fresnel vs 精确 Fresnel / F82-tint
 
-**问题**：Schlick 用 `F0 + (1-F0)(1-cosθ)⁵` 近似真实 Fresnel 曲线。对大多数材质准确，但某些有色金属（铜、金）在 ~80° 附近存在 Fresnel 下凹（dip），Schlick 无法表达。Lazányi-Szirmay-Kalos（2005）/ Adobe F82-tint 用一个额外参数修正此下凹。
-
-**现状**：glTF 核心规范使用 Schlick。F82-tint 属于 KHR_materials_specular 扩展。
-
-**影响**：铜、金等有色金属在掠射角附近的反射色偏差。需要场景使用 KHR_materials_specular 扩展才能触发。
-
-**修复复杂度**：低。Schlick 公式加一个修正项（~5 行）。但需要材质系统支持读取 specular 扩展参数。
+**决策**：❌ **不纳入**。F82-tint 需要 KHR_materials_specular 扩展提供 F82 参数，无此扩展数据时 Schlick 与 F82-tint 结果完全一致。M1 不解析该扩展，无数据源。
 
 #### 28c. Turquin 补偿的 Diffuse-Specular 耦合
 
-**问题**：Turquin 补偿增加了 specular 能量来恢复多散射损失。对 dielectric，恢复的能量中属于多次反射后透射入表面的部分应贡献给 diffuse 而非 specular。当前公式将全部恢复能量加到 specular。
+**决策**：✅ **纳入**，与 Turquin 补偿在 Step 3 同一小项中实现。
 
-**影响**：roughness=1、F0=0.04 时，specular 多出约 2.4% 能量（0.04 × 0.6 = 0.024）。总能量略超 1.0。
+**问题**：Turquin 补偿增加了 specular 能量，但 diffuse 权重 `(1-F)` 未相应减少，dielectric 总能量略超 1.0（最大 2.4%）。
 
-**修复复杂度**：中。需要将 diffuse 权重从 `(1-F)` 改为 `(1 - E_ss_compensated)`，额外一次 E_ss 求值。或直接将 Turquin 补偿限制为仅在 metallic > 0 时应用。
+**修复**：将 diffuse 权重从 `(1-F)` 改为 `(1 - E_spec_compensated)`，其中 E_spec_compensated 为 Turquin 补偿后的 specular 方向反照率。已有 E_ss 多项式，额外开销仅一次乘法。
 
 #### 28d. Normal Map Specular Anti-Aliasing
 
-**问题**：法线贴图在掠射角或远距离时，亚像素级法线变化导致 specular 高光闪烁（firefly）。Ray Cone LOD（Phase 4.5）选择正确的 mip level，但不修正法线分布的方差——即使选了高 mip，采样到的法线仍是单一值而非分布。
-
-**影响**：远距离或掠射角下的高光噪声/闪烁。4000 spp 累积可部分掩盖。
-
-**修复复杂度**：
-- 简单方案：基于法线贴图方差增大 roughness（Kaplanyan 2016 / Filament geometric specular AA），~15 行
-- 完整方案：LEAN/LEADR mapping，需要预处理管线，复杂度高
-
-**决策**：⏳ 待用户决定。
+**决策**：✅ **纳入 Phase 4.5**，在 Ray Cone LOD 实现后做。依赖 ray cone footprint 估算法线贴图方差，将方差叠加到 roughness²。不做 LEAN/LEADR（预处理管线复杂度过高），采用 Kaplanyan 2016 式 roughness variance 方案。
 
 ---
 
@@ -594,6 +580,7 @@ MUSTREAD:7
 | 7 | Target sample count + auto-stop | D23 | UX：达到目标 sample 数后停止 |
 | 8 | Render resolution decoupling | D15 | 渲染分辨率独立于 swapchain，为自适应/DLSS-RR 预留 |
 | ~~9~~ | ~~EON CLTC 采样~~ | D28a | 已提前到 Phase 4 Step 3（EON 完整采纳） |
+| 10 | Normal Map Specular AA | D28d | 基于 ray cone footprint 的法线方差 → roughness 叠加，依赖 Ray Cone LOD |
 
 #### 第二部分：Denoiser 集成
 
