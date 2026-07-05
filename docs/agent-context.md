@@ -11,13 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4 — 核心 Path Tracer
-- **进度**：Phase 4 文档创建完成。Phase 3 已归档，Phase 4 设计文档（`docs/current-phase.md`）、任务清单（`tasks/phase4.md`）、决策记录（`docs/phase4-discussion.md` D1-D26）就绪。即将开始实现
+- **进度**：Phase 4 文档创建完成。
 
 ### 下一个任务
 
 Phase 4 Step 1 第 1 小项：扩展 `launch_params.h` 新增 PT / 环境光 / emissive 参数与结构体
-
-> Phase 1、Phase 2、Phase 3 全部完成并归档。
 
 ---
 
