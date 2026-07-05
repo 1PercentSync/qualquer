@@ -1,7 +1,7 @@
 # Phase 4 任务清单
 
 > 目标：核心 Path Tracer（BRDF、多 bounce、IBL、NEE+MIS、累积收敛。4000 spp 大致收敛）
-> 详细设计见 `docs/current-phase.md`，决策记录见 `phase4-discussion.md`，技术决策见 `docs/technical-decisions.md`。
+> 详细设计见 `docs/current-phase.md`，决策记录见 `docs/phase4-discussion.md`，技术决策见 `docs/technical-decisions.md`。
 >
 > 每完成一个复选框暂停等待审查。一个 Step 结束时应请求用户在 CLion 中编译验证。
 
