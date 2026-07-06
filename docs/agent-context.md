@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4 — 核心 Path Tracer
-- **进度**：Phase 4 Step 2 完成（Tonemap + Exposure：PBR Neutral tonemap.cuh、tonemap kernel 除以 sample_count + exposure、raygen 改 Separate Sum 累加。编译运行通过）
+- **进度**：Phase 4 Step 3 第1小项完成：brdf.cuh 已创建（D_GGX、V_SmithGGXCorrelated、F_Schlick、sample_ggx_vndf/pdf_ggx_vndf、EON diffuse f_EON/E_FON、CLTC+uniform 混合采样 sample_EON/cltc_sample/pdf_EON、combined_lobe_pdf。math_utils.cuh 补 float3 逐分量乘除运算符，programs.cu include brdf.cuh）
 
 ### 下一个任务
 
-Phase 4 Step 3 第一小项：创建 `brdf.cuh`（GGX NDF、Smith G2、Fresnel Schlick、Lambertian diffuse、VNDF 采样、cosine hemisphere 采样、multi-lobe PDF）
+Phase 4 Step 3 第2小项：BRDF eval + sample 接口（specular_probability、sample + throughput_update 计算 specular/diffuse lobe、build_orthonormal_basis）
 
 ---
 
