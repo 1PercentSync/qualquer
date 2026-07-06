@@ -15,7 +15,7 @@
 
 ### 下一个任务
 
-Phase 4 Step 3 第2小项：BRDF eval + sample 接口（specular_probability、sample + throughput_update 计算 specular/diffuse lobe、build_orthonormal_basis）
+Phase 4 Step 3 第2小项：多散射能量补偿（E_ss 19 系数多项式 + E_glossy 39 系数多项式 + Turquin 补偿系数计算，集成到 specular throughput_update 和 BRDF eval）
 
 ---
 
