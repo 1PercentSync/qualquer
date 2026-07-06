@@ -71,6 +71,11 @@ __forceinline__ __device__ float3 normalize(const float3 v) {
     return v * rsqrtf(dot(v, v));
 }
 
+/// Linear interpolation: (1-t)*a + t*b (GLSL mix equivalent).
+__forceinline__ __device__ float lerp(const float a, const float b, const float t) {
+    return a + t * (b - a);
+}
+
 // ---- Matrix helpers ---------------------------------------------------------
 
 /// Multiply a float4x4 (row-major) by a float4 column vector.

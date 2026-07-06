@@ -417,7 +417,6 @@ __forceinline__ __device__ float E_ss(const float r, const float mu) {
         (-30.368898f) * r3 + 31.919222f * r2_mu   + (-8.013965f) * r_mu2 +
         (-6.2407165f) * mu3;
     const float denom =  // 1 + c10..c18
-    const float denom =
         1.0f +
         (-10.218104f) * r   + 10.955399f * mu +
         44.08196f * r2      + (-55.33452f) * r_mu + 21.437538f * mu2 +
