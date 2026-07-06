@@ -274,7 +274,7 @@ g1 = 0.0571085289, g2 = 0.491881867, g3 = -0.332181442, g4 = 0.0714429953
 
 **采样**：CLTC（Clipped Linearly Transformed Cosine）采样，掠射角方差比 cosine hemisphere 降 100×。LTC 矩阵系数 a/b/c/d 为 (μ, r) 的 rational polynomial fit（Listing 2），采样通过 Nusselt analog + 半圆-半椭圆区域均匀采样实现（Listing 3-4）。
 
-**集成**：`f_total = f_specular × turquin_comp + (1 - metallic) × (1 - E_glossy) × f_EON`，其中 `E_glossy(NdotV, roughness, F0)` 为 Sforza 39 系数有理多项式输出的 Turquin 补偿后 specular 含 Fresnel 方向反照率（D28c 耦合修正）。Specular 和 diffuse 的多散射能量补偿相互独立。
+**集成**：`f_total = f_specular × turquin_comp + (1 - metallic) × (1 - E_glossy) × f_EON`，其中 `E_glossy(NdotV, roughness, F0)` 为 Sforza 39 系数有理多项式输出的 Turquin 补偿后 specular 含 Fresnel 方向反照率（D28c 耦合修正）。F0 取 specular lobe 的实际 F0 = `lerp(0.04, baseColor, metallic)`；F0 为 RGB 时逐通道求值 E_glossy（3 次标量多项式）。Specular 和 diffuse 的多散射能量补偿相互独立。
 
 ### BRDF 参数约定（alpha vs roughness）
 
@@ -388,7 +388,7 @@ c36 =  25.947954    c37 =  75.77901     c38 =  49.348934
 
 精度（对 32×32×32 ground truth 表）：待实测确认（论文报告拟合误差与 conductor 同量级）。
 
-**F0 映射**：glTF 材质不直接提供 F0，需从 IOR 计算：`F0 = ((IOR-1)/(IOR+1))²`。对 glTF 核心 PBR metallic-roughness 材质，非金属默认 IOR=1.5 → F0=0.04。多项式输入直接用 F0。
+**F0 映射**：glTF metallic-roughness 的 specular F0 = `lerp(0.04, baseColor, metallic)`（纯电介质 IOR=1.5 → F0=0.04，纯金属 F0=baseColor）。E_glossy 和 turquin_compensation 的 F0 输入均取此混合值。F0 为 RGB 时逐通道求值（Sforza 多项式按标量 F0 ∈ [0,1] 拟合，全域有效；Filament 同样对 vec3 F0 逐通道处理）。纯金属（metallic=1）无 diffuse，不调用 E_glossy；过渡金属（metallic ∈ (0,1)）的 diffuse 权重 `(1 - metallic) × (1 - E_glossy)` 双重衰减，物理正确。
 
 **参考实现**：`D:\Github\energy-preservation`（github.com/dsforza96/energy-preservation，`scripts/glossy.py` 生成表，`scripts/fit.py` 拟合多项式）
 
