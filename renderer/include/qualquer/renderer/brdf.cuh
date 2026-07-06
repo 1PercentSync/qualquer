@@ -118,7 +118,7 @@ __forceinline__ __device__ float3 sample_ggx_vndf(const float3 Ve,
     const float t1   = r * cosf(phi);
     float       t2   = r * sinf(phi);
     const float s    = 0.5f * (1.0f + Vh.z);
-    t2 = (1.0f - s) * sqrtf(fmaxf(0.0f, 1.0f - t1 * t1)) + s * t2;
+    t2 = lerp(sqrtf(fmaxf(0.0f, 1.0f - t1 * t1)), t2, s);
 
     const float3 Nh = t1 * T1 + t2 * T2
         + sqrtf(fmaxf(0.0f, 1.0f - t1 * t1 - t2 * t2)) * Vh;
@@ -287,8 +287,7 @@ __forceinline__ __device__ float4 cltc_sample(const float3 wo_local,
     const float y     = R * sinf(phi);
     const float vz    = 1.0f / sqrtf(d * d + 1.0f);
     const float s     = 0.5f * (1.0f + vz);
-    // -mix(sqrt(1-y*y), x_disk, s)
-    const float x     = -((1.0f - s) * sqrtf(fmaxf(0.0f, 1.0f - y * y)) + s * x_disk);
+    const float x     = -lerp(sqrtf(fmaxf(0.0f, 1.0f - y * y)), x_disk, s);
 
     const float3 wh = make_float3(x, y,
         sqrtf(fmaxf(0.0f, 1.0f - (x * x + y * y))));
@@ -388,6 +387,110 @@ __forceinline__ __device__ float pdf_EON(const float3 wo_local,
     const float pdf_c = cltc_pdf(wo_local, wi_local, r);
     constexpr float pdf_u = kInvTwoPi;
     return P_u * pdf_u + P_c * pdf_c;
+}
+
+// ---- Multi-scatter energy compensation (Turquin 2019) -----------------------
+//
+// Coefficients: Sforza & Pellacini 2022 rational polynomial fits.
+// Source: github.com/dsforza96/energy-preservation (MIT).
+
+/**
+ * @brief GGX single-scatter directional albedo (F=1, geometric only).
+ *
+ * @param r  Linear roughness in [0,1] (sqrt(alpha)).
+ * @param mu cos(theta) in [0,1] (= NdotV).
+ * @return E_ss in [0,1]; caller must clamp to [eps,1] before dividing.
+ */
+__forceinline__ __device__ float E_ss(const float r, const float mu) {
+    // PolynomialFeatures(3) on [r, mu] -> [1, r, mu, r^2, r*mu, mu^2, r^3, r^2*mu, r*mu^2, mu^3]
+    const float r2 = r * r;
+    const float mu2 = mu * mu;
+    const float r_mu = r * mu;
+    const float r3 = r2 * r;
+    const float r2_mu = r2 * mu;
+    const float r_mu2 = r * mu2;
+    const float mu3 = mu2 * mu;
+
+    const float num =  // c0..c9
+        1.0247217f        + (-10.984229f) * r   + 10.918318f * mu +
+        46.93353f * r2    + (-54.779343f) * r_mu + 21.742077f * mu2 +
+        (-30.368898f) * r3 + 31.919222f * r2_mu   + (-8.013965f) * r_mu2 +
+        (-6.2407165f) * mu3;
+    const float denom =  // 1 + c10..c18
+    const float denom =
+        1.0f +
+        (-10.218104f) * r   + 10.955399f * mu +
+        44.08196f * r2      + (-55.33452f) * r_mu + 21.437538f * mu2 +
+        (-23.744568f) * r3  + 33.265057f * r2_mu + (-7.9268975f) * r_mu2 +
+        (-5.930959f) * mu3;
+    return num / denom;
+}
+
+/**
+ * @brief Specular multi-scatter compensation: 1 + F0*(1 - E_ss)/E_ss.
+ *
+ * @param F0      Normal-incidence reflectance (scalar; call per-channel for metals).
+ * @param E_ss_val Clamped E_ss in [eps, 1].
+ * @return Compensation multiplier (>= 1).
+ */
+__forceinline__ __device__ float turquin_compensation(const float F0,
+                                                     const float E_ss_val) {
+    return 1.0f + F0 * (1.0f - E_ss_val) / E_ss_val;
+}
+
+/**
+ * @brief Specular directional albedo with Fresnel (for diffuse-specular coupling).
+ *
+ * Diffuse weight = 1 - E_glossy. Separate fit needed because Fresnel
+ * depends on VdotH, not NdotV, so E_glossy cannot be derived from E_ss.
+ * Dielectric-only; metals have no diffuse and skip this.
+ *
+ * @param F0 Scalar normal-incidence reflectance.
+ * @param r  Linear roughness in [0,1].
+ * @param mu cos(theta) in [0,1] (= NdotV).
+ * @return E_glossy in [0,1].
+ */
+__forceinline__ __device__ float E_glossy(const float F0, const float r,
+                                         const float mu) {
+    const float F02 = F0 * F0;
+    const float r2 = r * r;
+    const float mu2 = mu * mu;
+    const float F0_r = F0 * r;
+    const float F0_mu = F0 * mu;
+    const float r_mu = r * mu;
+    const float F03 = F02 * F0;
+    const float F02_r = F02 * r;
+    const float F02_mu = F02 * mu;
+    const float F0_r2 = F0 * r2;
+    const float F0_r_mu = F0 * r_mu;
+    const float F0_mu2 = F0 * mu2;
+    const float r3 = r2 * r;
+    const float r2_mu = r2 * mu;
+    const float r_mu2 = r * mu2;
+    const float mu3 = mu2 * mu;
+
+    // PolynomialFeatures(3) on [F0, r, mu]:
+    // [1, F0, r, mu, F0^2, F0*r, F0*mu, r^2, r*mu, mu^2,
+    //  F0^3, F0^2*r, F0^2*mu, F0*r^2, F0*r*mu, F0*mu^2,
+    //  r^3, r^2*mu, r*mu^2, mu^3]
+    const float num =  // c0..c19
+        0.04301317f     + 132.98329f * F0     + (-0.9273584f) * r   + (-0.61434704f) * mu +
+        (-262.23462f) * F02 + (-137.75214f) * F0_r + (-234.72151f) * F0_mu +
+        5.125822f * r2      + (-0.37465897f) * r_mu + 9.284745f * mu2 +
+        129.71187f * F03    + 171.82188f * F02_r   + 400.04813f * F02_mu +
+        206.99231f * F0_r2  + 1.0847985f * F0_r_mu + 428.02484f * F0_mu2 +
+        (-2.2108653f) * r3  + (-6.056363f) * r2_mu + 0.95864034f * r_mu2 +
+        (-11.775469f) * mu3;
+    const float denom =  // 1 + c20..c38
+        1.0f +
+        139.43494f * F0     + (-24.177433f) * r   + (-3.7300687f) * mu +
+        (-253.77824f) * F02 + 6.717145f * F0_r   + 98.03935f * F0_mu +
+        153.19194f * r2     + (-184.53282f) * r_mu + 230.02286f * mu2 +
+        113.9376f * F03     + 66.64211f * F02_r  + 108.315094f * F02_mu +
+        23.577564f * F0_r2  + 120.04127f * F0_r_mu + 102.90899f * F0_mu2 +
+        17.030241f * r3     + 25.947954f * r2_mu + 75.77901f * r_mu2 +
+        49.348934f * mu3;
+    return num / denom;
 }
 
 // ---- Combined multi-lobe PDF ------------------------------------------------
