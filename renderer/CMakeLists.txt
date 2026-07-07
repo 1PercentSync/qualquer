@@ -12,7 +12,6 @@ target_sources(qualquer_renderer PRIVATE
     src/debug_ui.cpp
     src/renderer.cpp
     src/camera.cpp
-    src/ktx2.cpp
     src/stb_impl.cpp
     src/texture.cpp
     src/mesh.cpp

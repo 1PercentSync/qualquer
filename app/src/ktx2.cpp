@@ -1,11 +1,11 @@
 /**
  * @file ktx2.cpp
- * @brief Minimal KTX2 reader/writer implementation (renderer layer).
+ * @brief Minimal KTX2 reader/writer implementation (app layer).
  */
 
-#include <qualquer/renderer/ktx2.h>
+#include <qualquer/app/ktx2.h>
 
-#include <qualquer/renderer/cache.h>
+#include <qualquer/app/cache.h>
 
 #include <fstream>
 #include <numeric>
@@ -13,7 +13,7 @@
 #include <spdlog/spdlog.h>
 #include <vulkan/vulkan_core.h>
 
-namespace qualquer::renderer {
+namespace qualquer::app {
     // ---- KTX2 binary layout ----
 
     static constexpr uint8_t kKtx2Identifier[12] = {
@@ -414,4 +414,4 @@ namespace qualquer::renderer {
 
         return result;
     }
-} // namespace qualquer::renderer
+} // namespace qualquer::app

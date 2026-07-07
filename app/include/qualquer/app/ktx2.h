@@ -15,7 +15,7 @@
 #include <span>
 #include <vector>
 
-namespace qualquer::renderer {
+namespace qualquer::app {
 
     /**
      * @brief Neutral texture format used by the cache and CUDA upload paths.
@@ -99,4 +99,4 @@ namespace qualquer::renderer {
      */
     [[nodiscard]] std::optional<Ktx2Data> read_ktx2(const std::filesystem::path &path);
 
-} // namespace qualquer::renderer
+} // namespace qualquer::app

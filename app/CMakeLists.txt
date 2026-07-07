@@ -10,6 +10,7 @@ add_executable(qualquer_app
     src/config.cpp
     src/scene_loader.cpp
     src/cache.cpp
+    src/ktx2.cpp
 )
 
 target_include_directories(qualquer_app
