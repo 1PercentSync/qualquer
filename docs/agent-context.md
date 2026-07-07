@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4 — 核心 Path Tracer
-- **进度**：Phase 4 Step 4 第七小项完成：Renderer 集成已实现（SceneRenderInput 新增 env 字段，LaunchParams 从 scene 读取 env 数据）
+- **进度**：Phase 4 Step 4 第八小项完成：miss shader `__miss__env` 已实现（cubemap 采样 + 纯黑 fallback，pipeline entry 更新）
 
 ### 下一个任务
 
-Phase 4 Step 4 第八小项：Miss shader 更新（`__miss__env` 用 `texCubemap<float4>` 采样环境光）
+Phase 4 Step 4 第九小项：Env map 加载 UI（DebugUI 中添加 env_map_path 显示 + Load 按钮 + Application 响应）
 
 ---
 

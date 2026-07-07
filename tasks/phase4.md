@@ -41,7 +41,8 @@
 - [x] Env alias table 构建：全分辨率 luminance × sin(theta) 权重 + Vose's algorithm O(N) 构建 EnvAliasEntry 数组上传 GPU
 - [x] SceneLoader 集成：HDR 加载 + cubemap 创建（equirect→cubemap + BC6H 压缩 + finalize_texture，含 KTX2 缓存）+ alias table 构建，资源生命周期管理（destroy / 场景切换时重建）
 - [x] Renderer 集成：env cubemap + alias table 指针填入 LaunchParams
-- [ ] Miss shader 更新：`__miss__env` 用 `texCubemap<float4>` 采样环境光
+- [x] Miss shader 更新：`__miss__env` 用 `texCubemap<float4>` 采样环境光
+- [ ] Env map 加载 UI：DebugUI 中添加 env_map_path 显示 + Load 按钮 + Application 响应加载动作
 - [ ] 请求用户在 CLion 中编译验证（miss 显示 HDR 全景，命中表面仍为 ambient）
 
 ## Step 5：Bounce loop + 累积
@@ -78,6 +79,6 @@ MUSTREAD:4
 
 ## Step 8：UI 参数面板
 
-- [ ] ImGui 面板：max_bounces（滑块）、samples_per_frame（滑块）、exposure（滑块）、sample_count 显示（只读）、env_map_path 输入 + 加载按钮
+- [ ] ImGui 面板：max_bounces（滑块）、samples_per_frame（滑块）、exposure（滑块）、sample_count 显示（只读）
 - [ ] 参数变化触发累积 reset
 - [ ] 请求用户在 CLion 中编译验证（运行时参数可调，Phase 4 完成）
