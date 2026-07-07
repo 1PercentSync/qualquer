@@ -2,19 +2,16 @@
 
 /**
  * @file imgui_backend.h
- * @brief ImGui integration module (renderer layer).
+ * @brief ImGui integration module (vulkan layer).
  */
 
 #include <vulkan/vulkan.h>
 
+struct GLFWwindow;
+
 namespace qualquer::vulkan {
     class Context;
     class Swapchain;
-} // namespace qualquer::vulkan
-
-struct GLFWwindow;
-
-namespace qualquer::renderer {
     /**
      * @brief Owns the ImGui lifecycle: context, platform (GLFW) backend, and Vulkan renderer backend.
      *
@@ -46,7 +43,7 @@ namespace qualquer::renderer {
          * @param swapchain Swapchain providing the color format and image count.
          * @param window    GLFW window driving input and DPI.
          */
-        void init(const vulkan::Context &context, const vulkan::Swapchain &swapchain, GLFWwindow *window);
+        void init(const Context &context, const Swapchain &swapchain, GLFWwindow *window);
 
         /**
          * @brief Shuts down the ImGui backends and destroys the ImGui context.
@@ -87,4 +84,4 @@ namespace qualquer::renderer {
          */
         void discard_frame();
     };
-} // namespace qualquer::renderer
+} // namespace qualquer::vulkan

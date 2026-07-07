@@ -21,7 +21,7 @@
 #include <qualquer/optix/optix_check.h>
 #include <qualquer/optix/pipeline.h>
 #include <qualquer/renderer/camera.h>
-#include <qualquer/renderer/imgui_backend.h>
+#include <qualquer/vulkan/imgui_backend.h>
 #include <qualquer/renderer/launch_params.h>
 #include <qualquer/renderer/tonemap.h>
 #include <qualquer/vulkan/interop.h>

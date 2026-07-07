@@ -3,7 +3,7 @@
  * @brief ImGui integration implementation.
  */
 
-#include <qualquer/renderer/imgui_backend.h>
+#include <qualquer/vulkan/imgui_backend.h>
 
 #include <cstdlib>
 
@@ -16,10 +16,10 @@
 #include <qualquer/vulkan/context.h>
 #include <qualquer/vulkan/swapchain.h>
 
-namespace qualquer::renderer {
+namespace qualquer::vulkan {
     // ReSharper disable once CppMemberFunctionMayBeStatic
-    void ImGuiBackend::init(const vulkan::Context &context, // NOLINT(*-convert-member-functions-to-static)
-                            const vulkan::Swapchain &swapchain,
+    void ImGuiBackend::init(const Context &context, // NOLINT(*-convert-member-functions-to-static)
+                            const Swapchain &swapchain,
                             GLFWwindow *window) {
         IMGUI_CHECKVERSION();
         ImGui::CreateContext();
@@ -102,4 +102,4 @@ namespace qualquer::renderer {
         // rendering calls it directly so the next NewFrame() sees a clean state.
         ImGui::EndFrame();
     }
-} // namespace qualquer::renderer
+} // namespace qualquer::vulkan

@@ -29,12 +29,11 @@ namespace qualquer::optix {
 
 namespace qualquer::vulkan {
     class InteropImage;
-
     class Swapchain;
+    class ImGuiBackend;
 }
 
 namespace qualquer::renderer {
-    class ImGuiBackend;
 
     /**
      * @brief OptiX SBT record carrying only the opaque program header.
@@ -73,7 +72,7 @@ namespace qualquer::renderer {
         uint32_t graphics_queue_family;
 
         /** @brief ImGui backend for overlay recording. */
-        ImGuiBackend &imgui;
+        vulkan::ImGuiBackend &imgui;
     };
 
     /**

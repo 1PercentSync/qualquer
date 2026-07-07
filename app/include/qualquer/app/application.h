@@ -14,7 +14,7 @@
 #include <qualquer/optix/context.h>
 #include <qualquer/renderer/camera.h>
 #include <qualquer/renderer/debug_ui.h>
-#include <qualquer/renderer/imgui_backend.h>
+#include <qualquer/vulkan/imgui_backend.h>
 #include <qualquer/renderer/renderer.h>
 #include <qualquer/renderer/texture.h>
 #include <qualquer/vulkan/context.h>
@@ -157,7 +157,7 @@ namespace qualquer::app {
         vulkan::InteropSemaphore reverse_interop_semaphore_{};
 
         /** @brief ImGui integration (context, backends, UI rendering). */
-        renderer::ImGuiBackend imgui_backend_;
+        vulkan::ImGuiBackend imgui_backend_;
 
         /** @brief Single-frame render content (CUDA submit + Vulkan recording). */
         renderer::Renderer renderer_;
