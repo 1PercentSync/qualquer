@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4 — 核心 Path Tracer
-- **进度**：Phase 4 Step 4 第一小项完成：AppConfig 新增 `env_map_path` 字段，config.cpp 序列化/反序列化已更新
+- **进度**：Phase 4 Step 4 第二小项完成：HdrImageData + load_hdr_image() 已实现（stbi_loadf RGB f32，RAII 持有）
 
 ### 下一个任务
 
-Phase 4 Step 4 第二小项：HDR equirect 加载（stb_image 加载 .hdr）
+Phase 4 Step 4 第三小项：Equirect → cubemap 转换（CUDA kernel 实现 equirect 到 6-face cubemap 转换）
 
 ---
 

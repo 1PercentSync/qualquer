@@ -35,7 +35,7 @@
 ## Step 4：环境光
 
 - [x] AppConfig 新增 `env_map_path` 字段（HDR 环境贴图路径）
-- [ ] HDR equirect 加载：stb_image 加载 .hdr
+- [x] HDR equirect 加载：stb_image 加载 .hdr
 - [ ] Equirect → cubemap 转换：CUDA kernel 实现 equirect 到 6-face cubemap 转换
 - [ ] Cubemap 纹理创建：cudaMipmappedArray（cubemap flag）→ cudaTextureObject_t
 - [ ] Env alias table 构建：全分辨率 luminance × sin(theta) 权重 + Vose's algorithm O(N) 构建 EnvAliasEntry 数组上传 GPU
