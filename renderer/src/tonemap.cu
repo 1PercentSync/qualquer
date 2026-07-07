@@ -4,34 +4,15 @@
  */
 
 #include <cstdint>
-#include <cstdio>
 
 #include <cuda_runtime.h>
 
+#include <qualquer/optix/cuda_check_kernel.h>
 #include <qualquer/renderer/tonemap.h>
 #include <qualquer/renderer/tonemap.cuh>
 
 namespace qualquer::renderer {
     namespace {
-        // Checks the last CUDA error and aborts on failure with diagnostic output.
-        // Inlined here rather than sharing optix::cuda_check because that header pulls
-        // in spdlog/fmt, whose UTF-8 requirements complicate nvcc compilation. The
-        // output format matches CUDA_CHECK so failures read identically either side;
-        // stderr is unbuffered so the line is guaranteed to print before abort.
-#define CUDA_CHECK_KERNEL(x)                                                              \
-            do {                                                                          \
-                cudaError_t cuda_check_result_ = (x);                                     \
-                if (cuda_check_result_ != cudaSuccess) {                                  \
-                    std::fprintf(stderr,                                                 \
-                                 "CUDA_CHECK failed: %s returned %s at %s:%d\n",         \
-                                 #x,                                                      \
-                                 cudaGetErrorString(cuda_check_result_),                  \
-                                 __FILE__,                                                \
-                                 __LINE__);                                               \
-                    std::abort();                                                         \
-                }                                                                         \
-            } while (0)
-
         // PBR Neutral output is already in [0,1]; alpha is not a color and is
         // clamped directly. fminf/fmaxf, not a clamp() template, to avoid pulling
         // <algorithm> into device code.

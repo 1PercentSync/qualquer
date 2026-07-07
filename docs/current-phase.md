@@ -431,7 +431,7 @@ Phase 3 建纹理管线时，资产预处理和 CUDA 上传写在同一个 `text
 
 ### Env Cubemap
 
-加载流程：stb_image 加载 equirect HDR → CUDA kernel 转换为 6-face cubemap → BC6H 压缩（ISPC CPU）→ `finalize_texture()` 上传 `cudaMipmappedArray`（cubemap flag）→ `cudaTextureObject_t`。Miss shader 用 `texCubemap<float4>` 采样。BC6H 压缩结果通过 KTX2 缓存，后续加载直接跳过解码和压缩阶段。
+加载流程：stb_image 加载 equirect HDR → CUDA kernel 转换为 6-face cubemap（face size = `min(bit_ceil(w/4), 4096)`）→ BC6H 压缩（ISPC CPU）→ `finalize_texture()` 上传 `cudaMipmappedArray`（cubemap flag）→ `cudaTextureObject_t`。Miss shader 用 `texCubemap<float4>` 采样。BC6H 压缩结果通过 KTX2 缓存，后续加载直接跳过解码和压缩阶段。
 
 ---
 
