@@ -172,18 +172,18 @@ float emissive_total_power;
 | 字段 | 用途 | Reset 行为 |
 |------|------|-----------|
 | frame_counter_ | 帧号（%2 选 slot；同时上传为 LaunchParams::frame_index 作 device temporal/RNG 源） | 永不 reset |
-| sample_count_ | 总累积 sample 数 | camera/config 变化时 = 0 |
+| accum_counts_[2] | 每个 ping-pong buffer 的真实 sample 数 | reset 不直接改——chain_count 归零使 raygen 覆写，write slot 的 count 在帧末设为 1 |
 
 > 不单独设立 frame_seed：frame_counter_ 本身单调递增、永不 reset，直接复用作 RNG temporal scramble 源（device 经 LaunchParams::frame_index 读取）。frame_index 的命名已表达「用帧号作种子」的意图，无需另立别名字段。
 
-### Separate Sum 写读配对
+### Separate Sum 写读配对（per-slot 计数）
 
-Separate Sum 的写（raygen）与读（tonemap）必须配对，保证 sample_count_ 与 buffer 内容一致：
+每个 ping-pong buffer 自带 sample 数（`accum_counts_[i]`），sum 和 count 作为配对数据一起走，取消全局 `sample_count_` 和 buffer 清零。
 
-- **写（raygen）**：读旧总和 `accumulation_buffer_read`（= `accum_buffers_[accum_index_]`），加本帧 contribution，写新 buffer `accumulation_buffer`（= `accum_buffers_[1 - accum_index_]`）。覆盖写改为累加。
-- **读（tonemap）**：读 `accum_buffers_[accum_index_]`（上帧 raygen 写的新总和），除以 sample_count_（执行时 = 截至上帧完成的累积数）恢复均值。
-- **时序一致性**：tonemap 延迟一帧读 buffer，读的是上帧 raygen 写的新总和，对应「截至上帧」的 sample_count_（上帧末尾已递增）。sample_count_ == 0 时除以 1（首帧/reset 后，raygen 覆盖式累加到清零的 buffer）。
-- **reset**：camera/config 变化时 sample_count_ = 0 + 清零两 buffer，下帧从单 sample 重新累加。
+- **写（raygen）**：host 算 `chain_count = camera_changed ? 0 : accum_counts_[read_slot]`，上传为 `LaunchParams::sample_count`。raygen 据此决定覆写（= 0）还是累加（> 0）。帧末 `accum_counts_[write_slot] = chain_count + 1`。
+- **读（tonemap）**：直接用 `accum_counts_[read_slot]` 作除数（buffer 内容与 count 永远配对）。count == 0（init/resize 后首帧）时 tonemap 输出黑——此时 buffer 未初始化，raygen 正在写另一个 buffer 的第一个 sample。
+- **reset**：camera/config 变化时 `chain_count` 归零 → raygen 覆写 write buffer，不碰 read buffer。tonemap 同帧仍读 read buffer（count 有效，数据有效），显示上一次有效画面。下帧 tonemap 读刚写入的 1-sample 数据。
+- **不清零 buffer**：覆写模式（`sample_count == 0`）使 raygen 忽略 read buffer 直接写 contribution，等效于清零+累加但无 memset 开销和跨 stream 竞争。
 
 ### Alias Table (Vose's Algorithm)
 

@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4 — 核心 Path Tracer
-- **进度**：Phase 4 Step 4 第八小项完成：miss shader `__miss__env` 已实现（cubemap 采样 + 纯黑 fallback，pipeline entry 更新）
+- **进度**：Phase 4 Step 4 第十小项完成：env map 加载 UI + 累积 reset 修复（per-slot accum_counts 取代全局 sample_count + buffer 清零）
 
 ### 下一个任务
 
-Phase 4 Step 4 第九小项：Env map 加载 UI（DebugUI 中添加 env_map_path 显示 + Load 按钮 + Application 响应）
+Phase 4 Step 4 编译验证（miss 显示 HDR 全景，命中表面仍为 ambient，运行时可加载 HDR）— 已通过
 
 ---
 
