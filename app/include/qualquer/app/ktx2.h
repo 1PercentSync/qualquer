@@ -15,22 +15,11 @@
 #include <span>
 #include <vector>
 
+#include <qualquer/optix/cuda_texture_upload.h>
+
 namespace qualquer::app {
 
-    /**
-     * @brief Neutral texture format used by the cache and CUDA upload paths.
-     *
-     * Decoupled from both the KTX2 on-disk @c vkFormat field and the CUDA
-     * channel descriptor: @ref to_vk_format / @ref from_vk_format bridge to
-     * KTX2 storage, and the texture module maps this to a
-     * @c cudaChannelFormatKind at upload time.
-     */
-    enum class TextureFormat {
-        BC7_UNORM,             ///< BC7, linear (metallic-roughness, occlusion)
-        BC7_SRGB,              ///< BC7, gamma-correct (base color, emissive)
-        BC5_UNORM,             ///< BC5, RG only (tangent-space normals, Z reconstructed)
-        BC6H_UFLOAT,           ///< BC6H, unsigned float (HDR / IBL environment)
-    };
+    using optix::TextureFormat;
 
     /** @brief Data read back from a KTX2 file. */
     struct Ktx2Data {

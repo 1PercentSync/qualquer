@@ -16,7 +16,7 @@
 #include <qualquer/renderer/debug_ui.h>
 #include <qualquer/vulkan/imgui_backend.h>
 #include <qualquer/renderer/renderer.h>
-#include <qualquer/renderer/texture.h>
+#include <qualquer/optix/cuda_texture_upload.h>
 #include <qualquer/vulkan/context.h>
 #include <qualquer/vulkan/interop.h>
 #include <qualquer/vulkan/swapchain.h>
@@ -175,7 +175,7 @@ namespace qualquer::app {
         SceneLoader scene_loader_{};
 
         /** @brief Default 1×1 textures filling missing material slots. */
-        renderer::DefaultTextures default_textures_{};
+        optix::DefaultTextures default_textures_{};
 
         /** @brief Persistent application configuration (scene path). */
         AppConfig config_{};

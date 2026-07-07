@@ -2,7 +2,7 @@
 
 /**
  * @file texture.h
- * @brief Renderer layer — texture module.
+ * @brief Asset preprocessing — image decoding, BC compression, cache lookup (app layer).
  */
 
 #include <cstdint>
@@ -13,10 +13,13 @@
 #include <string_view>
 #include <vector>
 
-#include <qualquer/optix/cuda_texture.h>
-#include <qualquer/renderer/ktx2.h>
+#include <qualquer/optix/cuda_texture_upload.h>
 
-namespace qualquer::renderer {
+namespace qualquer::app {
+
+    using optix::TextureFormat;
+    using optix::PreparedTexture;
+    using optix::PreparedMipRegion;
 
     /**
      * @brief Tags an LDR texture by material intent, selecting its BC format
@@ -56,53 +59,6 @@ namespace qualquer::renderer {
 
         /** @return Whether the image holds decoded pixels. */
         [[nodiscard]] bool valid() const { return pixels != nullptr; }
-    };
-
-    /** @brief One mip level's region within PreparedTexture::data. */
-    struct PreparedMipRegion {
-        /** @brief Byte offset into PreparedTexture::data. */
-        uint64_t buffer_offset = 0;
-
-        /** @brief Pixel width of this level (single face for cubemaps). */
-        uint32_t width = 0;
-
-        /** @brief Pixel height of this level (single face for cubemaps). */
-        uint32_t height = 0;
-    };
-
-    /**
-     * @brief CPU-side block-compressed texture ready for GPU upload.
-     *
-     * Holds compressed mip data in one contiguous buffer plus per-level regions.
-     * Produced by compress_texture() / compress_texture_bc6h() (or loaded from
-     * cache by the load_cached_texture* functions); consumed by finalize_texture().
-     *
-     * Layout: levels are stored largest-first in @ref data. For cubemaps (HDR
-     * only), each level's region spans all 6 faces concatenated (face-major:
-     * all blocks of face 0, then face 1, ...), and width/height describe a
-     * single face — the six faces are equal-sized squares.
-     */
-    struct PreparedTexture {
-        /** @brief Compressed format (mapped to the CUDA channel kind at upload). */
-        TextureFormat format;
-
-        /** @brief Base-level pixel width (single face for cubemaps). */
-        uint32_t base_width = 0;
-
-        /** @brief Base-level pixel height (single face for cubemaps). */
-        uint32_t base_height = 0;
-
-        /** @brief 1 (LDR 2D) or 6 (HDR cubemap). */
-        uint32_t face_count = 0;
-
-        /** @brief Number of mip levels; 1 for HDR (base level only). */
-        uint32_t level_count = 0;
-
-        /** @brief Contiguous compressed mip data, indexed via @ref regions. */
-        std::vector<uint8_t> data;
-
-        /** @brief Per-level regions; regions[i] locates level i within @ref data. */
-        std::vector<PreparedMipRegion> regions;
     };
 
     /**
@@ -191,7 +147,7 @@ namespace qualquer::renderer {
      * @param data        Source RGBA8 pixels (must be valid).
      * @param role        Texture role selecting the BC format and color space.
      * @param source_hash Content hash used as the cache key.
-     * @return Prepared texture ready for finalize_texture().
+     * @return Prepared texture ready for optix::finalize_texture().
      */
     [[nodiscard]] PreparedTexture compress_texture(
         const ImageData &data, TextureRole role, std::string_view source_hash);
@@ -223,85 +179,9 @@ namespace qualquer::renderer {
      *                    face-major (all of face 0, then face 1, ...).
      * @param face_size   Edge length of one square face, in pixels.
      * @param source_hash Content hash used as the cache key.
-     * @return Prepared texture ready for finalize_texture().
+     * @return Prepared texture ready for optix::finalize_texture().
      */
     [[nodiscard]] PreparedTexture compress_texture_bc6h(
         std::span<const uint16_t> rgba, uint32_t face_size, std::string_view source_hash);
 
-    // ---- GPU upload ----
-
-    /**
-     * @brief Sampler settings for a CUDA texture object.
-     *
-     * Groups the glTF-derived sampler parameters that a
-     * @c cudaTextureObject_t bakes in (CUDA has no separate sampler handle).
-     * Callers construct from glTF sampler data; finalize_texture() forwards
-     * the values into @c cudaTextureDesc.
-     */
-    struct SamplerDesc {
-        /** @brief Texture filter for magnification and minification. */
-        cudaTextureFilterMode filter_mode;
-
-        /** @brief Filter between mip levels (point = no trilinear, linear = trilinear). */
-        cudaTextureFilterMode mipmap_filter_mode;
-
-        /** @brief Address mode for the U (S) coordinate. */
-        cudaTextureAddressMode address_mode_u;
-
-        /** @brief Address mode for the V (T) coordinate. */
-        cudaTextureAddressMode address_mode_v;
-    };
-
-    // ---- Default textures ----
-
-    /**
-     * @brief Holds the three default 1×1 textures for material fallback.
-     *
-     * Missing material texture slots are filled with these neutral values
-     * so the shader can always sample without special-casing.
-     */
-    struct DefaultTextures {
-        /** @brief 1×1 (1,1,1,1) — neutral base color / metallic-roughness / occlusion. */
-        optix::CudaTexture white;
-
-        /** @brief 1×1 (0.5,0.5,1.0,1.0) — tangent-space Z-up, no perturbation. */
-        optix::CudaTexture flat_normal;
-
-        /** @brief 1×1 (0,0,0,1) — no emission. */
-        optix::CudaTexture black;
-    };
-
-    /**
-     * @brief Creates three default 1×1 fp16×4 textures for material fallback.
-     *
-     * Each texture is a single half-precision (fp16) RGBA texel allocated via
-     * @c cudaMallocMipmappedArray (1 level) with @c cudaReadModeElementType,
-     * matching BC textures' read mode so @c tex2D<float4>() works uniformly
-     * (the hardware reads fp16 and promotes it to float on the texture fetch).
-     * Sampler is point-filter + clamp (1×1 has only one texel, so filter/wrap
-     * mode has no practical effect).
-     *
-     * @return DefaultTextures holding three RAII CudaTexture handles.
-     */
-    [[nodiscard]] DefaultTextures create_default_textures();
-
-    // ---- GPU upload ----
-
-    /**
-     * @brief Uploads a PreparedTexture to the GPU and creates a CUDA texture object.
-     *
-     * Allocates a @c cudaMipmappedArray_t with the native BC channel format,
-     * uploads compressed mip data level-by-level, and wraps the result in a
-     * @c cudaTextureObject_t. Supports both 2D (LDR, face_count=1) and
-     * cubemap (HDR BC6H, face_count=6) textures.
-     *
-     * @param prepared CPU-side compressed texture from compress_texture() /
-     *                 compress_texture_bc6h() or cache.
-     * @param sampler  Filter and address mode settings for the texture object.
-     * @return RAII handle owning the GPU resources; devices sample via
-     *         @c tex2D<float4>() on the contained texture object.
-     */
-    [[nodiscard]] optix::CudaTexture finalize_texture(
-        const PreparedTexture &prepared, const SamplerDesc &sampler);
-
-} // namespace qualquer::renderer
+} // namespace qualquer::app

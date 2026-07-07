@@ -9,7 +9,7 @@
 #include <qualquer/optix/cuda_texture.h>
 #include <qualquer/renderer/material.h>
 #include <qualquer/renderer/scene_types.h>
-#include <qualquer/renderer/texture.h>
+#include <qualquer/optix/cuda_texture_upload.h>
 
 #include <cstdint>
 #include <span>
@@ -42,7 +42,7 @@ namespace qualquer::app {
          * @return true on success, false on failure (scene remains empty).
          */
         bool load(const std::string &path,
-                  const renderer::DefaultTextures &default_textures);
+                  const optix::DefaultTextures &default_textures);
 
         /**
          * @brief Destroys all loaded resources (CUDA buffers, textures).
@@ -119,7 +119,7 @@ namespace qualquer::app {
 
         /** @brief Loads samplers, textures, and materials from the glTF asset. */
         void load_materials(const fastgltf::Asset &gltf,
-                            const renderer::DefaultTextures &default_textures);
+                            const optix::DefaultTextures &default_textures);
 
         /** @brief Traverses the scene graph and creates MeshInstances with world transforms. */
         void build_mesh_instances(fastgltf::Asset &gltf,

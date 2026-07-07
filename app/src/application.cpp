@@ -14,7 +14,7 @@
 #include <spdlog/spdlog.h>
 
 #include <qualquer/app/config.h>
-#include <qualquer/renderer/texture.h>
+#include <qualquer/optix/cuda_texture_upload.h>
 
 namespace qualquer::app {
     namespace {
@@ -91,7 +91,7 @@ namespace qualquer::app {
                        "shaders/programs.optixir");
 
         // --- Scene (default textures → glTF load → AS build → camera framing) ---
-        default_textures_ = renderer::create_default_textures();
+        default_textures_ = optix::create_default_textures();
         if (!config_.scene_path.empty()) {
             if (!scene_loader_.load(config_.scene_path, default_textures_)) {
                 error_message_ = "Failed to load scene: " + config_.scene_path;

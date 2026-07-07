@@ -7,7 +7,7 @@
 
 #include <qualquer/app/cache.h>
 #include <qualquer/app/mesh.h>
-#include <qualquer/renderer/texture.h>
+#include <qualquer/app/texture.h>
 
 #include <fastgltf/core.hpp>
 #include <fastgltf/math.hpp>
@@ -111,11 +111,11 @@ namespace qualquer::app {
         }
 
         /// Decodes a glTF image into CPU RGBA8 pixel data.
-        renderer::ImageData decode_gltf_image(const fastgltf::Asset &gltf,
+        ImageData decode_gltf_image(const fastgltf::Asset &gltf,
                                               const fastgltf::Image &image) {
-            renderer::ImageData result;
+            ImageData result;
             visit_gltf_image_bytes(gltf, image, [&](const uint8_t *data, const size_t size) {
-                result = renderer::load_image_from_memory(data, size);
+                result = load_image_from_memory(data, size);
             });
 
             if (!result.valid()) {
@@ -130,7 +130,7 @@ namespace qualquer::app {
                                     const fastgltf::Image &image) {
             std::string hash;
             visit_gltf_image_bytes(gltf, image, [&](const uint8_t *data, const size_t size) {
-                hash = renderer::content_hash(data, size);
+                hash = content_hash(data, size);
             });
             return hash;
         }
@@ -148,8 +148,8 @@ namespace qualquer::app {
         /// Converts a glTF sampler to a CUDA SamplerDesc.
         /// CUDA has a single filterMode (shared by mag/min); the minFilter's
         /// base part is used (more impactful for mipmapped textures).
-        renderer::SamplerDesc convert_gltf_sampler(const fastgltf::Sampler &sampler) {
-            renderer::SamplerDesc desc{
+        optix::SamplerDesc convert_gltf_sampler(const fastgltf::Sampler &sampler) {
+            optix::SamplerDesc desc{
                 .filter_mode = cudaFilterModeLinear,
                 .mipmap_filter_mode = cudaFilterModeLinear,
                 .address_mode_u = convert_wrap(sampler.wrapS),
@@ -183,7 +183,7 @@ namespace qualquer::app {
     } // anonymous namespace
 
     bool SceneLoader::load(const std::string &path,
-                           const renderer::DefaultTextures &default_textures) {
+                           const optix::DefaultTextures &default_textures) {
         spdlog::info("Loading scene: {}", path);
 
         try {
@@ -356,7 +356,7 @@ namespace qualquer::app {
     }
 
     void SceneLoader::load_materials(const fastgltf::Asset &gltf,
-                                     const renderer::DefaultTextures &default_textures) {
+                                     const optix::DefaultTextures &default_textures) {
         // ---- Default texture indices (reserved at the front of texture_objects_) ----
 
         texture_objects_.push_back(default_textures.white.texture_object);
@@ -364,43 +364,43 @@ namespace qualquer::app {
         texture_objects_.push_back(default_textures.black.texture_object);
 
         // ---- Collect unique (texture_index, role) pairs ----
-        using TexKey = std::pair<size_t, renderer::TextureRole>;
+        using TexKey = std::pair<size_t, TextureRole>;
         std::map<TexKey, size_t> unique_tex_map;
 
         struct TexEntry {
             size_t texture_index;
-            renderer::TextureRole role;
+            TextureRole role;
         };
         std::vector<TexEntry> unique_entries;
 
         for (const auto &mat : gltf.materials) {
             const auto &pbr = mat.pbrData;
-            auto collect = [&](const auto &opt_tex, const renderer::TextureRole role) {
+            auto collect = [&](const auto &opt_tex, const TextureRole role) {
                 if (!opt_tex.has_value()) { return; }
                 const auto key = std::make_pair(opt_tex->textureIndex, role);
                 if (unique_tex_map.contains(key)) { return; }
                 unique_tex_map[key] = unique_entries.size();
                 unique_entries.push_back({opt_tex->textureIndex, role});
             };
-            collect(pbr.baseColorTexture, renderer::TextureRole::Color);
-            collect(pbr.metallicRoughnessTexture, renderer::TextureRole::Linear);
-            collect(mat.normalTexture, renderer::TextureRole::Normal);
-            collect(mat.occlusionTexture, renderer::TextureRole::Linear);
-            collect(mat.emissiveTexture, renderer::TextureRole::Color);
+            collect(pbr.baseColorTexture, TextureRole::Color);
+            collect(pbr.metallicRoughnessTexture, TextureRole::Linear);
+            collect(mat.normalTexture, TextureRole::Normal);
+            collect(mat.occlusionTexture, TextureRole::Linear);
+            collect(mat.emissiveTexture, TextureRole::Color);
         }
 
         // ---- Hash source bytes + cache check (serial, fast) ----
         const auto tex_count = static_cast<int>(unique_entries.size());
 
         std::vector<std::string> source_hashes(tex_count);
-        std::vector<renderer::PreparedTexture> prepared_textures(tex_count);
+        std::vector<PreparedTexture> prepared_textures(tex_count);
         std::vector cache_hit(tex_count, false);
 
         for (int i = 0; i < tex_count; ++i) {
             const auto &tex = gltf.textures[unique_entries[i].texture_index];
             assert(tex.imageIndex.has_value() && "glTF texture must have an image source");
             source_hashes[i] = hash_gltf_image(gltf, gltf.images[*tex.imageIndex]);
-            if (auto cached = renderer::load_cached_texture(
+            if (auto cached = load_cached_texture(
                     source_hashes[i], unique_entries[i].role)) {
                 prepared_textures[i] = std::move(*cached);
                 cache_hit[i] = true;
@@ -408,7 +408,7 @@ namespace qualquer::app {
         }
 
         // ---- Decode cache-miss images (serial) ----
-        std::vector<renderer::ImageData> decoded_images(tex_count);
+        std::vector<ImageData> decoded_images(tex_count);
         for (int i = 0; i < tex_count; ++i) {
             if (cache_hit[i]) { continue; }
             const auto &tex = gltf.textures[unique_entries[i].texture_index];
@@ -419,14 +419,14 @@ namespace qualquer::app {
         #pragma omp parallel for schedule(dynamic)
         for (int i = 0; i < tex_count; ++i) {
             if (cache_hit[i]) { continue; }
-            prepared_textures[i] = renderer::compress_texture(
+            prepared_textures[i] = compress_texture(
                 decoded_images[i], unique_entries[i].role, source_hashes[i]);
         }
 
         decoded_images.clear();
 
         // ---- Serial GPU upload ----
-        constexpr renderer::SamplerDesc default_sampler{
+        constexpr optix::SamplerDesc default_sampler{
             .filter_mode = cudaFilterModeLinear,
             .mipmap_filter_mode = cudaFilterModeLinear,
             .address_mode_u = cudaAddressModeWrap,
@@ -442,7 +442,7 @@ namespace qualquer::app {
                                      ? convert_gltf_sampler(gltf.samplers[*tex.samplerIndex])
                                      : default_sampler;
 
-            auto cuda_texture = renderer::finalize_texture(prepared_textures[i], sampler);
+            auto cuda_texture = optix::finalize_texture(prepared_textures[i], sampler);
             const auto obj_index = static_cast<uint32_t>(texture_objects_.size());
             texture_objects_.push_back(cuda_texture.texture_object);
             textures_.push_back(std::move(cuda_texture));
@@ -452,7 +452,7 @@ namespace qualquer::app {
 
         // ---- Fill materials ----
         auto resolve_texture = [&](const size_t texture_index,
-                                   const renderer::TextureRole role) -> uint32_t {
+                                   const TextureRole role) -> uint32_t {
             const auto it = tex_index_cache.find({texture_index, role});
             assert(it != tex_index_cache.end() && "Texture must have been prepared");
             return it->second;
@@ -487,24 +487,24 @@ namespace qualquer::app {
             // Texture references (UINT32_MAX → default fallback below)
             data.base_color_tex = pbr.baseColorTexture.has_value()
                                       ? resolve_texture(pbr.baseColorTexture->textureIndex,
-                                                        renderer::TextureRole::Color)
+                                                        TextureRole::Color)
                                       : UINT32_MAX;
             data.metallic_roughness_tex = pbr.metallicRoughnessTexture.has_value()
                                               ? resolve_texture(
                                                     pbr.metallicRoughnessTexture->textureIndex,
-                                                    renderer::TextureRole::Linear)
+                                                    TextureRole::Linear)
                                               : UINT32_MAX;
             data.normal_tex = mat.normalTexture.has_value()
                                   ? resolve_texture(mat.normalTexture->textureIndex,
-                                                    renderer::TextureRole::Normal)
+                                                    TextureRole::Normal)
                                   : UINT32_MAX;
             data.occlusion_tex = mat.occlusionTexture.has_value()
                                      ? resolve_texture(mat.occlusionTexture->textureIndex,
-                                                       renderer::TextureRole::Linear)
+                                                       TextureRole::Linear)
                                      : UINT32_MAX;
             data.emissive_tex = mat.emissiveTexture.has_value()
                                     ? resolve_texture(mat.emissiveTexture->textureIndex,
-                                                      renderer::TextureRole::Color)
+                                                      TextureRole::Color)
                                     : UINT32_MAX;
 
             if (data.base_color_tex == UINT32_MAX) { data.base_color_tex = kDefaultWhiteIdx; }
