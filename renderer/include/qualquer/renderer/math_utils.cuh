@@ -76,6 +76,11 @@ __forceinline__ __device__ float lerp(const float a, const float b, const float 
     return a + t * (b - a);
 }
 
+/// Reflects I about unit normal N: I - 2*dot(I,N)*N (GLSL reflect equivalent).
+__forceinline__ __device__ float3 reflect(const float3 I, const float3 N) {
+    return I - N * (2.0f * dot(I, N));
+}
+
 // ---- Matrix helpers ---------------------------------------------------------
 
 /// Multiply a float4x4 (row-major) by a float4 column vector.
