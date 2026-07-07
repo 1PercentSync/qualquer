@@ -38,7 +38,7 @@
 - [ ] HDR equirect 加载：stb_image 加载 .hdr
 - [ ] Equirect → cubemap 转换：CUDA kernel 实现 equirect 到 6-face cubemap 转换
 - [ ] Cubemap 纹理创建：cudaMipmappedArray（cubemap flag）→ cudaTextureObject_t
-- [ ] Env alias table 构建：半分辨率降采样 + luminance × sin(theta) 权重 + Vose's algorithm O(N) 构建 EnvAliasEntry 数组上传 GPU
+- [ ] Env alias table 构建：全分辨率 luminance × sin(theta) 权重 + Vose's algorithm O(N) 构建 EnvAliasEntry 数组上传 GPU
 - [ ] SceneLoader 集成：HDR 加载 + cubemap 创建 + alias table 构建，资源生命周期管理（destroy / 场景切换时重建）
 - [ ] Renderer 集成：env cubemap + alias table 指针填入 LaunchParams
 - [ ] Miss shader 更新：`__miss__env` 用 `texCubemap<float4>` 采样环境光

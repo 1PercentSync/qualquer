@@ -203,6 +203,8 @@
 
 **光源策略**：仅 IBL（环境贴图）+ emissive 三角形。不实现任何解析光源（glTF KHR_lights_punctual 的 directional / point / spot 不纳入）。所有照明均通过 env miss shader 和 emissive 表面 NEE 提供。
 
+**Env alias table 分辨率**：✅ **全分辨率**（equirect_width × equirect_height）。调研了 nvpro_core2/vk_gltf_renderer（NVIDIA 官方样例）、teofum/platinum、harskish/fluctus 等使用 alias table 的 GPU 路径追踪器，除 Himalaya 外均采用全分辨率。Himalaya 的 ÷2 是出于 VRAM 预算的工程取舍，非业界标准。全分辨率保持角度精度与 PDF 评估一致性；若实测发现 hot pixel 导致采样过度集中，再考虑降采样（÷2 box filter）作为缓解手段。
+
 ---
 
 ### D10. Shadow Ray 策略
