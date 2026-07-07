@@ -5,7 +5,7 @@
 
 #include <qualquer/app/scene_loader.h>
 
-#include <qualquer/renderer/cache.h>
+#include <qualquer/app/cache.h>
 #include <qualquer/renderer/mesh.h>
 #include <qualquer/renderer/texture.h>
 

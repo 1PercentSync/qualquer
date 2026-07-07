@@ -10,7 +10,7 @@
 #include <string>
 #include <string_view>
 
-namespace qualquer::renderer {
+namespace qualquer::app {
 
     /**
      * @brief Returns the cache root directory (%TEMP%\qualquer\).
@@ -67,4 +67,4 @@ namespace qualquer::renderer {
     bool atomic_write_file(const std::filesystem::path &path,
                            const void *data, std::size_t size);
 
-} // namespace qualquer::renderer
+} // namespace qualquer::app

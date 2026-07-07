@@ -1,9 +1,9 @@
 /**
  * @file cache.cpp
- * @brief Shared cache infrastructure implementation (renderer layer).
+ * @brief Shared cache infrastructure implementation (app layer).
  */
 
-#include <qualquer/renderer/cache.h>
+#include <qualquer/app/cache.h>
 
 #include <fstream>
 #include <iomanip>
@@ -15,7 +15,7 @@
 #include <spdlog/spdlog.h>
 #include <xxhash.h>
 
-namespace qualquer::renderer {
+namespace qualquer::app {
 
     // ---- Helpers ----
 
@@ -110,4 +110,4 @@ namespace qualquer::renderer {
         return true;
     }
 
-} // namespace qualquer::renderer
+} // namespace qualquer::app

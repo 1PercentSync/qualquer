@@ -1,6 +1,5 @@
 find_package(imgui CONFIG REQUIRED)
 find_package(OptiX REQUIRED)
-find_package(xxHash CONFIG REQUIRED)
 find_package(Stb REQUIRED)
 find_package(mikktspace CONFIG REQUIRED)
 
@@ -13,7 +12,6 @@ target_sources(qualquer_renderer PRIVATE
     src/debug_ui.cpp
     src/renderer.cpp
     src/camera.cpp
-    src/cache.cpp
     src/ktx2.cpp
     src/stb_impl.cpp
     src/texture.cpp
@@ -30,7 +28,6 @@ target_link_libraries(qualquer_renderer
     PUBLIC qualquer_vulkan
     PRIVATE imgui::imgui
     PRIVATE qualquer_optix
-    PRIVATE xxHash::xxhash
     PRIVATE bc7enc
     PRIVATE ispc_texcomp
     PRIVATE mikktspace::mikktspace
