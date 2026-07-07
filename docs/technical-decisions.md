@@ -169,11 +169,12 @@ CUDA 侧通过 `cudaExternalMemoryGetMappedMipmappedArray` → `cudaArray_t` →
 
 ### ImGuiBackend 归属
 
-**决策**：`ImGuiBackend` 所有权归 Application，Renderer 经 `RenderInput` 引用传入，不缓存为成员。
+**决策**：`ImGuiBackend` 代码归 vulkan 层（呈现基础设施），所有权归 Application，Renderer 经 `RenderInput` 引用传入，不缓存为成员。
 
 **理由**：
-- ImGui 生命周期绑定窗口/输入（GLFW、DeltaTime、begin_frame 需事件后状态），归 app
-- ImGui “在 cmd 里录制”属渲染内容，归 renderer，但只需使用不需所有
+- ImGuiBackend 的职责是把 ImGui draw data 通过 Vulkan 管线渲染到 swapchain image——这是”呈现”，不是”决定画什么”。它不含任何渲染逻辑（不决定 UI 面板内容），只做 Vulkan 渲染后端 + GLFW 平台后端的生命周期管理和 draw data 录制
+- UI 面板内容（debug_ui）归 renderer——它决定”画什么”（哪些滑块、哪些数据）
+- ImGui 生命周期绑定窗口/输入（GLFW、DeltaTime、begin_frame 需事件后状态），所有权归 app
 - Renderer 作为使用方不缓存 Application 拥有的引用（项目所有权原则：使用方不在成员中缓存所有者拥有的引用），故所有依赖（cuda_context/display_buffer/swapchain/imgui）均走 RenderInput，Renderer 唯一成员是自有的 frame_counter_。与 Himalaya 缓存指针成员的做法不同——Qualquer 的所有权原则更严格
 
 ### CUDA 每帧工作

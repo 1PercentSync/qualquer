@@ -70,26 +70,26 @@ Qualquer 是基于 CUDA + OptiX 的 Path Tracer，Vulkan 仅用于 swapchain 呈
 
 封装 OptiX 和 CUDA API，向上层提供简洁的 RT 接口。
 
-包含：Context 管理、Module/Pipeline/SBT 创建、加速结构（BLAS/TLAS）、Denoiser、CUDA 内存管理。
+包含：Context 管理、Module/Pipeline/SBT 创建、加速结构（BLAS/TLAS）、Denoiser、CUDA 内存管理（CudaBuffer、CudaTexture、纹理上传）。
 
 **设计原则**：不包含任何渲染逻辑。
 
 ### vulkan（Vulkan 呈现层）
 
-仅负责 swapchain 呈现和 CUDA-Vulkan interop。
+负责 swapchain 呈现、CUDA-Vulkan interop 和 ImGui 渲染后端。
 
-包含：Instance/Device/Queue 管理、Swapchain、CUDA external memory/semaphore interop。
+包含：Instance/Device/Queue 管理、Swapchain、CUDA external memory/semaphore interop、ImGui 后端（Vulkan + GLFW 平台集成）。
 
-**设计原则**：最小化，只做呈现。
+**设计原则**：只做呈现——把已决定的渲染内容送上屏幕。ImGui 后端属于呈现基础设施（不决定画什么，只负责将 draw data 通过 Vulkan 管线渲染到 swapchain image）。
 MUSTREAD:4
 
 ### renderer（渲染逻辑层）
 
-实现 PT 渲染管线和场景管理，负责**单帧渲染内容的录制**：拿到命令缓冲和帧输入，录制一帧要画什么（PT kernel 调度、tone map、blit、ImGui 录制）。
+实现 PT 渲染管线和场景管理，负责**单帧渲染内容的决策**：PT kernel 调度、tone map、UI 面板内容（debug_ui 决定 ImGui 画什么）。
 
-包含：PT 着色逻辑、材质系统、场景数据结构、累积 buffer、降噪调度。
+包含：PT 着色逻辑、材质系统、场景数据结构、累积 buffer、降噪调度、UI 面板逻辑。
 
-**不持有帧循环**：acquire/submit/present、fence/semaphore 同步、swapchain 重建都在 app 层。renderer 只暴露 “渲染内容” 接口（CUDA 提交 + Vulkan 命令录制），由 app 编排好时序后调用。理由：一帧的渲染内容横跨 optix（CUDA 着色）和 vulkan（blit/呈现），有内部数据依赖和时序编排，只有同时依赖两者的 renderer 能承载；但帧循环骨架（编排+同步）属于“驱动时序”，与“画什么”正交，归 app。这条切法来自 Himalaya 的实证——其 Renderer 是 Application 帧循环膨胀后抽出的“渲染内容”，编排+同步始终留在 Application。
+**不持有帧循环**：acquire/submit/present、fence/semaphore 同步、swapchain 重建都在 app 层。renderer 只暴露 “渲染内容” 接口（CUDA 提交 + Vulkan 命令录制），由 app 编排好时序后调用。理由：一帧的渲染内容横跨 optix（CUDA 着色）和 vulkan（blit/呈现/ImGui 录制），有内部数据依赖和时序编排，只有同时依赖两者的 renderer 能承载；但帧循环骨架（编排+同步）属于”驱动时序”，与”画什么”正交，归 app。这条切法来自 Himalaya 的实证——其 Renderer 是 Application 帧循环膨胀后抽出的”渲染内容”，编排+同步始终留在 Application。
 
 **与 Himalaya 的区别**：Himalaya 把渲染拆成 framework 与 pass 两层。Qualquer 不拆，原因：
 - PT 是单个 OptiX launch，不需要 Render Graph 编排多 Pass
@@ -98,7 +98,7 @@ MUSTREAD:4
 
 ### app（应用层）
 
-场景加载、资产管理、相机控制、用户输入、UI，以及**帧循环的编排与同步**。
+场景加载、资产管理（图片解码、BC 压缩、mip 生成、tangent 生成、HDR 环境贴图处理、磁盘缓存）、相机控制、用户输入，以及**帧循环的编排与同步**。
 
 帧循环（wait fence → acquire image → renderer 录制 → submit → present → resize 重建）在 app 层。app 同时驱动 optix 和 vulkan 做时序编排。
 

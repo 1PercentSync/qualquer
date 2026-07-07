@@ -15,7 +15,7 @@
 
 ### 下一个任务
 
-Phase 4 Step 4 第三小项：Equirect → cubemap 转换（CUDA kernel 实现 equirect 到 6-face cubemap 转换）
+Phase 4 Step 4 第三小项：纹理管线层归属重构（资产预处理 renderer→app，CUDA 资源创建 renderer→optix，详见 current-phase.md）
 
 ---
 
