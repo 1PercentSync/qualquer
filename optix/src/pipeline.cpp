@@ -102,7 +102,7 @@ namespace qualquer::optix {
             },
             {
                 .kind = OPTIX_PROGRAM_GROUP_KIND_MISS,
-                .miss = {.module = module_, .entryFunctionName = "__miss__ms"},
+                .miss = {.module = module_, .entryFunctionName = "__miss__env"},
             },
             {
                 .kind = OPTIX_PROGRAM_GROUP_KIND_HITGROUP,

@@ -60,12 +60,12 @@ __global__ void __raygen__rg() { // NOLINT(*-reserved-identifier)
 
     // Empty scene (no geometry loaded → traversable == 0): optixTrace on a null
     // traversable is undefined behavior, so write the miss background color
-    // directly and skip tracing. Matches __miss__ms output, keeping the frame
-    // consistent with a fully-miss scene.
+    // directly and skip tracing. Matches __miss__env fallback output, keeping
+    // the frame consistent with a fully-miss scene.
     if (params.traversable == 0) {
         const float4 old = params.accumulation_buffer_read[linear_index];
         params.accumulation_buffer[linear_index] =
-            make_float4(old.x + 0.1f, old.y + 0.1f, old.z + 0.1f, 1.0f);
+            make_float4(old.x, old.y, old.z, 1.0f);
         return;
     }
 
@@ -121,11 +121,20 @@ __global__ void __raygen__rg() { // NOLINT(*-reserved-identifier)
         make_float4(old.x + r, old.y + g, old.z + b, 1.0f);
 }
 
-/// Emits a constant background color on miss.
-__global__ void __miss__ms() { // NOLINT(*-reserved-identifier)
-    optixSetPayload_0(__float_as_uint(0.1f));
-    optixSetPayload_1(__float_as_uint(0.1f));
-    optixSetPayload_2(__float_as_uint(0.1f));
+/// Samples the HDR environment cubemap along the missed ray direction.
+/// Falls back to a constant background when no env cubemap is loaded.
+__global__ void __miss__env() { // NOLINT(*-reserved-identifier)
+    if (params.env_cubemap != 0) {
+        const float3 dir = optixGetWorldRayDirection();
+        const auto texel = texCubemap<float4>(params.env_cubemap, dir.x, dir.y, dir.z);
+        optixSetPayload_0(__float_as_uint(texel.x));
+        optixSetPayload_1(__float_as_uint(texel.y));
+        optixSetPayload_2(__float_as_uint(texel.z));
+    } else {
+        optixSetPayload_0(__float_as_uint(0.0f));
+        optixSetPayload_1(__float_as_uint(0.0f));
+        optixSetPayload_2(__float_as_uint(0.0f));
+    }
 }
 
 /// Closest hit: geometry lookup → vertex interpolation → PBR texture sampling
