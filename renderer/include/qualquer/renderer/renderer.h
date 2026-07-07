@@ -91,6 +91,26 @@ namespace qualquer::renderer {
 
         /** @brief Device texture-object array (indexed via Material tex fields). */
         const optix::CudaBuffer<cudaTextureObject_t> &texture_objects;
+
+        // ---- Environment map (from SceneLoader) ----
+
+        /** @brief Env cubemap texture object (0 = no env map loaded). */
+        cudaTextureObject_t env_cubemap;
+
+        /** @brief Device alias table (null when no env map loaded). */
+        const EnvAliasEntry *env_alias_table;
+
+        /** @brief Alias table entry count (0 when no env map loaded). */
+        uint32_t env_alias_count;
+
+        /** @brief Alias table width (equirect source width). */
+        uint32_t env_alias_width;
+
+        /** @brief Alias table height (equirect source height). */
+        uint32_t env_alias_height;
+
+        /** @brief Sin-weighted total luminance across the environment map. */
+        float env_total_luminance;
     };
 
     /**
