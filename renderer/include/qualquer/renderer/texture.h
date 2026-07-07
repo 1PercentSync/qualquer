@@ -105,6 +105,31 @@ namespace qualquer::renderer {
         std::vector<PreparedMipRegion> regions;
     };
 
+    /**
+     * @brief CPU-side RGB float32 pixel data decoded from an HDR file by stb_image.
+     *
+     * Always 3 floats per pixel (stbi_loadf is forced to 3 channels). Owns its
+     * buffer through a deleter that calls stbi_image_free, so it is move-only.
+     */
+    struct HdrImageData {
+        /** @brief RGB float32 pixel buffer, freed via stbi_image_free; null when invalid. */
+        std::unique_ptr<float[], void (*)(void *)> pixels{nullptr, nullptr};
+
+        /** @brief Pixel width. */
+        uint32_t width = 0;
+
+        /** @brief Pixel height. */
+        uint32_t height = 0;
+
+        /** @return Total bytes (width * height * 3 * sizeof(float)). */
+        [[nodiscard]] std::size_t size_bytes() const {
+            return static_cast<std::size_t>(width) * height * 3 * sizeof(float);
+        }
+
+        /** @return Whether the image holds decoded pixels. */
+        [[nodiscard]] bool valid() const { return pixels != nullptr; }
+    };
+
     // ---- LDR: image decoding ----
 
     /**
@@ -125,6 +150,19 @@ namespace qualquer::renderer {
      * @return Decoded image, or an invalid one on failure (check with valid()).
      */
     [[nodiscard]] ImageData load_image_from_memory(const uint8_t *buffer, std::size_t byte_length);
+
+    // ---- HDR: image decoding ----
+
+    /**
+     * @brief Loads an HDR file (.hdr / .exr) as RGB float32.
+     *
+     * Forces 3 channels regardless of source format. The returned pixel data is
+     * used both by the equirect-to-cubemap conversion and by the env alias table
+     * builder.
+     * @param path Path to the HDR image file.
+     * @return Decoded HDR image, or an invalid one on failure (check with valid()).
+     */
+    [[nodiscard]] HdrImageData load_hdr_image(const std::filesystem::path &path);
 
     // ---- LDR: cache lookup + compression ----
 

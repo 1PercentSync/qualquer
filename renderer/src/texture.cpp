@@ -62,6 +62,26 @@ namespace qualquer::renderer {
         };
     }
 
+    // ---- HDR image decoding ----
+
+    HdrImageData load_hdr_image(const std::filesystem::path &path) {
+        const auto name = path.string();
+        int w = 0;
+        int h = 0;
+        int channels = 0;
+        auto *raw = stbi_loadf(name.c_str(), &w, &h, &channels, 3);
+        if (!raw) {
+            spdlog::error("Failed to load HDR image '{}': {}", name, stbi_failure_reason());
+            return {};
+        }
+        spdlog::info("Loaded HDR environment map '{}' ({}x{})", name, w, h);
+        return {
+            .pixels = {raw, stbi_image_free},
+            .width = static_cast<uint32_t>(w),
+            .height = static_cast<uint32_t>(h),
+        };
+    }
+
     // ---- internal helpers ----
 
     namespace {
