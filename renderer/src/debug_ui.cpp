@@ -122,6 +122,9 @@ namespace qualquer::renderer {
         ImGui::Separator();
         draw_scene(ctx, actions);
 
+        ImGui::Separator();
+        draw_env_map(ctx, actions);
+
         ImGui::End();
 
         return actions;
@@ -244,6 +247,28 @@ namespace qualquer::renderer {
             if (!path.empty()) {
                 action.scene_load_requested = true;
                 action.new_scene_path = std::move(path);
+            }
+        }
+    }
+    void DebugUI::draw_env_map(const DebugUIContext &ctx, DebugUIActions &action) {
+        if (ctx.env_map_path.empty()) {
+            ImGui::TextDisabled("No env map loaded");
+        } else {
+            const auto filename = std::filesystem::path(ctx.env_map_path).filename().string();
+            ImGui::Text("Env: %s", filename.c_str());
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("%s", ctx.env_map_path.c_str());
+            }
+        }
+
+        ImGui::SameLine();
+        if (ImGui::Button("Load HDR...")) {
+            auto path = open_file_dialog(
+                L"HDR Files (*.hdr)\0*.hdr\0All Files (*.*)\0*.*\0",
+                L"Load Environment Map");
+            if (!path.empty()) {
+                action.env_map_load_requested = true;
+                action.new_env_map_path = std::move(path);
             }
         }
     }

@@ -54,6 +54,15 @@ namespace qualquer::renderer {
          * surfaced through DebugUIActions::scene_load_requested.
          */
         const std::string &scene_path;
+
+        /**
+         * @brief Currently loaded HDR environment map path (empty = none).
+         *
+         * Display-only: the Env Map section shows the filename and a tooltip
+         * with the full path. Loading is triggered via a native file dialog and
+         * surfaced through DebugUIActions::env_map_load_requested.
+         */
+        const std::string &env_map_path;
     };
 
     /**
@@ -87,6 +96,12 @@ namespace qualquer::renderer {
 
         /** @brief Scene path picked by the user (valid only when scene_load_requested). */
         std::string new_scene_path;
+
+        /** @brief True if the user picked an HDR env map via the Load dialog. */
+        bool env_map_load_requested = false;
+
+        /** @brief Env map path picked by the user (valid only when env_map_load_requested). */
+        std::string new_env_map_path;
     };
 
     /**
@@ -225,5 +240,18 @@ namespace qualquer::renderer {
          * @param action Receives the load request and the picked path.
          */
         static void draw_scene(const DebugUIContext &ctx, DebugUIActions &action);
+
+        /**
+         * @brief Renders the Env Map section: current file name and a Load button.
+         *
+         * Shows "No env map loaded" when ctx.env_map_path is empty, otherwise
+         * the filename with a full-path tooltip. The Load button opens a native
+         * file dialog (HDR); on a non-empty selection sets
+         * action.env_map_load_requested and action.new_env_map_path.
+         *
+         * @param ctx    Provides the current env map path.
+         * @param action Receives the load request and the picked path.
+         */
+        static void draw_env_map(const DebugUIContext &ctx, DebugUIActions &action);
     };
 } // namespace qualquer::renderer

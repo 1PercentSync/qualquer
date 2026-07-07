@@ -167,6 +167,7 @@ namespace qualquer::app {
                 .swapchain = swapchain_,
                 .error_message = error_message_,
                 .scene_path = config_.scene_path,
+                .env_map_path = config_.env_map_path,
             };
             const auto actions = debug_ui_.draw(ui_ctx); // only CPU side, render command is in record()
 
@@ -180,6 +181,17 @@ namespace qualquer::app {
                 // the display buffer that the drained tonemap just finished writing,
                 // and blit/present do not depend on scene data.
                 switch_scene(actions.new_scene_path);
+            }
+            if (actions.env_map_load_requested) {
+                // Drain CUDA streams: this frame's raygen/tonemap reference the
+                // current env cubemap texture object via LaunchParams; they must
+                // finish before the old texture is destroyed.
+                CUDA_CHECK(cudaStreamSynchronize(cuda_context_.compute_stream));
+                CUDA_CHECK(cudaStreamSynchronize(cuda_context_.display_stream));
+
+                scene_loader_.load_env_map(actions.new_env_map_path);
+                config_.env_map_path = actions.new_env_map_path;
+                save_config(config_);
             }
             // present_mode_changed is acted on after end_frame (see below): recreating
             // mid-frame would invalidate the image acquired in acquire_image before it is
