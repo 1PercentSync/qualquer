@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4 — 核心 Path Tracer
-- **进度**：Phase 4 Step 4 第十小项完成：env map 加载 UI + 累积 reset 修复（per-slot accum_counts 取代全局 sample_count + buffer 清零）
+- **进度**：Phase 4 Step 4 完成（环境光：HDR 加载 + cubemap + alias table + miss shader + 加载 UI + per-slot 累积修复，编译验证通过）
 
 ### 下一个任务
 
-Phase 4 Step 4 编译验证（miss 显示 HDR 全景，命中表面仍为 ambient，运行时可加载 HDR）— 已通过
+Phase 4 Step 5 第一小项：创建 `rng.cuh`（PCG hash RNG + 维度分配）
 
 ---
 

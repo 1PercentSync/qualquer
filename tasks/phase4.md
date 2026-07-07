@@ -43,7 +43,7 @@
 - [x] Renderer 集成：env cubemap + alias table 指针填入 LaunchParams
 - [x] Miss shader 更新：`__miss__env` 用 `texCubemap<float4>` 采样环境光
 - [x] Env map 加载 UI：DebugUI 中添加 env_map_path 显示 + Load 按钮 + Application 响应加载动作
-- [ ] 请求用户在 CLion 中编译验证（miss 显示 HDR 全景，命中表面仍为 ambient）
+- [x] 请求用户在 CLion 中编译验证（miss 显示 HDR 全景，命中表面仍为 ambient，运行时可加载 HDR）
 
 ## Step 5：Bounce loop + 累积
 
