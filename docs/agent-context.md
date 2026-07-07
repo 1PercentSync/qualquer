@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4 — 核心 Path Tracer
-- **进度**：Phase 4 Step 4 第三小项完成：层归属重构（cache/ktx2/mesh/stb_impl/texture 预处理→app，finalize_texture/create_default_textures→optix，ImGuiBackend→vulkan，CMake 依赖迁移）
+- **进度**：Phase 4 Step 4 第四小项完成：equirect_to_cubemap CUDA kernel 已实现（app 层，fp16 RGBA 输出，face-major 布局，face size 上限 4096）
 
 ### 下一个任务
 
-Phase 4 Step 4 第四小项：Equirect → cubemap 转换（CUDA kernel 实现 equirect 到 6-face cubemap 转换）
+Phase 4 Step 4 第五小项：Cubemap 纹理创建（cudaMipmappedArray cubemap flag → cudaTextureObject_t）
 
 ---
 

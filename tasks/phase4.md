@@ -37,7 +37,7 @@
 - [x] AppConfig 新增 `env_map_path` 字段（HDR 环境贴图路径）
 - [x] HDR equirect 加载：stb_image 加载 .hdr
 - [x] 层归属重构：资产预处理（图片解码、stb_impl、BC 压缩、mip 生成、tangent 生成、cache、ktx2）renderer→app；CUDA 资源创建（finalize_texture、create_default_textures、共享类型）renderer→optix；ImGuiBackend renderer→vulkan；CMake 依赖迁移
-- [ ] Equirect → cubemap 转换：CUDA kernel 实现 equirect 到 6-face cubemap 转换
+- [x] Equirect → cubemap 转换：CUDA kernel 实现 equirect 到 6-face cubemap 转换
 - [ ] Cubemap 纹理创建：cudaMipmappedArray（cubemap flag）→ cudaTextureObject_t
 - [ ] Env alias table 构建：全分辨率 luminance × sin(theta) 权重 + Vose's algorithm O(N) 构建 EnvAliasEntry 数组上传 GPU
 - [ ] SceneLoader 集成：HDR 加载 + cubemap 创建 + alias table 构建，资源生命周期管理（destroy / 场景切换时重建）
