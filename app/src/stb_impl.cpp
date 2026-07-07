@@ -1,6 +1,6 @@
 /**
  * @file stb_impl.cpp
- * @brief Renderer layer — stb single-header library implementation sink.
+ * @brief App layer — stb single-header library implementation sink.
  *
  * Concentrates the stb_image / stb_image_resize2 implementations in one
  * translation unit so that editing texture.cpp does not recompile them, and so

@@ -3,6 +3,7 @@ find_package(nlohmann_json CONFIG REQUIRED)
 find_package(OpenMP REQUIRED)
 find_package(xxHash CONFIG REQUIRED)
 find_package(mikktspace CONFIG REQUIRED)
+find_package(Stb REQUIRED)
 
 add_executable(qualquer_app
     src/main.cpp
@@ -13,10 +14,12 @@ add_executable(qualquer_app
     src/cache.cpp
     src/ktx2.cpp
     src/mesh.cpp
+    src/stb_impl.cpp
 )
 
 target_include_directories(qualquer_app
     PRIVATE include
+    PRIVATE ${Stb_INCLUDE_DIR}
 )
 
 target_link_libraries(qualquer_app
