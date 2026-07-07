@@ -6,6 +6,8 @@
 #include <qualquer/app/scene_loader.h>
 
 #include <qualquer/app/cache.h>
+#include <qualquer/app/env_alias_table.h>
+#include <qualquer/app/equirect_to_cubemap.h>
 #include <qualquer/app/mesh.h>
 #include <qualquer/app/texture.h>
 
@@ -577,7 +579,102 @@ namespace qualquer::app {
         }
     }
 
+    // ---- Environment map ----
+
+    bool SceneLoader::load_env_map(const std::string &path) {
+        destroy_env_map();
+
+        if (path.empty()) {
+            return false;
+        }
+
+        // --- Load HDR pixels (needed for both cubemap and alias table) ---
+        auto hdr = load_hdr_image(std::filesystem::path(path));
+        if (!hdr.valid()) {
+            return false;
+        }
+
+        const auto equirect_w = hdr.width;
+        const auto equirect_h = hdr.height;
+
+        // --- Cubemap: cache check → equirect→cubemap → BC6H → finalize ---
+        const auto source_hash = content_hash(std::filesystem::path(path));
+        auto cached = source_hash.empty()
+                          ? std::nullopt
+                          : load_cached_texture_bc6h(source_hash);
+
+        optix::CudaTexture cubemap;
+        if (cached) {
+            spdlog::info("Env cubemap loaded from cache");
+            constexpr optix::SamplerDesc cubemap_sampler{
+                .filter_mode = cudaFilterModeLinear,
+                .mipmap_filter_mode = cudaFilterModePoint,
+                .address_mode_u = cudaAddressModeClamp,
+                .address_mode_v = cudaAddressModeClamp,
+            };
+            cubemap = optix::finalize_texture(*cached, cubemap_sampler);
+        } else {
+            // Equirect → cubemap (CUDA kernel, fp16 RGBA output)
+            uint32_t face_size = 0;
+            auto cubemap_pixels = equirect_to_cubemap(
+                hdr.pixels.get(), equirect_w, equirect_h, face_size);
+            if (cubemap_pixels.empty()) {
+                spdlog::error("Env cubemap: equirect-to-cubemap conversion failed");
+                return false;
+            }
+
+            // BC6H compression (CPU ISPC, writes KTX2 cache)
+            auto prepared = compress_texture_bc6h(cubemap_pixels, face_size, source_hash);
+
+            constexpr optix::SamplerDesc cubemap_sampler{
+                .filter_mode = cudaFilterModeLinear,
+                .mipmap_filter_mode = cudaFilterModePoint,
+                .address_mode_u = cudaAddressModeClamp,
+                .address_mode_v = cudaAddressModeClamp,
+            };
+            cubemap = optix::finalize_texture(prepared, cubemap_sampler);
+        }
+
+        // --- Alias table (always from raw HDR pixels, no disk cache) ---
+        auto alias_result = build_env_alias_table(
+            hdr.pixels.get(), equirect_w, equirect_h);
+        if (alias_result.entries.empty()) {
+            spdlog::error("Env alias table construction failed");
+            cubemap.destroy();
+            return false;
+        }
+
+        // Upload alias table to device
+        env_alias_table_.alloc(alias_result.entries.size());
+        env_alias_table_.upload(alias_result.entries.data(),
+                                alias_result.entries.size(), nullptr);
+
+        // Commit all resources
+        env_cubemap_texture_ = std::move(cubemap);
+        env_equirect_width_ = equirect_w;
+        env_equirect_height_ = equirect_h;
+        env_total_luminance_ = alias_result.total_luminance;
+
+        spdlog::info("Env map ready: cubemap tex={}, alias table {}x{} ({} entries)",
+                     env_cubemap_texture_.texture_object,
+                     equirect_w, equirect_h,
+                     alias_result.entries.size());
+        return true;
+    }
+
+    void SceneLoader::destroy_env_map() {
+        env_cubemap_texture_.destroy();
+        env_alias_table_.free();
+        env_equirect_width_ = 0;
+        env_equirect_height_ = 0;
+        env_total_luminance_ = 0.0f;
+    }
+
+    // ---- Destroy + accessors ----
+
     void SceneLoader::destroy() {
+        destroy_env_map();
+
         for (auto &tex: textures_) {
             tex.destroy();
         }
@@ -612,5 +709,29 @@ namespace qualquer::app {
 
     const renderer::AABB &SceneLoader::scene_bounds() const {
         return scene_bounds_;
+    }
+
+    cudaTextureObject_t SceneLoader::env_cubemap() const {
+        return env_cubemap_texture_.texture_object;
+    }
+
+    const optix::CudaBuffer<renderer::EnvAliasEntry> &SceneLoader::env_alias_table_buffer() const {
+        return env_alias_table_;
+    }
+
+    uint32_t SceneLoader::env_alias_count() const {
+        return static_cast<uint32_t>(env_alias_table_.count());
+    }
+
+    uint32_t SceneLoader::env_alias_width() const {
+        return env_equirect_width_;
+    }
+
+    uint32_t SceneLoader::env_alias_height() const {
+        return env_equirect_height_;
+    }
+
+    float SceneLoader::env_total_luminance() const {
+        return env_total_luminance_;
     }
 } // namespace qualquer::app

@@ -102,6 +102,11 @@ namespace qualquer::app {
                              scene_loader_.mesh_instances());
         camera_controller_.set_focus_target(&scene_loader_.scene_bounds());
         auto_position_camera(scene_loader_.scene_bounds());
+
+        // --- Environment map (HDR → cubemap + alias table) ---
+        if (!config_.env_map_path.empty()) {
+            scene_loader_.load_env_map(config_.env_map_path);
+        }
     }
 
     void Application::run() {
@@ -438,6 +443,11 @@ namespace qualquer::app {
 
         camera_controller_.set_focus_target(&scene_loader_.scene_bounds());
         auto_position_camera(scene_loader_.scene_bounds());
+
+        // Reload env map (destroy() cleared it along with scene resources)
+        if (!config_.env_map_path.empty()) {
+            scene_loader_.load_env_map(config_.env_map_path);
+        }
 
         config_.scene_path = path;
         save_config(config_);

@@ -7,6 +7,7 @@
 
 #include <qualquer/optix/cuda_buffer.h>
 #include <qualquer/optix/cuda_texture.h>
+#include <qualquer/renderer/launch_params.h>
 #include <qualquer/renderer/material.h>
 #include <qualquer/renderer/scene_types.h>
 #include <qualquer/optix/cuda_texture_upload.h>
@@ -45,7 +46,30 @@ namespace qualquer::app {
                   const optix::DefaultTextures &default_textures);
 
         /**
-         * @brief Destroys all loaded resources (CUDA buffers, textures).
+         * @brief Loads an HDR environment map and prepares GPU resources.
+         *
+         * Pipeline: stb_image decode → equirect-to-cubemap CUDA kernel →
+         * BC6H compression (with KTX2 disk cache) → finalize_texture upload →
+         * alias table construction → CudaBuffer upload.
+         *
+         * Safe to call multiple times (destroys previous env map first).
+         * On failure, logs the error and leaves env resources empty (no env
+         * lighting, but rendering continues).
+         *
+         * @param path Path to the .hdr environment map file.
+         * @return true on success, false on failure.
+         */
+        bool load_env_map(const std::string &path);
+
+        /**
+         * @brief Destroys environment map GPU resources only.
+         *
+         * Called by destroy() and before load_env_map replaces resources.
+         */
+        void destroy_env_map();
+
+        /**
+         * @brief Destroys all loaded resources (CUDA buffers, textures, env map).
          *
          * Safe to call even if load() was never called.
          */
@@ -70,6 +94,26 @@ namespace qualquer::app {
          * AABB (min = max = 0).
          */
         [[nodiscard]] const renderer::AABB &scene_bounds() const;
+
+        // ---- Environment map accessors ----
+
+        /** @brief Env cubemap texture object (0 when no env map is loaded). */
+        [[nodiscard]] cudaTextureObject_t env_cubemap() const;
+
+        /** @brief Device alias table entries (null when no env map is loaded). */
+        [[nodiscard]] const optix::CudaBuffer<renderer::EnvAliasEntry> &env_alias_table_buffer() const;
+
+        /** @brief Alias table entry count (equirect width × height; 0 when unloaded). */
+        [[nodiscard]] uint32_t env_alias_count() const;
+
+        /** @brief Equirect source width (alias table column count). */
+        [[nodiscard]] uint32_t env_alias_width() const;
+
+        /** @brief Equirect source height (alias table row count). */
+        [[nodiscard]] uint32_t env_alias_height() const;
+
+        /** @brief Sin-weighted total luminance across the environment map. */
+        [[nodiscard]] float env_total_luminance() const;
 
     private:
         // ---- Loaded scene data ----
@@ -99,6 +143,23 @@ namespace qualquer::app {
 
         /** @brief Device-side texture-object array, indexed by Material tex fields. */
         optix::CudaBuffer<cudaTextureObject_t> texture_objects_buffer_;
+
+        // ---- Environment map resources ----
+
+        /** @brief Env cubemap GPU texture (owned; destroyed in destroy_env_map()). */
+        optix::CudaTexture env_cubemap_texture_;
+
+        /** @brief Device alias table (one EnvAliasEntry per equirect pixel). */
+        optix::CudaBuffer<renderer::EnvAliasEntry> env_alias_table_;
+
+        /** @brief Equirect source width used for alias table dimensions. */
+        uint32_t env_equirect_width_ = 0;
+
+        /** @brief Equirect source height used for alias table dimensions. */
+        uint32_t env_equirect_height_ = 0;
+
+        /** @brief Sin-weighted total luminance (alias table normalization constant). */
+        float env_total_luminance_ = 0.0f;
 
         // ---- Private loading stages ----
 
