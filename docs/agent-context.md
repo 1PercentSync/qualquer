@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4 — 核心 Path Tracer
-- **进度**：Phase 4 Step 4 第四小项完成：equirect_to_cubemap CUDA kernel 已实现（app 层，fp16 RGBA 输出，face-major 布局，face size 上限 4096）
+- **进度**：Phase 4 Step 4 第五小项完成：env alias table 构建函数已实现（全分辨率 Vose's O(N)，luminance × sin_theta 权重，EnvAliasTableResult 输出）
 
 ### 下一个任务
 
-Phase 4 Step 4 第五小项：Env alias table 构建
+Phase 4 Step 4 第六小项：SceneLoader 集成（HDR 加载 + cubemap 创建 + alias table 构建 + 生命周期管理）
 
 ---
 
