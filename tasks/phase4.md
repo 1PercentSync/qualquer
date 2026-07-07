@@ -40,7 +40,7 @@
 - [x] Equirect → cubemap 转换：CUDA kernel 实现 equirect 到 6-face cubemap 转换
 - [x] Env alias table 构建：全分辨率 luminance × sin(theta) 权重 + Vose's algorithm O(N) 构建 EnvAliasEntry 数组上传 GPU
 - [x] SceneLoader 集成：HDR 加载 + cubemap 创建（equirect→cubemap + BC6H 压缩 + finalize_texture，含 KTX2 缓存）+ alias table 构建，资源生命周期管理（destroy / 场景切换时重建）
-- [ ] Renderer 集成：env cubemap + alias table 指针填入 LaunchParams
+- [x] Renderer 集成：env cubemap + alias table 指针填入 LaunchParams
 - [ ] Miss shader 更新：`__miss__env` 用 `texCubemap<float4>` 采样环境光
 - [ ] 请求用户在 CLion 中编译验证（miss 显示 HDR 全景，命中表面仍为 ambient）
 

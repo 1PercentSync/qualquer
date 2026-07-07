@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4 — 核心 Path Tracer
-- **进度**：Phase 4 Step 4 第六小项完成：SceneLoader env map 集成已实现（HDR→cubemap+BC6H+KTX2 缓存+alias table，load_env_map/destroy_env_map，Application init+switch_scene 调用）
+- **进度**：Phase 4 Step 4 第七小项完成：Renderer 集成已实现（SceneRenderInput 新增 env 字段，LaunchParams 从 scene 读取 env 数据）
 
 ### 下一个任务
 
-Phase 4 Step 4 第七小项：Renderer 集成（env cubemap + alias table 指针填入 LaunchParams）
+Phase 4 Step 4 第八小项：Miss shader 更新（`__miss__env` 用 `texCubemap<float4>` 采样环境光）
 
 ---
 
