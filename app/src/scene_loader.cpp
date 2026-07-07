@@ -6,7 +6,7 @@
 #include <qualquer/app/scene_loader.h>
 
 #include <qualquer/app/cache.h>
-#include <qualquer/renderer/mesh.h>
+#include <qualquer/app/mesh.h>
 #include <qualquer/renderer/texture.h>
 
 #include <fastgltf/core.hpp>
@@ -317,7 +317,7 @@ namespace qualquer::app {
 
                 // Generate tangents via MikkTSpace if missing (needs normal + uv0)
                 if (!has_tangent && has_normals && has_uv0) {
-                    renderer::generate_tangents(vertices, indices);
+                    generate_tangents(vertices, indices);
                 }
 
                 optix::CudaBuffer<renderer::Vertex> vb;

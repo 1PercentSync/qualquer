@@ -2,7 +2,7 @@
 
 /**
  * @file mesh.h
- * @brief Host-side mesh utilities (renderer layer).
+ * @brief Host-side mesh utilities (app layer).
  */
 
 #include <qualquer/renderer/vertex.h>
@@ -10,7 +10,7 @@
 #include <cstdint>
 #include <span>
 
-namespace qualquer::renderer {
+namespace qualquer::app {
     /**
      * @brief Generates tangent vectors via MikkTSpace for meshes lacking them.
      *
@@ -21,6 +21,6 @@ namespace qualquer::renderer {
      * @param vertices Mutable vertex span — tangent fields are written in place.
      * @param indices  Triangle index buffer (size must be a multiple of 3).
      */
-    void generate_tangents(std::span<Vertex> vertices, std::span<const uint32_t> indices);
+    void generate_tangents(std::span<renderer::Vertex> vertices, std::span<const uint32_t> indices);
 
-} // namespace qualquer::renderer
+} // namespace qualquer::app

@@ -1,13 +1,15 @@
 /**
  * @file mesh.cpp
- * @brief MikkTSpace tangent generation (renderer layer).
+ * @brief MikkTSpace tangent generation (app layer).
  */
 
-#include <qualquer/renderer/mesh.h>
+#include <qualquer/app/mesh.h>
 
 #include <mikktspace.h>
 
-namespace qualquer::renderer {
+namespace qualquer::app {
+    using renderer::Vertex;
+
     namespace {
         // Bundles vertex and index spans for MikkTSpace callbacks (pUserData).
         struct MikkUserData {
@@ -78,4 +80,4 @@ namespace qualquer::renderer {
 
         genTangSpaceDefault(&ctx);
     }
-} // namespace qualquer::renderer
+} // namespace qualquer::app

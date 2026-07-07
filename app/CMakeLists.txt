@@ -2,6 +2,7 @@ find_package(fastgltf CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(OpenMP REQUIRED)
 find_package(xxHash CONFIG REQUIRED)
+find_package(mikktspace CONFIG REQUIRED)
 
 add_executable(qualquer_app
     src/main.cpp
@@ -11,6 +12,7 @@ add_executable(qualquer_app
     src/scene_loader.cpp
     src/cache.cpp
     src/ktx2.cpp
+    src/mesh.cpp
 )
 
 target_include_directories(qualquer_app
@@ -23,6 +25,7 @@ target_link_libraries(qualquer_app
     PRIVATE fastgltf::fastgltf
     PRIVATE nlohmann_json::nlohmann_json
     PRIVATE xxHash::xxhash
+    PRIVATE mikktspace::mikktspace
     PRIVATE OpenMP::OpenMP_CXX
 )
 
