@@ -116,9 +116,15 @@ __global__ void __raygen__rg() { // NOLINT(*-reserved-identifier)
     const float g = __uint_as_float(p1);
     const float b = __uint_as_float(p2);
 
-    const float4 old = params.accumulation_buffer_read[linear_index];
-    params.accumulation_buffer[linear_index] =
-        make_float4(old.x + r, old.y + g, old.z + b, 1.0f);
+    if (params.sample_count == 0) {
+        // First sample after reset (or init): overwrite — the read buffer
+        // holds stale data from a previous accumulation chain.
+        params.accumulation_buffer[linear_index] = make_float4(r, g, b, 1.0f);
+    } else {
+        const float4 old = params.accumulation_buffer_read[linear_index];
+        params.accumulation_buffer[linear_index] =
+            make_float4(old.x + r, old.y + g, old.z + b, 1.0f);
+    }
 }
 
 /// Samples the HDR environment cubemap along the missed ray direction.

@@ -35,13 +35,23 @@ namespace qualquer::renderer {
                 return;
             }
 
+            // sample_count == 0: the buffer holds uninitialised or stale data
+            // (init/resize/first-ever frame). Write black and return; raygen is
+            // concurrently filling the OTHER buffer with the first valid sample,
+            // which tonemap will read next frame.
+            if (sample_count == 0) {
+                const uchar4 black{0, 0, 0, 255};
+                surf2Dwrite(black,
+                            display_surface,
+                            static_cast<int>(x * sizeof(uchar4)),
+                            static_cast<int>(y),
+                            cudaBoundaryModeZero);
+                return;
+            }
+
             const float4 hdr = accumulation_buffer[y * width + x];
 
-            // Separate-Sum: divide the accumulated total by the sample count to
-            // recover the mean. sample_count == 0 (pre-first-frame or just reset)
-            // guards against div-by-zero; raygen overwrites on the first sample, so
-            // the buffer already holds a single-sample value.
-            const float inv_count = 1.0f / (sample_count == 0 ? 1.0f : static_cast<float>(sample_count));
+            const float inv_count = 1.0f / static_cast<float>(sample_count);
             const float3 mean = make_float3(hdr.x, hdr.y, hdr.z) * inv_count;
 
             const float3 ldr = apply_tonemap(mean, exposure);

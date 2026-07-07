@@ -251,12 +251,15 @@ namespace qualquer::renderer {
         uint32_t frame_counter_ = 0;
 
         /**
-         * @brief Total samples accumulated across frames (Separate-Sum divisor).
+         * @brief Per-slot sample count: accum_counts_[i] is the number of samples
+         *        whose contributions are summed in accum_buffers_[i].
          *
-         * Reset to 0 on camera or render-config change; the accumulation buffers
-         * are cleared in lockstep so the sum and count stay consistent.
+         * Paired with the buffer contents so tonemap always divides by the
+         * count that matches what it reads, even across reset boundaries.
+         * On reset only the chain_count (fed to raygen) drops to 0; the read
+         * slot's count stays valid until raygen overwrites that buffer.
          */
-        uint32_t sample_count_ = 0;
+        std::array<uint32_t, 2> accum_counts_ = {0, 0};
 
         /**
          * @brief Previous-frame inverse view matrix (accumulation-reset detection).

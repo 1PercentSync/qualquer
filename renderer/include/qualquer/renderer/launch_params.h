@@ -151,7 +151,12 @@ struct LaunchParams {
     /** @brief Samples traced per frame (raygen sample-loop iteration count). */
     uint32_t samples_per_frame;
 
-    /** @brief Total samples accumulated so far; the Separate-Sum divisor at tonemap. */
+    /**
+     * @brief Samples accumulated in the read buffer (chain count).
+     *
+     * 0 signals raygen to overwrite the write buffer directly (first sample
+     * after reset/init) instead of accumulating from the read buffer.
+     */
     uint32_t sample_count;
 
     /** @brief Exposure as a linear color multiplier applied before tonemap.

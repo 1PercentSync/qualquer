@@ -237,17 +237,18 @@ namespace qualquer::renderer {
         sbt_hit_.alloc(1);
         sbt_hit_.upload(&record, 1, cuda_context.compute_stream);
 
-        // Two accumulation buffers for ping-pong HDR accumulation, cleared so the
-        // first frame reads a defined zero background.
+        // Two accumulation buffers for ping-pong HDR accumulation. No explicit
+        // clear: accum_counts_ = {0,0} makes raygen overwrite on the first frame
+        // and tonemap output black (count == 0 guard), so uninitialised content
+        // is never read.
         const std::size_t pixel_count = static_cast<std::size_t>(width) * height;
         for (auto &buffer: accum_buffers_) {
             buffer.alloc(pixel_count);
-            buffer.clear(cuda_context.compute_stream);
         }
 
         params_buffer_.alloc(1);
         accum_index_ = 0;
-        sample_count_ = 0;
+        accum_counts_ = {0, 0};
 
         // Events start recorded on compute_stream so the first frame's waits
         // (on slot 1, the "previous" slot) pass immediately — the stream ordering
@@ -275,12 +276,11 @@ namespace qualquer::renderer {
         const std::size_t pixel_count = static_cast<std::size_t>(width) * height;
         for (auto &buffer: accum_buffers_) {
             buffer.resize(pixel_count);
-            buffer.clear(cuda_context.compute_stream);
         }
         accum_index_ = 0;
-        // A size change invalidates prior accumulation: sample_count_ must match
-        // the cleared buffers. frame_counter_ is intentionally not reset.
-        sample_count_ = 0;
+        // Counts reset to 0: raygen will overwrite (ignoring uninitialised
+        // buffer content) and tonemap will output black until valid data arrives.
+        accum_counts_ = {0, 0};
 
         // Re-record events so the next frame's display_stream wait covers the
         // clears above. Without this, the wait would see the stale event from
@@ -385,25 +385,22 @@ namespace qualquer::renderer {
 
         // Accumulation reset on camera change: exact byte-compare of the inverse
         // view/projection against the previous frame. Any change (camera move,
-        // fov/aspect/near/far) invalidates prior accumulation — sample_count_
-        // is zeroed and both ping-pong buffers are cleared on compute_stream
-        // before this frame's raygen runs. Render-config changes (max_bounces,
-        // exposure, ...) are not tracked here yet; they arrive through a separate
-        // input channel in a later step.
+        // fov/aspect/near/far) breaks the chain — chain_count drops to 0 so
+        // raygen overwrites instead of accumulating. No buffer clearing: the
+        // read slot keeps its valid count for tonemap; the write slot's count
+        // is set at frame end.
         const bool camera_changed =
             scene.camera.inv_view != prev_inv_view_ ||
             scene.camera.inv_projection != prev_inv_projection_;
-        if (camera_changed) {
-            sample_count_ = 0;
-            accum_buffers_[0].clear(cuda_context.compute_stream);
-            accum_buffers_[1].clear(cuda_context.compute_stream);
-        }
+        const uint32_t chain_count = camera_changed ? 0 : accum_counts_[accum_index_];
         prev_inv_view_ = scene.camera.inv_view;
         prev_inv_projection_ = scene.camera.inv_projection;
 
         const LaunchParams params{
             // Separate-Sum: raygen reads the previous total and writes the new
-            // total to the opposite ping-pong slot.
+            // total to the opposite ping-pong slot. When chain_count == 0
+            // (reset or first frame), raygen overwrites the write buffer
+            // directly without reading from the read buffer.
             .accumulation_buffer = accum_buffers_[1 - accum_index_].data(),
             .accumulation_buffer_read = accum_buffers_[accum_index_].data(),
             .width = width,
@@ -415,12 +412,9 @@ namespace qualquer::renderer {
             .texture_objects = scene.texture_objects.data(),
             .inv_view = to_float4x4(scene.camera.inv_view),
             .inv_projection = to_float4x4(scene.camera.inv_projection),
-            // PT state: sample_count_ is Renderer state advanced per frame;
-            // exposure defaults to 1.0 (0 EV). The rest are config defaults
-            // (separate input channel arrives in a later step).
             .max_bounces = 0,
             .samples_per_frame = 1,
-            .sample_count = sample_count_,
+            .sample_count = chain_count,
             .exposure = 1.0f,
             // Env light resources (from SceneLoader via SceneRenderInput).
             .env_cubemap = scene.env_cubemap,
@@ -478,10 +472,13 @@ namespace qualquer::renderer {
         // that this frame's tonemap is about to read.
         CUDA_CHECK(cudaStreamWaitEvent(cuda_context.display_stream, event_raygen_done_[prev_slot]));
 
+        // Tonemap divides by the count that matches the buffer it reads.
+        // accum_counts_[accum_index_] is the true sample count in that buffer;
+        // it was set at the END of the frame that last wrote it.
         launch_tonemap(accum_buffers_[accum_index_].data(),
                        cuda_context.display_surface,
                        width, height,
-                       sample_count_,
+                       accum_counts_[accum_index_],
                        1.0f,
                        cuda_context.display_stream);
 
@@ -494,9 +491,10 @@ namespace qualquer::renderer {
         constexpr cudaExternalSemaphoreSignalParams signal_params{};
         CUDA_CHECK(cudaSignalExternalSemaphoresAsync(&sem, &signal_params, 1, cuda_context.display_stream));
 
+        // The write slot now holds chain_count + 1 samples (raygen added one).
+        accum_counts_[1 - accum_index_] = chain_count + 1;
         accum_index_ = 1 - accum_index_;
         ++frame_counter_;
-        sample_count_ += 1;
     }
 
     void Renderer::record_vulkan(const RenderInput &input) {
