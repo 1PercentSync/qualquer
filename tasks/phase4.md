@@ -39,7 +39,7 @@
 - [x] 层归属重构：资产预处理（图片解码、stb_impl、BC 压缩、mip 生成、tangent 生成、cache、ktx2）renderer→app；CUDA 资源创建（finalize_texture、create_default_textures、共享类型）renderer→optix；ImGuiBackend renderer→vulkan；CMake 依赖迁移
 - [x] Equirect → cubemap 转换：CUDA kernel 实现 equirect 到 6-face cubemap 转换
 - [x] Env alias table 构建：全分辨率 luminance × sin(theta) 权重 + Vose's algorithm O(N) 构建 EnvAliasEntry 数组上传 GPU
-- [ ] SceneLoader 集成：HDR 加载 + cubemap 创建（equirect→cubemap + BC6H 压缩 + finalize_texture，含 KTX2 缓存）+ alias table 构建，资源生命周期管理（destroy / 场景切换时重建）
+- [x] SceneLoader 集成：HDR 加载 + cubemap 创建（equirect→cubemap + BC6H 压缩 + finalize_texture，含 KTX2 缓存）+ alias table 构建，资源生命周期管理（destroy / 场景切换时重建）
 - [ ] Renderer 集成：env cubemap + alias table 指针填入 LaunchParams
 - [ ] Miss shader 更新：`__miss__env` 用 `texCubemap<float4>` 采样环境光
 - [ ] 请求用户在 CLion 中编译验证（miss 显示 HDR 全景，命中表面仍为 ambient）
