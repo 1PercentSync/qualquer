@@ -15,6 +15,7 @@ add_executable(qualquer_app
     src/ktx2.cpp
     src/mesh.cpp
     src/stb_impl.cpp
+    src/texture.cpp
 )
 
 target_include_directories(qualquer_app
@@ -29,6 +30,8 @@ target_link_libraries(qualquer_app
     PRIVATE nlohmann_json::nlohmann_json
     PRIVATE xxHash::xxhash
     PRIVATE mikktspace::mikktspace
+    PRIVATE bc7enc
+    PRIVATE ispc_texcomp
     PRIVATE OpenMP::OpenMP_CXX
 )
 

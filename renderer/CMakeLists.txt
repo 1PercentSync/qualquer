@@ -1,5 +1,4 @@
 find_package(OptiX REQUIRED)
-find_package(Stb REQUIRED)
 
 include(CompileOptiXIR)
 
@@ -9,20 +8,16 @@ target_sources(qualquer_renderer PRIVATE
     src/debug_ui.cpp
     src/renderer.cpp
     src/camera.cpp
-    src/texture.cpp
     src/tonemap.cu
 )
 
 target_include_directories(qualquer_renderer
     PUBLIC include
-    PRIVATE ${Stb_INCLUDE_DIR}
 )
 
 target_link_libraries(qualquer_renderer
     PUBLIC qualquer_vulkan
     PRIVATE qualquer_optix
-    PRIVATE bc7enc
-    PRIVATE ispc_texcomp
 )
 
 # Expose device programs to CLion's code model (inherits target include paths)
