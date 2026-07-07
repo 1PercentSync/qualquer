@@ -19,6 +19,9 @@ namespace qualquer::app {
     struct AppConfig {
         /** @brief Absolute path to the scene file (.gltf / .glb). */
         std::string scene_path;
+
+        /** @brief Absolute path to the HDR environment map (.hdr). */
+        std::string env_map_path;
     };
 
     /**

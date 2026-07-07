@@ -51,8 +51,13 @@ namespace qualquer::app {
             }
 
             if (const auto json = nlohmann::json::parse(file);
-                json.contains("scene_path") && json["scene_path"].is_string()) {
-                config.scene_path = json["scene_path"].get<std::string>();
+                json.is_object()) {
+                if (json.contains("scene_path") && json["scene_path"].is_string()) {
+                    config.scene_path = json["scene_path"].get<std::string>();
+                }
+                if (json.contains("env_map_path") && json["env_map_path"].is_string()) {
+                    config.env_map_path = json["env_map_path"].get<std::string>();
+                }
             }
             spdlog::info("Loaded config from {}", path.string());
         } catch (const std::exception &e) {
@@ -78,6 +83,7 @@ namespace qualquer::app {
 
                 nlohmann::json j;
                 j["scene_path"] = config.scene_path;
+                j["env_map_path"] = config.env_map_path;
                 file << j.dump(2);
             }
 
