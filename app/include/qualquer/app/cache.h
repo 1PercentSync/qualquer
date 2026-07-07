@@ -5,7 +5,6 @@
  * @brief Shared cache infrastructure: directory, content hashing, and path management.
  */
 
-#include <cstddef>
 #include <filesystem>
 #include <string>
 #include <string_view>

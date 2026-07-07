@@ -6,7 +6,6 @@
  */
 
 #include <cstdint>
-#include <memory>
 #include <vector>
 
 #include <cuda_runtime.h>

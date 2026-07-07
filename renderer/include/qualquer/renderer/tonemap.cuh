@@ -6,7 +6,6 @@
  */
 
 #include <cuda_runtime.h>
-#include <cmath> // IDE resolver needs explicit fminf/fmaxf decl; nvcc maps to device intrinsics regardless
 
 #include <qualquer/renderer/math_utils.cuh>
 

@@ -16,6 +16,7 @@ add_executable(qualquer_app
     src/mesh.cpp
     src/stb_impl.cpp
     src/texture.cpp
+    src/equirect_to_cubemap.cu
 )
 
 target_include_directories(qualquer_app

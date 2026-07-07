@@ -6,7 +6,6 @@
  */
 
 #include <cuda_runtime.h>
-#include <optix.h>
 #include <vulkan/vulkan.h>
 
 #include <array>

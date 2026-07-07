@@ -11,7 +11,6 @@
 #include <vector>
 #include <vulkan/vulkan.h>
 #include <vk_mem_alloc.h>
-#include <spdlog/spdlog.h>
 
 /**
  * @brief Checks a VkResult and aborts on failure with diagnostic output.

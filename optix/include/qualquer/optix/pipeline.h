@@ -5,7 +5,6 @@
  * @brief OptiX layer: ray tracing pipeline.
  */
 
-#include <cstddef>
 #include <string>
 
 #include <optix.h>

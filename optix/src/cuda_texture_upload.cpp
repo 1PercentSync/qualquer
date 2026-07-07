@@ -20,14 +20,13 @@ namespace qualquer::optix {
                 case TextureFormat::BC6H_UFLOAT:
                     return cudaCreateChannelDesc(16, 16, 16, 0,
                                                  cudaChannelFormatKindUnsignedBlockCompressed6H);
-                case TextureFormat::BC7_UNORM:
-                    return cudaCreateChannelDesc(8, 8, 8, 8,
-                                                 cudaChannelFormatKindUnsignedBlockCompressed7);
                 case TextureFormat::BC7_SRGB:
-                    // Allocate as plain BC7; sRGB→linear conversion is requested
-                    // via cudaTextureDesc::sRGB at texture object creation.
+                    // sRGB→linear conversion is requested via cudaTextureDesc::sRGB
+                    // at texture object creation, not through the channel format.
                     // cudaChannelFormatKindUnsignedBlockCompressed7SRGB is broken
                     // in CUDA 13.x (rejects all readMode combinations).
+                    [[fallthrough]];
+                case TextureFormat::BC7_UNORM:
                     return cudaCreateChannelDesc(8, 8, 8, 8,
                                                  cudaChannelFormatKindUnsignedBlockCompressed7);
             }
@@ -41,6 +40,7 @@ namespace qualquer::optix {
 
         /// Creates a 1×1 fp16×4 CUDA texture with the given solid color.
         CudaTexture create_solid_texture(
+            // ReSharper disable once CppDFAConstantParameter
             const float r, const float g, const float b, const float a) {
             const auto channel_desc = cudaCreateChannelDesc(
                 16, 16, 16, 16, cudaChannelFormatKindFloat);

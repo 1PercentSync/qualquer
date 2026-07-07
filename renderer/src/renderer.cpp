@@ -7,7 +7,6 @@
 
 #include <algorithm>
 #include <cstdint>
-#include <cstring>
 #include <vector>
 
 #include <glm/glm.hpp>
@@ -392,8 +391,8 @@ namespace qualquer::renderer {
         // exposure, ...) are not tracked here yet; they arrive through a separate
         // input channel in a later step.
         const bool camera_changed =
-            std::memcmp(&scene.camera.inv_view, &prev_inv_view_, sizeof(glm::mat4)) != 0 ||
-            std::memcmp(&scene.camera.inv_projection, &prev_inv_projection_, sizeof(glm::mat4)) != 0;
+            scene.camera.inv_view != prev_inv_view_ ||
+            scene.camera.inv_projection != prev_inv_projection_;
         if (camera_changed) {
             sample_count_ = 0;
             accum_buffers_[0].clear(cuda_context.compute_stream);
