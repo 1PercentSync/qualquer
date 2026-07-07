@@ -30,7 +30,7 @@
 - [x] 创建 `brdf.cuh`：GGX NDF（D）、Smith height-correlated G2、Fresnel Schlick（标准形式 F90=1 单函数，不暴露 F90 参数重载，理由见 D28b）、EON diffuse（single-scatter FON + multi-scatter 补偿 lobe + CLTC 采样）、metallic/dielectric lobe weighting、VNDF 采样（GGX visible normal）、combined multi-lobe PDF
 - [x] 多散射能量补偿：E_ss 有理多项式求值函数（Sforza 19 系数，specular 补偿）+ E_glossy 有理多项式求值函数（Sforza 39 系数，diffuse 耦合权重）+ Turquin 补偿系数计算（`1 + F0 * (1 - E_ss) / E_ss`），集成到 specular throughput_update 和 BRDF eval；diffuse 权重 = `1 - E_glossy(NdotV, roughness, F0)`
 - [x] BRDF eval + sample 接口：build_orthonormal_basis、specular_probability、BrdfParams 结构体 + init_brdf_params 构造入口（集中 E_glossy/Turquin 逐通道补偿与 diffuse_weight 双重衰减）、brdf_eval（specular+diffuse BRDF 值，Step 7 NEE 用）、brdf_sample（specular VNDF / diffuse CLTC + throughput_update + combined PDF，Step 5 closesthit 用）
-- [ ] 请求用户在 CLion 中编译验证（函数编译通过，Step 5 集成到 closesthit）
+- [x] 请求用户在 CLion 中编译验证（函数编译通过，Step 5 集成到 closesthit）
 
 ## Step 4：环境光
 

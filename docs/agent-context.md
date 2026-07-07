@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4 — 核心 Path Tracer
-- **进度**：Phase 4 Step 3 第3小项完成：BRDF eval + sample 接口已实现（build_orthonormal_basis、specular_probability、BrdfParams/BrdfSample 结构体、init_brdf_params 构造入口集中逐通道 Turquin/E_glossy 补偿、brdf_eval、brdf_sample，含 TBN helper）
+- **进度**：Phase 4 Step 3 完成（BRDF 函数全集：GGX specular + EON diffuse + 多散射能量补偿 Turquin/E_glossy + eval/sample 接口，编译验证通过）
 
 ### 下一个任务
 
-Phase 4 Step 3 第4小项：请求用户在 CLion 中编译验证（函数编译通过，Step 5 集成到 closesthit）
+Phase 4 Step 4 第一小项：AppConfig 新增 `env_map_path` 字段（HDR 环境贴图路径）
 
 ---
 
