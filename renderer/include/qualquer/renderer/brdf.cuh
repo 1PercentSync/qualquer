@@ -510,4 +510,283 @@ __forceinline__ __device__ float combined_lobe_pdf(const float pdf_spec,
     return p_spec * pdf_spec + (1.0f - p_spec) * pdf_diff;
 }
 
+// ---- Tangent-space transforms (TBN basis) ----------------------------------
+
+/**
+ * @brief Transforms a world-space vector into tangent space (z = N).
+ *
+ * @param T Tangent axis (world, unit, from build_orthonormal_basis).
+ * @param B Bitangent axis (world, unit).
+ * @param N Normal axis (world, unit).
+ * @param v World-space vector.
+ * @return Tangent-space vector with z = dot(N, v).
+ */
+__forceinline__ __device__ float3 world_to_tangent(const float3 T, const float3 B,
+                                                   const float3 N, const float3 v) {
+    return make_float3(dot(T, v), dot(B, v), dot(N, v));
+}
+
+/**
+ * @brief Transforms a tangent-space vector back to world space.
+ *
+ * @param T Tangent axis (world, unit).
+ * @param B Bitangent axis (world, unit).
+ * @param N Normal axis (world, unit).
+ * @param v Tangent-space vector (z = normal component).
+ * @return World-space vector.
+ */
+__forceinline__ __device__ float3 tangent_to_world(const float3 T, const float3 B,
+                                                   const float3 N, const float3 v) {
+    return T * v.x + B * v.y + N * v.z;
+}
+
+// ---- Orthonormal basis ------------------------------------------------------
+
+/**
+ * @brief Builds an orthonormal basis (T, B) from a unit normal.
+ *
+ * Crosses N with +Z, or +X when N is nearly parallel to +Z, to avoid
+ * degenerate cross products. Ported from Himalaya pt_common.glsl.
+ *
+ * @param N Unit normal (world space, must be normalized).
+ * @param T [out] Tangent axis perpendicular to N.
+ * @param B [out] Bitangent axis perpendicular to N and T.
+ */
+__forceinline__ __device__ void build_orthonormal_basis(const float3 N,
+                                                        float3 &T, float3 &B) {
+    if (fabsf(N.z) < 0.999f) {
+        T = normalize(cross(make_float3(0.0f, 0.0f, 1.0f), N));
+    } else {
+        T = normalize(cross(make_float3(1.0f, 0.0f, 0.0f), N));
+    }
+    B = cross(N, T);
+}
+
+// ---- Multi-lobe BRDF selection ----------------------------------------------
+
+/**
+ * @brief Probability of selecting the specular lobe over diffuse.
+ *
+ * Fresnel reflectance luminance at the view angle, clamped to [0.01, 0.99]
+ * to avoid division by a zero selection probability. Ported from Himalaya
+ * pt_common.glsl.
+ *
+ * @param NdotV Clamped dot(N, V), must be > 0.
+ * @param F0    Normal-incidence reflectance (RGB).
+ * @return Specular lobe selection probability in [0.01, 0.99].
+ */
+__forceinline__ __device__ float specular_probability(const float NdotV,
+                                                      const float3 F0) {
+    const float3 F = F_Schlick(NdotV, F0);
+    const float spec_weight = F.x * 0.2126f + F.y * 0.7152f + F.z * 0.0722f;
+    return fmaxf(fminf(spec_weight, 0.99f), 0.01f);
+}
+
+// ---- BRDF parameter bundle --------------------------------------------------
+
+/**
+ * @brief Per-shading-point BRDF parameters, computed once and shared by
+ *        brdf_eval and brdf_sample.
+ *
+ * Packs geometry (V/N/T/B), material (F0, diffuse_rho, alpha, r), and
+ * precomputed energy compensation (turquin_comp, diffuse_weight, p_spec) so
+ * the closesthit shader constructs one instance via init_brdf_params and
+ * passes it to both the bounce sampler and the NEE evaluators.
+ */
+struct BrdfParams {
+    float3 V;              ///< View direction (world, normalized, facing surface).
+    float3 N;              ///< Shading normal (world, normalized).
+    float3 T;              ///< Tangent axis (world, from build_orthonormal_basis).
+    float3 B;              ///< Bitangent axis (world, from build_orthonormal_basis).
+    float3 F0;             ///< lerp(0.04, base_color, metallic); RGB.
+    float3 base_color;     ///< Linear RGB base color (EON single-scatter albedo input).
+    float3 turquin_comp;   ///< Per-channel specular compensation multiplier (RGB).
+    float3 diffuse_weight; ///< (1-metallic) * (1 - E_glossy_per_channel); RGB.
+    float  alpha;          ///< roughness^2 (specular primitives); caller clamps >= 1e-4.
+    float  r;              ///< Linear roughness in [0,1] (EON / E_ss / E_glossy).
+    float  NdotV;          ///< Clamped dot(N, V), must be > 0.
+    float  p_spec;         ///< Specular lobe selection probability.
+};
+
+/**
+ * @brief Result of brdf_sample: sampled direction, throughput update, and
+ *        combined multi-lobe PDF.
+ *
+ * A pdf_combined of 0 signals an invalid sample (specular lobe reflected
+ * below the surface); the caller terminates the path in that case.
+ */
+struct BrdfSample {
+    float3 next_dir;          ///< Sampled direction (world, normalized).
+    float3 throughput_update; ///< BRDF * cos / (pdf * lobe_prob).
+    float  pdf_combined;      ///< Combined multi-lobe PDF (0 = invalid sample).
+};
+
+/**
+ * @brief Constructs a BrdfParams from raw shading-point inputs.
+ *
+ * Centralizes the per-channel energy compensation so closesthit stays free
+ * of compensation bookkeeping:
+ *   - turquin_comp: 3 channels of turquin_compensation sharing one scalar
+ *     E_ss (E_ss is F0-independent, computed once).
+ *   - diffuse_weight: (1-metallic) * (1 - E_glossy_per_channel), where
+ *     E_glossy uses the mixed specular F0 = lerp(0.04, base_color, metallic)
+ *     per channel. Pure metals (metallic=1) have no diffuse, so E_glossy is
+ *     skipped and diffuse_weight = 0.
+ *
+ * @param V          View direction (world, normalized, facing surface).
+ * @param N          Shading normal (world, normalized).
+ * @param T_basis    Tangent axis (world, from build_orthonormal_basis).
+ * @param B_basis    Bitangent axis (world).
+ * @param base_color Linear RGB base color.
+ * @param metallic   Metallic factor in [0,1].
+ * @param roughness  Linear roughness in [0,1] (glTF value, caller clamps >= 0.04).
+ * @param alpha      roughness^2, caller-clamped >= 1e-4 (NaN guard at alpha=0).
+ */
+__forceinline__ __device__ BrdfParams init_brdf_params(
+        const float3 V, const float3 N,
+        const float3 T_basis, const float3 B_basis,
+        const float3 base_color, const float metallic,
+        const float roughness, const float alpha) {
+    BrdfParams p{};
+    p.V = V;
+    p.N = N;
+    p.T = T_basis;
+    p.B = B_basis;
+    p.F0 = compute_F0(base_color, metallic);
+    p.base_color = base_color;
+    p.alpha = alpha;
+    p.r = roughness;
+    p.NdotV = fmaxf(dot(N, V), 1e-4f);
+
+    const float E_ss_val = fmaxf(fminf(E_ss(roughness, p.NdotV), 1.0f), kEpsilon);
+    p.turquin_comp = make_float3(
+        turquin_compensation(p.F0.x, E_ss_val),
+        turquin_compensation(p.F0.y, E_ss_val),
+        turquin_compensation(p.F0.z, E_ss_val));
+
+    if (metallic < 1.0f) {
+        const float3 one = make_float3(1.0f, 1.0f, 1.0f);
+        const float3 E_glossy_rgb = make_float3(
+            E_glossy(p.F0.x, roughness, p.NdotV),
+            E_glossy(p.F0.y, roughness, p.NdotV),
+            E_glossy(p.F0.z, roughness, p.NdotV));
+        p.diffuse_weight = (1.0f - metallic) * (one - E_glossy_rgb);
+    } else {
+        p.diffuse_weight = make_float3(0.0f, 0.0f, 0.0f);
+    }
+
+    p.p_spec = specular_probability(p.NdotV, p.F0);
+    return p;
+}
+
+// ---- BRDF eval (NEE) --------------------------------------------------------
+
+/**
+ * @brief Evaluates the full BRDF (specular + diffuse) at a fixed light
+ *        direction, for next-event estimation.
+ *
+ * Specular = D * V * F * turquin_comp (Turquin compensation included).
+ * Diffuse = diffuse_weight * f_EON (EON already includes 1/pi and its own
+ * multi-scatter compensation; diffuse_weight carries (1-metallic) and
+ * (1 - E_glossy) coupling).
+ *
+ * @param params BRDF parameter bundle (from init_brdf_params).
+ * @param L      Light direction (world, normalized, facing surface).
+ * @param NdotL  dot(N, L), must be > 0 (caller culls back-facing).
+ * @return BRDF value (RGB).
+ */
+__forceinline__ __device__ float3 brdf_eval(const BrdfParams &params,
+                                            const float3 L, const float NdotL) {
+    const float3 V_ts = world_to_tangent(params.T, params.B, params.N, params.V);
+    const float3 L_ts = world_to_tangent(params.T, params.B, params.N, L);
+
+    const float3 H_ts = normalize(V_ts + L_ts);
+    const float NdotH = fmaxf(H_ts.z, 0.0f);
+    const float VdotH = fmaxf(dot(V_ts, H_ts), 0.0f);
+
+    const float D   = D_GGX(NdotH, params.alpha);
+    const float Vis = V_SmithGGXCorrelated(params.NdotV, NdotL, params.alpha);
+    const float3 F  = F_Schlick(VdotH, params.F0);
+    const float3 spec = F * params.turquin_comp * (D * Vis);
+
+    const float3 diff = params.diffuse_weight
+        * f_EON(params.base_color, params.r, L_ts, V_ts);
+
+    return spec + diff;
+}
+
+// ---- BRDF sample (bounce) ---------------------------------------------------
+
+/**
+ * @brief Samples the combined BRDF for the next bounce direction.
+ *
+ * Selects the specular lobe (GGX VNDF) with probability p_spec, otherwise
+ * the diffuse lobe (EON CLTC). Returns the throughput update
+ * (BRDF * cos / (pdf * lobe_prob)) and the combined multi-lobe PDF for MIS.
+ *
+ * A pdf_combined of 0 signals an invalid sample (specular lobe reflected
+ * below the surface); the caller terminates the path.
+ *
+ * @param params BRDF parameter bundle (from init_brdf_params).
+ * @param u_lobe Uniform random in [0,1) for lobe selection.
+ * @param u0     Uniform random in [0,1) for direction sampling.
+ * @param u1     Uniform random in [0,1) for direction sampling.
+ * @return BrdfSample with next_dir, throughput_update, pdf_combined.
+ */
+__forceinline__ __device__ BrdfSample brdf_sample(const BrdfParams &params,
+                                                  const float u_lobe,
+                                                  const float u0, const float u1) {
+    BrdfSample result{};
+    const float3 V_ts = world_to_tangent(params.T, params.B, params.N, params.V);
+
+    if (u_lobe < params.p_spec) {
+        // Specular lobe: GGX VNDF
+        const float3 H_ts = sample_ggx_vndf(V_ts, params.alpha, make_float2(u0, u1));
+        const float3 L_ts = reflect(-V_ts, H_ts);
+
+        if (L_ts.z <= 0.0f) {
+            result.next_dir = params.N;
+            result.throughput_update = make_float3(0.0f, 0.0f, 0.0f);
+            result.pdf_combined = 0.0f;
+            return result;
+        }
+
+        const float NdotL = L_ts.z;
+        const float NdotH = fmaxf(H_ts.z, 0.0f);
+        const float VdotH = fmaxf(dot(V_ts, H_ts), 0.0f);
+
+        const float D   = D_GGX(NdotH, params.alpha);
+        const float Vis = V_SmithGGXCorrelated(params.NdotV, NdotL, params.alpha);
+        const float3 F  = F_Schlick(VdotH, params.F0);
+        const float pdf_spec = pdf_ggx_vndf(NdotH, params.NdotV, params.alpha);
+
+        const float3 spec_brdf = F * params.turquin_comp * (D * Vis);
+        result.throughput_update = spec_brdf * NdotL
+            / fmaxf(pdf_spec * params.p_spec, kEpsilon);
+
+        const float pdf_diff = pdf_EON(V_ts, L_ts, params.r);
+        result.pdf_combined = combined_lobe_pdf(pdf_spec, pdf_diff, params.p_spec);
+        result.next_dir = tangent_to_world(params.T, params.B, params.N, L_ts);
+    } else {
+        // Diffuse lobe: EON CLTC
+        const float4 wi_c = sample_EON(V_ts, params.r, u0, u1);
+        const float3 L_ts = make_float3(wi_c.x, wi_c.y, wi_c.z);
+        const float pdf_diff = wi_c.w;
+        const float NdotL = fmaxf(L_ts.z, 1e-4f);
+
+        const float3 diff_brdf = params.diffuse_weight
+            * f_EON(params.base_color, params.r, L_ts, V_ts);
+        result.throughput_update = diff_brdf * NdotL
+            / fmaxf(pdf_diff * (1.0f - params.p_spec), kEpsilon);
+
+        const float3 H_ts = normalize(V_ts + L_ts);
+        const float NdotH = fmaxf(H_ts.z, 0.0f);
+        const float pdf_spec = pdf_ggx_vndf(NdotH, params.NdotV, params.alpha);
+        result.pdf_combined = combined_lobe_pdf(pdf_spec, pdf_diff, params.p_spec);
+        result.next_dir = tangent_to_world(params.T, params.B, params.N, L_ts);
+    }
+
+    return result;
+}
+
 } // namespace qualquer::renderer
