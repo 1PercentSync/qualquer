@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4 — 核心 Path Tracer
-- **进度**：Phase 4 Step 3 完成（BRDF 函数全集：GGX specular + EON diffuse + 多散射能量补偿 Turquin/E_glossy + eval/sample 接口，编译验证通过）
+- **进度**：Phase 4 Step 4 第一小项完成：AppConfig 新增 `env_map_path` 字段，config.cpp 序列化/反序列化已更新
 
 ### 下一个任务
 
-Phase 4 Step 4 第一小项：AppConfig 新增 `env_map_path` 字段（HDR 环境贴图路径）
+Phase 4 Step 4 第二小项：HDR equirect 加载（stb_image 加载 .hdr）
 
 ---
 
