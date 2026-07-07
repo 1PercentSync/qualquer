@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4 — 核心 Path Tracer
-- **进度**：Phase 4 Step 4 第二小项完成：HdrImageData + load_hdr_image() 已实现（stbi_loadf RGB f32，RAII 持有）
+- **进度**：Phase 4 Step 4 第三小项完成：层归属重构（cache/ktx2/mesh/stb_impl/texture 预处理→app，finalize_texture/create_default_textures→optix，ImGuiBackend→vulkan，CMake 依赖迁移）
 
 ### 下一个任务
 
-Phase 4 Step 4 第三小项：纹理管线层归属重构（资产预处理 renderer→app，CUDA 资源创建 renderer→optix，详见 current-phase.md）
+Phase 4 Step 4 第四小项：Equirect → cubemap 转换（CUDA kernel 实现 equirect 到 6-face cubemap 转换）
 
 ---
 
