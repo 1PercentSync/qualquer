@@ -88,7 +88,9 @@ __forceinline__ __device__ float V_SmithGGXCorrelated(const float NdotV,
  */
 __forceinline__ __device__ float3 F_Schlick(const float VdotH,
                                             const float3 F0) {
-    const float f = __powf(1.0f - VdotH, 5.0f);
+    const float x  = 1.0f - VdotH;
+    const float x2 = x * x;
+    const float f  = x2 * x2 * x;
     return F0 + (make_float3(1.0f, 1.0f, 1.0f) - F0) * f;
 }
 
@@ -115,8 +117,10 @@ __forceinline__ __device__ float3 sample_ggx_vndf(const float3 Ve,
 
     const float r    = sqrtf(xi.x);
     const float phi  = kTwoPi * xi.y;
-    const float t1   = r * cosf(phi);
-    float       t2   = r * sinf(phi);
+    float sin_phi, cos_phi;
+    sincosf(phi, &sin_phi, &cos_phi);
+    const float t1   = r * cos_phi;
+    float       t2   = r * sin_phi;
     const float s    = 0.5f * (1.0f + Vh.z);
     t2 = lerp(sqrtf(fmaxf(0.0f, 1.0f - t1 * t1)), t2, s);
 
@@ -142,6 +146,55 @@ __forceinline__ __device__ float pdf_ggx_vndf(const float NdotH,
     const float a2 = alpha * alpha;
     const float G1 = 2.0f * NdotV / (NdotV + sqrtf(a2 + (1.0f - a2) * NdotV * NdotV));
     return (D * G1) / (4.0f * NdotV);
+}
+
+// ---- Specular: VNDF fused weight + PDF --------------------------------------
+//
+// For VNDF importance sampling, the analytic throughput weight simplifies:
+//   BRDF * cos / PDF = D·V·F·NdotL / (D·G1/(4·NdotV)) = F · G2/G1
+// The NDF (D) cancels between numerator and denominator. This fused function
+// computes the G2/G1 ratio and the VNDF PDF together, sharing sqrt_v and a2.
+// Avoids: 1× redundant D_GGX, 1× redundant sqrtf (sqrt_v shared with G1).
+// Bonus: G2/G1 ∈ [0,1] is naturally bounded; the old D·V·NdotL/PDF path has
+// unbounded intermediates when D → ∞ at low alpha.
+
+/**
+ * @brief Fused VNDF importance sampling weight (G2/G1) and solid-angle PDF.
+ *
+ * The throughput update for specular VNDF is F * turquin_comp * weight / p_spec.
+ */
+struct VndfWeightAndPdf {
+    float weight; ///< G2/G1 (D cancels analytically in the importance sampling weight).
+    float pdf;    ///< Solid-angle VNDF PDF: D * G1 / (4 * NdotV).
+};
+
+/**
+ * @brief Computes both the G2/G1 weight and VNDF PDF, sharing intermediates.
+ *
+ * @param NdotH dot(N, H), must be >= 0 (needed for PDF only).
+ * @param NdotV dot(N, V), must be > 0.
+ * @param NdotL dot(N, L), must be > 0.
+ * @param alpha roughness^2; caller clamps >= 1e-4.
+ */
+__forceinline__ __device__ VndfWeightAndPdf vndf_weight_and_pdf(
+        const float NdotH, const float NdotV, const float NdotL, const float alpha) {
+    const float a2 = alpha * alpha;
+    const float one_minus_a2 = 1.0f - a2;
+
+    // Smith G1 masking sqrt — shared between weight (G2/G1) and PDF (D*G1/(4*NdotV)).
+    const float sqrt_v = sqrtf(NdotV * NdotV * one_minus_a2 + a2);
+    const float sqrt_l = sqrtf(NdotL * NdotL * one_minus_a2 + a2);
+
+    // G2/G1 for height-correlated Smith GGX (Heitz 2014).
+    const float weight = NdotL * (NdotV + sqrt_v)
+        / fmaxf(NdotL * sqrt_v + NdotV * sqrt_l, kEpsilon);
+
+    // VNDF PDF = D * G1 / (4 * NdotV), reusing sqrt_v for G1.
+    const float D  = D_GGX(NdotH, alpha);
+    const float G1 = 2.0f * NdotV / (NdotV + sqrt_v);
+    const float pdf = (D * G1) / (4.0f * NdotV);
+
+    return {weight, pdf};
 }
 
 // ---- Diffuse: EON (Energy-Preserving Oren-Nayar) ----------------------------
@@ -283,8 +336,10 @@ __forceinline__ __device__ float4 cltc_sample(const float3 wo_local,
 
     const float R     = sqrtf(u1);
     const float phi   = kTwoPi * u2;
-    const float x_disk = R * cosf(phi);
-    const float y     = R * sinf(phi);
+    float sin_phi, cos_phi;
+    sincosf(phi, &sin_phi, &cos_phi);
+    const float x_disk = R * cos_phi;
+    const float y     = R * sin_phi;
     const float vz    = 1.0f / sqrtf(d * d + 1.0f);
     const float s     = 0.5f * (1.0f + vz);
     const float x     = -lerp(sqrtf(fmaxf(0.0f, 1.0f - y * y)), x_disk, s);
@@ -341,7 +396,9 @@ __forceinline__ __device__ float cltc_pdf(const float3 wo_local,
 __forceinline__ __device__ float3 uniform_lobe_sample(const float u1, const float u2) {
     const float sin_theta = sqrtf(fmaxf(0.0f, 1.0f - u1 * u1));
     const float phi = kTwoPi * u2;
-    return make_float3(sin_theta * cosf(phi), sin_theta * sinf(phi), u1);
+    float sin_phi, cos_phi;
+    sincosf(phi, &sin_phi, &cos_phi);
+    return make_float3(sin_theta * cos_phi, sin_theta * sin_phi, u1);
 }
 
 /**
@@ -755,17 +812,15 @@ __forceinline__ __device__ BrdfSample brdf_sample(const BrdfParams &params,
         const float NdotH = fmaxf(H_ts.z, 0.0f);
         const float VdotH = fmaxf(dot(V_ts, H_ts), 0.0f);
 
-        const float D   = D_GGX(NdotH, params.alpha);
-        const float Vis = V_SmithGGXCorrelated(params.NdotV, NdotL, params.alpha);
-        const float3 F  = F_Schlick(VdotH, params.F0);
-        const float pdf_spec = pdf_ggx_vndf(NdotH, params.NdotV, params.alpha);
-
-        const float3 spec_brdf = F * params.turquin_comp * (D * Vis);
-        result.throughput_update = spec_brdf * NdotL
-            / fmaxf(pdf_spec * params.p_spec, kEpsilon);
+        // D cancels in BRDF*cos/PDF → throughput = F * turquin * G2/G1 / p_spec.
+        const float3 F = F_Schlick(VdotH, params.F0);
+        const VndfWeightAndPdf wp = vndf_weight_and_pdf(
+            NdotH, params.NdotV, NdotL, params.alpha);
+        result.throughput_update = F * params.turquin_comp
+            * (wp.weight / params.p_spec);
 
         const float pdf_diff = pdf_EON(V_ts, L_ts, params.r);
-        result.pdf_combined = combined_lobe_pdf(pdf_spec, pdf_diff, params.p_spec);
+        result.pdf_combined = combined_lobe_pdf(wp.pdf, pdf_diff, params.p_spec);
         result.next_dir = tangent_to_world(params.T, params.B, params.N, L_ts);
     } else {
         // Diffuse lobe: EON CLTC
