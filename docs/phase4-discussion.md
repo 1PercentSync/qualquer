@@ -89,9 +89,10 @@
 **注意**：未来 DLSS Ray Reconstruction 可在 1 spp 下直接产出高质量画面，届时实时预览模式可能不走累积管线。但 Phase 4 的累积系统仍然是物理收敛渲染的基础，两者互补而非替代。
 
 **决策**：✅
-1. **Separate Sum 累积**：`sum_new = sum_old + frame_total`，tonemap 中 `display = sum / total_sample_count`。count 是全局值（全帧均匀采样），无需 per-pixel buffer。精度略优于 running average，与现有 ping-pong 架构兼容。
-2. **累积重置**：camera/PT 参数/渲染分辨率/场景切换时 `sample_count_ = 0`，实现参考 Himalaya。
-3. **语义拆分**：`frame_counter_`（帧号，永不 reset——%2 选 slot，同时上传为 LaunchParams::frame_index 作 device temporal/RNG 源）、`sample_count_`（累积总量，reset 时归零）。不单设 `frame_seed_`：frame_counter_ 本身单调递增、永不 reset，复用作 RNG temporal scramble 源即可，frame_index 命名已表达「用帧号作种子」意图。（原方案照搬 Himalaya 拆出独立 frame_seed_，在 Qualquer 单 renderer 层下无等价收益，按「决策可更新性」简化。）
+1. **Separate Sum 累积**：`sum_new = sum_old + frame_total`，tonemap 中 `display = sum / count`。精度略优于 running average，与现有 ping-pong 架构兼容。
+2. **Per-slot 计数**：每个 ping-pong buffer 各自记录 sample 数（`accum_counts_[2]`），sum 和 count 作为配对数据一起走。tonemap 的除数永远与所读 buffer 的内容匹配。（原方案使用全局 `sample_count_` + 清零两 buffer，实现后发现 reset 帧 clear 与同帧 tonemap 读同一 buffer 存在跨 stream 数据竞争且导致黑帧，按决策可更新性原则改为 per-slot 计数 + 覆写模式。）
+3. **累积重置**：camera/PT 参数/渲染分辨率/场景切换时 `chain_count` 归零 → raygen 覆写 write buffer（不读 read buffer），等效清零但无 memset 和跨 stream 竞争。tonemap 同帧仍读 read buffer（count 有效），显示上一帧画面。
+4. **语义拆分**：`frame_counter_`（帧号，永不 reset——%2 选 slot，同时上传为 LaunchParams::frame_index 作 device temporal/RNG 源）、`accum_counts_[2]`（per-slot sample 数，帧末更新 write slot）。不单设 `frame_seed_`：frame_counter_ 本身单调递增、永不 reset，复用作 RNG temporal scramble 源即可。
 
 ---
 

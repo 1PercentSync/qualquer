@@ -53,7 +53,7 @@
 - [ ] Closesthit 重写（基础）：顶点插值 + normal mapping + material 参数提取 + back-face flip + ray offset + normal consistency + 18-register payload 写回（emissive 直写 emissive_factor，throughput_update = 0 终止 path）
 - [ ] Closesthit 重写（BRDF 采样）：build_orthonormal_basis + specular_probability + lobe selection + VNDF/cosine sampling + throughput_update 计算 + env_mis_weight + last_brdf_pdf 写入 payload
 - [ ] Raygen 重写（单 sample 骨架）：单 sample + bounce loop + PathState 驱动
-- [ ] Raygen 完整：sample loop（samples_per_frame 次）+ subpixel jitter + sample_count 递增
+- [ ] Raygen 完整：sample loop（samples_per_frame 次）+ subpixel jitter + accum_counts 更新
 - [ ] SER 集成：optixTraverse + optixReorder + optixInvoke 替换 optixTrace
 - [ ] 请求用户在 CLion 中编译验证（多 bounce PT 在 HDR env 下工作，累积收敛可见）
 
@@ -79,6 +79,6 @@ MUSTREAD:4
 
 ## Step 8：UI 参数面板
 
-- [ ] ImGui 面板：max_bounces（滑块）、samples_per_frame（滑块）、exposure（滑块）、sample_count 显示（只读）
-- [ ] 参数变化触发累积 reset
+- [ ] ImGui 面板：max_bounces（滑块）、samples_per_frame（滑块）、exposure（滑块）、累积 sample 数显示（只读，读 accum_counts）
+- [ ] 参数变化触发累积 reset（chain_count 归零，无需清零 buffer）
 - [ ] 请求用户在 CLion 中编译验证（运行时参数可调，Phase 4 完成）

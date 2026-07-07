@@ -149,7 +149,7 @@ Phase 3 基础上新增：
 // PT 参数
 uint32_t max_bounces;
 uint32_t samples_per_frame;
-uint32_t sample_count;
+uint32_t sample_count;  // chain count（read buffer 的已累积数；0 = raygen 覆写模式）
 float exposure;  // 线性倍率（app 层由 EV 转换 pow(2, ev)）；渲染层直接 color *= exposure
 
 // 环境光
