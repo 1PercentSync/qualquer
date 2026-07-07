@@ -15,7 +15,7 @@
 
 ### 下一个任务
 
-Phase 4 Step 4 第五小项：Cubemap 纹理创建（cudaMipmappedArray cubemap flag → cudaTextureObject_t）
+Phase 4 Step 4 第五小项：Env alias table 构建
 
 ---
 
