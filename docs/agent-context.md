@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4 — 核心 Path Tracer
-- **进度**：Phase 4 Step 3 第2小项完成：多散射能量补偿函数已实现（E_ss 19 系数多项式、E_glossy 39 系数多项式、turquin_compensation 系数计算）
+- **进度**：Phase 4 Step 3 第3小项完成：BRDF eval + sample 接口已实现（build_orthonormal_basis、specular_probability、BrdfParams/BrdfSample 结构体、init_brdf_params 构造入口集中逐通道 Turquin/E_glossy 补偿、brdf_eval、brdf_sample，含 TBN helper）
 
 ### 下一个任务
 
-Phase 4 Step 3 第3小项：BRDF eval + sample 接口（specular_probability、sample + throughput_update 计算 specular/diffuse lobe、build_orthonormal_basis，集成 E_glossy / Turquin 补偿）
+Phase 4 Step 3 第4小项：请求用户在 CLion 中编译验证（函数编译通过，Step 5 集成到 closesthit）
 
 ---
 
