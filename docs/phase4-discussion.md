@@ -181,6 +181,8 @@
 - EON 公式中 ρ（diffuse 反照率）的取值来源（查 EON repo GLSL 实现）
 - CLTC 采样的 PDF 求值公式（查 EON repo GLSL 实现，与 combined_lobe_pdf 的 pdf_diff 一致）
 
+**brdf_eval / brdf_sample 接口 + BrdfParams**：multi-lobe BRDF 求值与采样抽成独立接口函数 `brdf_eval` / `brdf_sample`，着色点不变量打包为 `BrdfParams` 结构体、由 `init_brdf_params` 构造入口一次性填充，替代 Himalaya 的 closesthit 内联。理由：与 combined_lobe_pdf 同理，eval/sample 在 brdf_sample 两分支 + 两处 NEE eval 共 4 处复用，接口化保证 BRDF 求值一致；`init_brdf_params` 集中 D27/D28c 逐通道补偿计算（turquin_comp 逐通道调 turquin_compensation 共用标量 E_ss、E_glossy 逐通道用混合 F0、diffuse_weight 双重衰减），避免散到 closesthit；`__forceinline__` 零运行时开销。`build_orthonormal_basis`、`specular_probability` 同样移植为独立函数。VNDF 采样产生下半球方向（L_ts.z ≤ 0）时 brdf_sample 返回 pdf=0/throughput_update=0 表示无效，path 终止逻辑由 closesthit 处理。
+
 ---
 
 ### D9. 光源系统：环境光 + Emissive 三角形

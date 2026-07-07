@@ -392,6 +392,19 @@ c36 =  25.947954    c37 =  75.77901     c38 =  49.348934
 
 **参考实现**：`D:\Github\energy-preservation`（github.com/dsforza96/energy-preservation，`scripts/glossy.py` 生成表，`scripts/fit.py` 拟合多项式）
 
+### BRDF eval/sample 接口
+
+multi-lobe BRDF 求值与采样抽成独立接口，closesthit（Step 5 bounce 采样）与 NEE（Step 7 光照方向求值）共用，替代 Himalaya 的 closesthit 内联。
+
+- `build_orthonormal_basis(N, T, B)`：世界空间 TBN 构造（N 近 +Z 时改与 +X 叉乘避免退化），移植自 Himalaya
+- `specular_probability(NdotV, F0)`：F_Schlick(NdotV, F0) 的 luminance，clamp [0.01, 0.99] 防除零；D28c 确认不调整
+- `BrdfParams`：着色点不变量打包（V/N/T/B、F0=lerp(0.04,base_color,metallic)、diffuse_rho=base_color、alpha、r、NdotV、turquin_comp(RGB)、diffuse_weight=(1-metallic)×(1-E_glossy)(RGB)、p_spec）
+- `init_brdf_params(...)`：构造入口，集中 D27/D28c 逐通道补偿（turquin_comp 逐通道调 turquin_compensation 共用标量 E_ss；E_glossy 逐通道用混合 F0；diffuse_weight 双重衰减）；纯金属（metallic=1）跳过 E_glossy、diffuse_weight=0
+- `brdf_eval(params, L, NdotL)`：返回 specular（D·V·F·turquin_comp）+ diffuse（diffuse_weight·f_EON）BRDF 值
+- `brdf_sample(params, u_lobe, u0, u1)`：返回 {next_dir, throughput_update, pdf_combined}；specular 分支 VNDF 采样，diffuse 分支 CLTC 采样；combined PDF 经 combined_lobe_pdf 组装；VNDF 采样 L_ts.z ≤ 0 时返回 pdf=0/throughput_update=0 表示无效，终止逻辑由 closesthit 处理
+
+`diffuse_rho = base_color`（不含 1-metallic），`(1-metallic)` 并入 `diffuse_weight` 与 `(1-E_glossy)` 双重衰减，符合 f_EON 要求 caller 外部应用 (1-metallic) 的约定。
+
 ### Env Cubemap
 
 加载流程：stb_image 加载 equirect HDR → CUDA kernel 转换为 6-face cubemap → `cudaMipmappedArray`（cubemap flag）→ `cudaTextureObject_t`。Miss shader 用 `texCubemap<float4>` 采样。
