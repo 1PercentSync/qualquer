@@ -5,7 +5,7 @@
 > **范围判据**：以 "4000 spp 大致收敛" 作为 Phase 4 / 4.5 特性归属判据——某特性缺失会导致 4000 spp 也无法收敛 → 归 Phase 4；缺失时 4000 spp 仍能收敛但为实时 PT 必需 → 归 Phase 4.5。4000 spp 是判据不是项目终点，项目长期目标是实时 PT 渲染器（见 `roadmap.md`）。
 >
 > 任务清单见 `tasks/phase4.md`。
-> 讨论记录见 `docs/phase4-discussion.md`（D1-D28 决策）。
+> 讨论记录见 `docs/phase4-discussion.md`（D1-D29 决策）。
 
 ---
 
