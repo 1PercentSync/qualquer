@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4 — 核心 Path Tracer
-- **进度**：Phase 4 Step 6 第一小项完成：Pipeline 新增 shadow miss program group（4 program groups），miss SBT 扩展为 2 条 record，optixTraverse stride 改 0，新增 `__miss__shadow` 入口点
+- **进度**：Phase 4 Step 6 第二小项完成：`__anyhit__ah` 实现 alpha mask test（纹理 alpha × factor × 顶点色 alpha < cutoff → optixIgnoreIntersection）
 
 ### 下一个任务
 
-Phase 4 Step 6 第二小项：创建 `__anyhit__alpha`（alpha_mode==Mask 时 alpha test）
+Phase 4 Step 6 第三小项：Closesthit 扩展（back-face + !double_sided pass-through）
 
 ---
 
