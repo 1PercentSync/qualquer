@@ -528,9 +528,9 @@ namespace qualquer::app {
         scene_stats_ = renderer::SceneStats{
             .meshes = meshes.empty() ? 0u : max_group_id + 1,
             .instances = static_cast<uint32_t>(instances.size()),
-            .tlas_instances = static_cast<uint32_t>(instances.size()),
+            .tlas_instances = renderer_.tlas_instance_count(),
             .materials = static_cast<uint32_t>(scene_loader_.material_buffer().count()),
-            .textures = static_cast<uint32_t>(scene_loader_.texture_objects_buffer().count()),
+            .textures = scene_loader_.scene_texture_count(),
             .triangles = total_triangles,
             .vertices = total_vertices,
             .emissive_triangles = scene_loader_.emissive_count(),

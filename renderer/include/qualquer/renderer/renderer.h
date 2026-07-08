@@ -237,11 +237,15 @@ namespace qualquer::renderer {
          */
         [[nodiscard]] uint32_t accumulated_samples() const;
 
+        /** @brief Actual TLAS instance count after group folding (set by load_scene). */
+        [[nodiscard]] uint32_t tlas_instance_count() const;
+
         /**
          * @brief Forces the next frame to overwrite instead of accumulating.
          *
-         * Zeros both per-slot sample counts so the next submit_cuda sees
-         * chain_count=0 regardless of camera/settings state.
+         * Sets a deferred flag consumed by the next submit_cuda, which forces
+         * chain_count=0 without clearing per-slot counts (same path as camera
+         * reset, avoids black-frame flash).
          */
         void reset_accumulation();
 
@@ -296,6 +300,9 @@ namespace qualquer::renderer {
          * slot's count stays valid until raygen overwrites that buffer.
          */
         std::array<uint32_t, 2> accum_counts_ = {0, 0};
+
+        /** @brief Actual TLAS instance count after same-node primitive folding. */
+        uint32_t tlas_instance_count_ = 0;
 
         /**
          * @brief Deferred reset flag set by reset_accumulation().

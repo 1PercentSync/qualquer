@@ -755,6 +755,13 @@ namespace qualquer::app {
         return texture_objects_buffer_;
     }
 
+    uint32_t SceneLoader::scene_texture_count() const {
+        // texture_objects_ contains 3 default textures at the front followed
+        // by scene textures. textures_ holds the CudaTexture objects for
+        // scene textures only.
+        return static_cast<uint32_t>(textures_.size());
+    }
+
     const renderer::AABB &SceneLoader::scene_bounds() const {
         return scene_bounds_;
     }

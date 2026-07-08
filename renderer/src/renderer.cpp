@@ -355,6 +355,7 @@ namespace qualquer::renderer {
         build_geometry_info(geometry_info_buffer_, cuda_context.compute_stream, grouping);
 
         std::vector<OptixInstance> tlas_instances = build_tlas_instances(meshes, instances, grouping, accel_);
+        tlas_instance_count_ = static_cast<uint32_t>(tlas_instances.size());
         if (tlas_instances.empty()) {
             spdlog::warn("Renderer::load_scene: no TLAS instances (all meshes degenerate?)");
             return;
@@ -735,6 +736,10 @@ namespace qualquer::renderer {
 
     uint32_t Renderer::accumulated_samples() const {
         return accum_counts_[accum_index_];
+    }
+
+    uint32_t Renderer::tlas_instance_count() const {
+        return tlas_instance_count_;
     }
 
     void Renderer::reset_accumulation() {

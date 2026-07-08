@@ -91,6 +91,9 @@ namespace qualquer::app {
         /** @brief Returns the device texture-object array (indexed by Material tex fields). */
         [[nodiscard]] const optix::CudaBuffer<cudaTextureObject_t> &texture_objects_buffer() const;
 
+        /** @brief Number of scene textures loaded from glTF (excluding 3 default textures). */
+        [[nodiscard]] uint32_t scene_texture_count() const;
+
         /**
          * @brief Scene AABB (union of all mesh instance world_bounds).
          *
