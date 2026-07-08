@@ -257,6 +257,14 @@ namespace qualquer::app {
             result.prim_offsets.push_back(static_cast<uint32_t>(meshes_.size()));
 
             for (const auto &primitive : gltf_mesh.primitives) {
+                // Only triangle primitives are supported (glTF default mode=4).
+                if (primitive.type != fastgltf::PrimitiveType::Triangles) {
+                    spdlog::warn("Mesh '{}' primitive skipped: unsupported type {}",
+                                 std::string(gltf_mesh.name),
+                                 static_cast<int>(primitive.type));
+                    continue;
+                }
+
                 // Position (required by glTF spec)
                 const auto pos_it = primitive.findAttribute("POSITION");
                 if (pos_it == primitive.attributes.end()) {
