@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4 — 核心 Path Tracer
-- **进度**：Phase 4 Step 8 第三小项完成：Accumulate checkbox + Reset 按钮 + Renderer::reset_accumulation()
+- **进度**：Phase 4 Step 8 第四小项完成：参数变化 reset + deferred slider（均已在第一小项实现，本项确认无遗漏）
 
 ### 下一个任务
 
-Phase 4 Step 8 第四小项：参数变化触发累积 reset + deferred slider 模式
+Phase 4 Step 8 第五小项：SER 性能测试（对比 SER 开/关 + hint/无 hint 帧率差异）
 
 ---
 
