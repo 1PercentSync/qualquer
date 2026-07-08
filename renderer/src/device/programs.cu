@@ -167,9 +167,10 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
     const float w1 = bary.x;
     const float w2 = bary.y;
 
-    const float3 obj_normal = w0 * v0.normal + w1 * v1.normal + w2 * v2.normal;
-    const float2 uv         = w0 * v0.uv0    + w1 * v1.uv0    + w2 * v2.uv0;
-    const float4 tangent    = w0 * v0.tangent + w1 * v1.tangent + w2 * v2.tangent;
+    const float3 obj_normal  = w0 * v0.normal  + w1 * v1.normal  + w2 * v2.normal;
+    const float2 uv          = w0 * v0.uv0     + w1 * v1.uv0     + w2 * v2.uv0;
+    const float4 vert_color  = w0 * v0.color   + w1 * v1.color   + w2 * v2.color;
+    const float4 tangent     = w0 * v0.tangent + w1 * v1.tangent + w2 * v2.tangent;
 
     // Face normal from triangle edges (object space, not normalized)
     const float3 face_normal_obj = cross(v1.position - v0.position,
@@ -191,19 +192,15 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
     const cudaTextureObject_t *tex = params.texture_objects;
 
     const auto bc_texel = tex2D<float4>(tex[mat.base_color_tex], uv.x, uv.y);
-    const float3 base_color = make_float3(bc_texel.x * mat.base_color_factor.x,
-                                          bc_texel.y * mat.base_color_factor.y,
-                                          bc_texel.z * mat.base_color_factor.z);
+    const float3 base_color = make_float3(bc_texel.x * mat.base_color_factor.x * vert_color.x,
+                                          bc_texel.y * mat.base_color_factor.y * vert_color.y,
+                                          bc_texel.z * mat.base_color_factor.z * vert_color.z);
 
     // Metallic-roughness and emissive sampled for pipeline validation
     const auto mr_texel = tex2D<float4>(tex[mat.metallic_roughness_tex], uv.x, uv.y);
     const auto em_texel = tex2D<float4>(tex[mat.emissive_tex], uv.x, uv.y);
     (void)mr_texel;
     (void)em_texel;
-
-    // Occlusion: glTF spec lerp — color * (1 + strength * (ao - 1))
-    const auto ao_texel = tex2D<float4>(tex[mat.occlusion_tex], uv.x, uv.y);
-    const float occlusion = 1.0f + mat.occlusion_strength * (ao_texel.x - 1.0f);
 
     // ---- Normal mapping (TBN + BC5 normal map) ----
     const auto nm_texel = tex2D<float4>(tex[mat.normal_tex], uv.x, uv.y);
@@ -212,8 +209,8 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
         make_float2(nm_texel.x, nm_texel.y), mat.normal_scale);
     (void)N_shading;
 
-    // ---- Ambient shading: baseColor × occlusion ----
-    const float3 color = base_color * occlusion;
+    // ---- Ambient shading: baseColor (includes vertex color) ----
+    const float3 color = base_color;
 
     optixSetPayload_0(__float_as_uint(color.x));
     optixSetPayload_1(__float_as_uint(color.y));
