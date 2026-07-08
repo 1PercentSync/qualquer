@@ -152,8 +152,10 @@ __forceinline__ __device__ float shadow_terminator_factor(const float3 N_geo,
         return 1.0f;
     }
 
-    // G ∈ (0, 1): ratio of geometric to shading cosine.
-    const float G = NgdotL / NdotL;
+    // G ∈ (0, 1): Chiang 2019 Eq. 1 — geometric-to-shading cosine ratio,
+    // normalized by the alignment between geometric and shading normals.
+    // NgdotNs > 0 is guaranteed by ensure_normal_consistency upstream.
+    const float G = NgdotL / (NdotL * dot(N_geo, N_shading));
 
     // Smooth polynomial: G + G² − G³ = G(1 + G(1 − G)).
     // Monotonic 0→1, derivative at G=1 is 0 (smooth arrival).
