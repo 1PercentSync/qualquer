@@ -53,7 +53,7 @@
 - [x] SceneLoader 适配：`load_meshes` 读取 glTF `COLOR_0`（VEC3/VEC4，缺失默认白）；`load_materials` 移除 AO 纹理收集、加载、默认值回退
 - [x] Closesthit 适配：移除 AO 采样，ambient 着色改为 `base_color × vertex_color`（插值顶点色后乘入 base_color）
 - [x] 请求用户在 CLion 中编译验证（重构核销：现有渲染行为正确，顶点色生效，AO 已清除）
-- [ ] 创建 `pt_common.cuh`：PathState 结构体、ray offset（Wächter & Binder）、shading normal consistency check、MIS power heuristic
+- [x] 创建 `pt_common.cuh`：PathState 结构体、ray offset（Wächter & Binder）、shading normal consistency check、MIS power heuristic
 - [ ] 创建 `payload_helpers.cuh`：18-register payload pack/unpack 内联函数（float↔uint bit cast helpers + per-field set/get）
 - [ ] Closesthit 重写（基础）：顶点插值（含顶点色）+ normal mapping + material 参数提取 + base_color × vertex_color + back-face flip + ray offset + normal consistency + 18-register payload 写回（emissive 直写 emissive_factor，throughput_update = 0 终止 path）
 - [ ] Closesthit 重写（BRDF 采样）：build_orthonormal_basis + specular_probability + lobe selection + VNDF/cosine sampling + throughput_update 计算 + env_mis_weight + last_brdf_pdf 写入 payload

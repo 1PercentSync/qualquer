@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4 — 核心 Path Tracer
-- **进度**：Phase 4 Step 5 数据结构重构完成（AO 清理 + 顶点色接入，编译验证通过）
+- **进度**：Phase 4 Step 5 第7小项完成：`pt_common.cuh` 已创建（PathState + ray offset + normal consistency + MIS power heuristic）
 
 ### 下一个任务
 
-Phase 4 Step 5 第7小项：创建 `pt_common.cuh`（PathState + ray offset + normal consistency + MIS power heuristic）
+Phase 4 Step 5 第8小项：创建 `payload_helpers.cuh`（18-register payload pack/unpack）
 
 ---
 
