@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4 — 核心 Path Tracer
-- **进度**：Phase 4 Step 5 第12小项完成：Raygen 完整（sample loop + subpixel jitter + sample_index 传递 + accum_counts 修正）
+- **进度**：Phase 4 Step 5 第13小项完成：SER 集成（optixTraverse + optixReorder + optixInvoke + material coherence hint）
 
 ### 下一个任务
 
-Phase 4 Step 5 第13小项：SER 集成（optixTraverse + optixReorder + optixInvoke）
+Phase 4 Step 5 最终小项：请求用户在 CLion 中编译验证（多 bounce PT 在 HDR env 下工作，累积收敛可见）
 
 ---
 

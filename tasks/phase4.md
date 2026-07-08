@@ -59,7 +59,7 @@
 - [x] Closesthit 重写（BRDF 采样）：build_orthonormal_basis + specular_probability + lobe selection + VNDF/cosine sampling + throughput_update 计算 + env_mis_weight + last_brdf_pdf 写入 payload
 - [x] Raygen 重写（单 sample 骨架）：单 sample + bounce loop + PathState 驱动
 - [x] Raygen 完整：sample loop（samples_per_frame 次）+ subpixel jitter + accum_counts 更新
-- [ ] SER 集成：optixTraverse + optixReorder + optixInvoke 替换 optixTrace
+- [x] SER 集成：optixTraverse + optixReorder + optixInvoke 替换 optixTrace
 - [ ] 请求用户在 CLion 中编译验证（多 bounce PT 在 HDR env 下工作，累积收敛可见）
 
 MUSTREAD:4
