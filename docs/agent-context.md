@@ -15,7 +15,7 @@
 
 ### 下一个任务
 
-Phase 4 Step 5 第2小项：创建 `pt_common.cuh`（PathState + ray offset + normal consistency + MIS power heuristic）
+Phase 4 Step 5 数据结构重构 第1小项：Material 重构（移除 AO 相关字段）
 
 ---
 

@@ -45,12 +45,17 @@
 - [x] Env map 加载 UI：DebugUI 中添加 env_map_path 显示 + Load 按钮 + Application 响应加载动作
 - [x] 请求用户在 CLion 中编译验证（miss 显示 HDR 全景，命中表面仍为 ambient，运行时可加载 HDR）
 
-## Step 5：Bounce loop + 累积
+## Step 5：Bounce loop + 累积 + 数据结构重构（AO 清理 + 顶点色接入）
 
 - [x] 创建 `rng.cuh`：PCG hash RNG（pixel_index × sample_index × dimension）、维度分配方案（dim 0-1 subpixel jitter，per-bounce base = 2 + bounce × 12）
+- [ ] Material 重构：移除 `occlusion_tex`（uint32_t）和 `occlusion_strength`（float），host 端 `material.h` + device 端 `programs.cu` 镜像同步，更新 static_assert
+- [ ] Vertex 重构：新增 `color`（glm::vec4 / float4，默认 `{1,1,1,1}`），host 端 `vertex.h` + device 端 `math_utils.cuh` DeviceVertex 同步，更新 static_assert（48 → 64 字节）
+- [ ] SceneLoader 适配：`load_meshes` 读取 glTF `COLOR_0`（VEC3/VEC4，缺失默认白）；`load_materials` 移除 AO 纹理收集、加载、默认值回退
+- [ ] Closesthit 适配：移除 AO 采样，ambient 着色改为 `base_color × vertex_color`（插值顶点色后乘入 base_color）
+- [ ] 请求用户在 CLion 中编译验证（重构核销：现有渲染行为正确，顶点色生效，AO 已清除）
 - [ ] 创建 `pt_common.cuh`：PathState 结构体、ray offset（Wächter & Binder）、shading normal consistency check、MIS power heuristic
 - [ ] 创建 `payload_helpers.cuh`：18-register payload pack/unpack 内联函数（float↔uint bit cast helpers + per-field set/get）
-- [ ] Closesthit 重写（基础）：顶点插值 + normal mapping + material 参数提取 + back-face flip + ray offset + normal consistency + 18-register payload 写回（emissive 直写 emissive_factor，throughput_update = 0 终止 path）
+- [ ] Closesthit 重写（基础）：顶点插值（含顶点色）+ normal mapping + material 参数提取 + base_color × vertex_color + back-face flip + ray offset + normal consistency + 18-register payload 写回（emissive 直写 emissive_factor，throughput_update = 0 终止 path）
 - [ ] Closesthit 重写（BRDF 采样）：build_orthonormal_basis + specular_probability + lobe selection + VNDF/cosine sampling + throughput_update 计算 + env_mis_weight + last_brdf_pdf 写入 payload
 - [ ] Raygen 重写（单 sample 骨架）：单 sample + bounce loop + PathState 驱动
 - [ ] Raygen 完整：sample loop（samples_per_frame 次）+ subpixel jitter + accum_counts 更新
