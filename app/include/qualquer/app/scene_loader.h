@@ -115,6 +115,20 @@ namespace qualquer::app {
         /** @brief Sin-weighted total luminance across the environment map. */
         [[nodiscard]] float env_total_luminance() const;
 
+        // ---- Emissive triangle accessors ----
+
+        /** @brief Device emissive triangle array (null when no emissive geometry). */
+        [[nodiscard]] const optix::CudaBuffer<renderer::EmissiveTriangle> &emissive_triangles_buffer() const;
+
+        /** @brief Device alias table over emissive triangles (null when no emissive geometry). */
+        [[nodiscard]] const optix::CudaBuffer<renderer::AliasEntry> &emissive_alias_table_buffer() const;
+
+        /** @brief Number of emissive triangles (0 when no emissive geometry). */
+        [[nodiscard]] uint32_t emissive_count() const;
+
+        /** @brief Total radiant power across all emissive triangles (0 when none). */
+        [[nodiscard]] float emissive_total_power() const;
+
     private:
         // ---- Loaded scene data ----
 
@@ -161,6 +175,17 @@ namespace qualquer::app {
         /** @brief Sin-weighted total luminance (alias table normalization constant). */
         float env_total_luminance_ = 0.0f;
 
+        // ---- Emissive triangle resources ----
+
+        /** @brief Device emissive triangle array. */
+        optix::CudaBuffer<renderer::EmissiveTriangle> emissive_triangles_;
+
+        /** @brief Device alias table (one AliasEntry per emissive triangle). */
+        optix::CudaBuffer<renderer::AliasEntry> emissive_alias_table_;
+
+        /** @brief Total radiant power across all emissive triangles. */
+        float emissive_total_power_ = 0.0f;
+
         // ---- Private loading stages ----
 
         /** @brief Intermediate data from mesh loading, consumed by build_mesh_instances(). */
@@ -173,6 +198,12 @@ namespace qualquer::app {
 
             /** @brief Per-primitive local-space AABB (parallel to meshes_). */
             std::vector<renderer::AABB> local_bounds;
+
+            /** @brief Per-primitive CPU vertex data (parallel to meshes_); retained for emissive collection. */
+            std::vector<std::vector<renderer::Vertex>> cpu_vertices;
+
+            /** @brief Per-primitive CPU index data (parallel to meshes_); retained for emissive collection. */
+            std::vector<std::vector<uint32_t>> cpu_indices;
         };
 
         /** @brief Loads all mesh primitives: vertex/index buffers, local AABBs, material IDs. */

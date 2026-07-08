@@ -6,6 +6,7 @@
 #include <qualquer/app/scene_loader.h>
 
 #include <qualquer/app/cache.h>
+#include <qualquer/app/emissive_alias_table.h>
 #include <qualquer/app/env_alias_table.h>
 #include <qualquer/app/equirect_to_cubemap.h>
 #include <qualquer/app/mesh.h>
@@ -214,9 +215,29 @@ namespace qualquer::app {
                          gltf.textures.size(),
                          gltf.nodes.size());
 
-            const auto mesh_data = load_meshes(gltf);
+            auto mesh_data = load_meshes(gltf);
             load_materials(gltf, default_textures);
             build_mesh_instances(gltf, mesh_data);
+
+            // Collect emissive triangles and build alias table (needs materials
+            // + world transforms, so runs after load_materials + build_mesh_instances).
+            // CPU vertex/index data in mesh_data is freed when it goes out of scope.
+            auto emissive_result = build_emissive_alias_table(
+                meshes_, mesh_instances_, gpu_materials_,
+                mesh_data.cpu_vertices, mesh_data.cpu_indices);
+
+            emissive_total_power_ = emissive_result.total_power;
+
+            if (!emissive_result.triangles.empty()) {
+                emissive_triangles_.alloc(emissive_result.triangles.size());
+                emissive_triangles_.upload(emissive_result.triangles.data(),
+                                           emissive_result.triangles.size(), nullptr);
+
+                emissive_alias_table_.alloc(emissive_result.alias_table.size());
+                emissive_alias_table_.upload(emissive_result.alias_table.data(),
+                                             emissive_result.alias_table.size(), nullptr);
+            }
+
             return true;
         } catch (const std::exception &e) {
             spdlog::error("Scene loading failed: {}", e.what());
@@ -373,6 +394,8 @@ namespace qualquer::app {
 
                 result.material_ids.push_back(prim_material_id);
                 result.local_bounds.push_back({local_min, local_max});
+                result.cpu_vertices.push_back(std::move(vertices));
+                result.cpu_indices.push_back(std::move(indices));
             }
         }
 
@@ -693,6 +716,10 @@ namespace qualquer::app {
     void SceneLoader::destroy() {
         destroy_env_map();
 
+        emissive_triangles_.free();
+        emissive_alias_table_.free();
+        emissive_total_power_ = 0.0f;
+
         for (auto &tex: textures_) {
             tex.destroy();
         }
@@ -751,5 +778,21 @@ namespace qualquer::app {
 
     float SceneLoader::env_total_luminance() const {
         return env_total_luminance_;
+    }
+
+    const optix::CudaBuffer<renderer::EmissiveTriangle> &SceneLoader::emissive_triangles_buffer() const {
+        return emissive_triangles_;
+    }
+
+    const optix::CudaBuffer<renderer::AliasEntry> &SceneLoader::emissive_alias_table_buffer() const {
+        return emissive_alias_table_;
+    }
+
+    uint32_t SceneLoader::emissive_count() const {
+        return static_cast<uint32_t>(emissive_triangles_.count());
+    }
+
+    float SceneLoader::emissive_total_power() const {
+        return emissive_total_power_;
     }
 } // namespace qualquer::app

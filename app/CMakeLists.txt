@@ -16,6 +16,7 @@ add_executable(qualquer_app
     src/mesh.cpp
     src/stb_impl.cpp
     src/texture.cpp
+    src/emissive_alias_table.cpp
     src/env_alias_table.cpp
     src/equirect_to_cubemap.cu
 )

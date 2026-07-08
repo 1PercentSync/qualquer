@@ -111,6 +111,20 @@ namespace qualquer::renderer {
 
         /** @brief Sin-weighted total luminance across the environment map. */
         float env_total_luminance;
+
+        // ---- Emissive triangles (from SceneLoader) ----
+
+        /** @brief Device emissive triangle array (null when no emissive geometry). */
+        const EmissiveTriangle *emissive_triangles;
+
+        /** @brief Device alias table over emissive triangles (null when no emissive geometry). */
+        const AliasEntry *emissive_alias_table;
+
+        /** @brief Number of emissive triangles (0 when no emissive geometry). */
+        uint32_t emissive_count;
+
+        /** @brief Total radiant power across all emissive triangles. */
+        float emissive_total_power;
     };
 
     /**

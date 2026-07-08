@@ -426,10 +426,10 @@ namespace qualquer::renderer {
             .env_alias_width = scene.env_alias_width,
             .env_alias_height = scene.env_alias_height,
             .env_total_luminance = scene.env_total_luminance,
-            .emissive_triangles = nullptr,
-            .emissive_alias_table = nullptr,
-            .emissive_count = 0,
-            .emissive_total_power = 0.0f,
+            .emissive_triangles = scene.emissive_triangles,
+            .emissive_alias_table = scene.emissive_alias_table,
+            .emissive_count = scene.emissive_count,
+            .emissive_total_power = scene.emissive_total_power,
         };
         params_buffer_.upload(&params, 1, cuda_context.compute_stream);
 
