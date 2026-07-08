@@ -140,6 +140,7 @@ namespace qualquer::app {
             renderer_.submit_cuda(cuda_context_,
                                   renderer::SceneRenderInput{
                                       .camera = camera_,
+                                      .settings = render_settings_,
                                       .materials = scene_loader_.material_buffer(),
                                       .texture_objects = scene_loader_.texture_objects_buffer(),
                                       .env_cubemap = scene_loader_.env_cubemap(),
@@ -172,6 +173,9 @@ namespace qualquer::app {
                 .error_message = error_message_,
                 .scene_path = config_.scene_path,
                 .env_map_path = config_.env_map_path,
+                .settings = render_settings_,
+                .camera = camera_,
+                .accumulated_samples = renderer_.accumulated_samples(),
             };
             const auto actions = debug_ui_.draw(ui_ctx); // only CPU side, render command is in record()
 

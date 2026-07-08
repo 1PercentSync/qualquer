@@ -20,6 +20,7 @@
 #include <qualquer/renderer/camera.h>
 #include <qualquer/renderer/launch_params.h>
 #include <qualquer/renderer/material.h>
+#include <qualquer/renderer/render_settings.h>
 #include <qualquer/renderer/scene_types.h>
 
 namespace qualquer::optix {
@@ -85,6 +86,9 @@ namespace qualquer::renderer {
     struct SceneRenderInput {
         /** @brief Camera providing inverse view/projection for primary-ray generation. */
         const Camera &camera;
+
+        /** @brief Runtime render settings (bounces, spp, exposure, accumulation toggle). */
+        const RenderSettings &settings;
 
         /** @brief Device material array (indexed via GPUGeometryInfo::material_buffer_offset). */
         const optix::CudaBuffer<Material> &materials;
@@ -224,6 +228,15 @@ namespace qualquer::renderer {
          */
         static void record_vulkan(const RenderInput &input);
 
+        /**
+         * @brief Number of samples accumulated in the buffer currently being read
+         *        by tonemap (visible on screen).
+         *
+         * DebugUI displays this as the live sample counter. The value reflects the
+         * read slot's count, which is the latest fully-written accumulation total.
+         */
+        [[nodiscard]] uint32_t accumulated_samples() const;
+
     private:
         /** @brief OptiX pipeline (module, program groups, linked handle). */
         optix::Pipeline pipeline_;
@@ -280,7 +293,7 @@ namespace qualquer::renderer {
          * @brief Previous-frame inverse view matrix (accumulation-reset detection).
          *
          * Exact byte-compare against the current frame's inv_view; any change
-         * (camera move) zeros sample_count_ and clears the accum buffers.
+         * (camera move) zeros chain_count so raygen overwrites.
          */
         glm::mat4 prev_inv_view_{1.0f};
 
@@ -288,9 +301,18 @@ namespace qualquer::renderer {
          * @brief Previous-frame inverse projection matrix (accumulation-reset detection).
          *
          * Exact byte-compare against the current frame's inv_projection; any change
-         * (fov/aspect/near/far) zeros sample_count_ and clears the accum buffers.
+         * (fov/aspect/near/far) zeros chain_count so raygen overwrites.
          */
         glm::mat4 prev_inv_projection_{1.0f};
+
+        /** @brief Previous-frame max_bounces (accumulation-reset detection). */
+        uint32_t prev_max_bounces_ = 16;
+
+        /** @brief Previous-frame samples_per_frame (accumulation-reset detection). */
+        uint32_t prev_samples_per_frame_ = 1;
+
+        /** @brief Previous-frame exposure linear multiplier (accumulation-reset detection). */
+        float prev_exposure_ = 1.0f;
 
         /**
          * @brief Recorded after raygen completes on compute_stream.

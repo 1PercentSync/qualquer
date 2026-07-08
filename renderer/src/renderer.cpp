@@ -6,6 +6,7 @@
 #include <qualquer/renderer/renderer.h>
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <vector>
 
@@ -386,18 +387,29 @@ namespace qualquer::renderer {
         // that this frame's raygen is about to overwrite.
         CUDA_CHECK(cudaStreamWaitEvent(cuda_context.compute_stream, event_tonemap_done_[prev_slot]));
 
-        // Accumulation reset on camera change: exact byte-compare of the inverse
-        // view/projection against the previous frame. Any change (camera move,
-        // fov/aspect/near/far) breaks the chain — chain_count drops to 0 so
-        // raygen overwrites instead of accumulating. No buffer clearing: the
-        // read slot keeps its valid count for tonemap; the write slot's count
-        // is set at frame end.
+        // Accumulation reset: any change in camera matrices or render settings
+        // breaks the chain — chain_count drops to 0 so raygen overwrites instead
+        // of accumulating. accumulation_enabled=false forces chain_count to 0
+        // every frame (no accumulation). No buffer clearing: the read slot keeps
+        // its valid count for tonemap; the write slot's count is set at frame end.
+        const float exposure_linear = std::pow(2.0f, scene.settings.exposure_ev);
+
         const bool camera_changed =
             scene.camera.inv_view != prev_inv_view_ ||
             scene.camera.inv_projection != prev_inv_projection_;
-        const uint32_t chain_count = camera_changed ? 0 : accum_counts_[accum_index_];
+        const bool settings_changed =
+            scene.settings.max_bounces != prev_max_bounces_ ||
+            scene.settings.samples_per_frame != prev_samples_per_frame_ ||
+            exposure_linear != prev_exposure_;
+        const bool needs_reset =
+            camera_changed || settings_changed || !scene.settings.accumulation_enabled;
+        const uint32_t chain_count = needs_reset ? 0 : accum_counts_[accum_index_];
+
         prev_inv_view_ = scene.camera.inv_view;
         prev_inv_projection_ = scene.camera.inv_projection;
+        prev_max_bounces_ = scene.settings.max_bounces;
+        prev_samples_per_frame_ = scene.settings.samples_per_frame;
+        prev_exposure_ = exposure_linear;
 
         const LaunchParams params{
             // Separate-Sum: raygen reads the previous total and writes the new
@@ -415,10 +427,10 @@ namespace qualquer::renderer {
             .texture_objects = scene.texture_objects.data(),
             .inv_view = to_float4x4(scene.camera.inv_view),
             .inv_projection = to_float4x4(scene.camera.inv_projection),
-            .max_bounces = 16,
-            .samples_per_frame = 1,
+            .max_bounces = scene.settings.max_bounces,
+            .samples_per_frame = scene.settings.samples_per_frame,
             .sample_count = chain_count,
-            .exposure = 1.0f,
+            .exposure = exposure_linear,
             // Env light resources (from SceneLoader via SceneRenderInput).
             .env_cubemap = scene.env_cubemap,
             .env_alias_table = scene.env_alias_table,
@@ -482,7 +494,7 @@ namespace qualquer::renderer {
                        cuda_context.display_surface,
                        width, height,
                        accum_counts_[accum_index_],
-                       1.0f,
+                       exposure_linear,
                        cuda_context.display_stream);
 
         CUDA_CHECK(cudaEventRecord(event_tonemap_done_[slot], cuda_context.display_stream));
@@ -711,5 +723,9 @@ namespace qualquer::renderer {
             .pImageMemoryBarriers = &to_present,
         };
         vkCmdPipelineBarrier2(cmd, &to_present_dep);
+    }
+
+    uint32_t Renderer::accumulated_samples() const {
+        return accum_counts_[accum_index_];
     }
 } // namespace qualquer::renderer

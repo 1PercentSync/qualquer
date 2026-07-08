@@ -14,6 +14,7 @@
 #include <qualquer/optix/context.h>
 #include <qualquer/renderer/camera.h>
 #include <qualquer/renderer/debug_ui.h>
+#include <qualquer/renderer/render_settings.h>
 #include <qualquer/vulkan/imgui_backend.h>
 #include <qualquer/renderer/renderer.h>
 #include <qualquer/optix/cuda_texture_upload.h>
@@ -167,6 +168,9 @@ namespace qualquer::app {
 
         /** @brief Camera state (position, orientation, derived matrices). */
         renderer::Camera camera_{};
+
+        /** @brief Runtime render settings (UI-adjustable, not persisted). */
+        renderer::RenderSettings render_settings_{};
 
         /** @brief Free-roaming camera controller (WASD + mouse rotation). */
         CameraController camera_controller_{};

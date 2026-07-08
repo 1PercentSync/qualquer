@@ -48,6 +48,45 @@ namespace qualquer::renderer {
             }
             return {};
         }
+
+        /**
+         * SliderFloat that applies immediately during mouse drag but defers
+         * Ctrl+Click text-input changes until Enter / click-away / Tab.
+         */
+        bool slider_float_deferred(const char *label,
+                                   float *v,
+                                   const float v_min,
+                                   const float v_max,
+                                   const char *format,
+                                   const ImGuiSliderFlags flags = 0) {
+            const float original = *v;
+            ImGui::SliderFloat(label, v, v_min, v_max, format, flags);
+
+            if (ImGui::IsItemActive() && ImGui::GetIO().WantTextInput) {
+                *v = original;
+                return false;
+            }
+
+            return *v != original;
+        }
+
+        /** SliderAngle variant with the same deferred text-input behaviour. */
+        bool slider_angle_deferred(const char *label,
+                                   float *v_rad,
+                                   const float v_degrees_min,
+                                   const float v_degrees_max,
+                                   const char *format,
+                                   const ImGuiSliderFlags flags = 0) {
+            const float original = *v_rad;
+            ImGui::SliderAngle(label, v_rad, v_degrees_min, v_degrees_max, format, flags);
+
+            if (ImGui::IsItemActive() && ImGui::GetIO().WantTextInput) {
+                *v_rad = original;
+                return false;
+            }
+
+            return *v_rad != original;
+        }
     } // namespace
 
     // ---- FrameStats ----
@@ -115,6 +154,9 @@ namespace qualquer::renderer {
         // an absent section would leave a dangling line, so it is drawn inside the
         // section (guarded by the empty check).
         draw_error_banner(ctx, actions);
+
+        ImGui::Separator();
+        draw_path_tracing(ctx, actions);
 
         ImGui::Separator();
         draw_log_level(actions);
@@ -212,6 +254,26 @@ namespace qualquer::renderer {
         if (ImGui::SmallButton("X")) {
             action.error_dismissed = true;
         }
+    }
+
+    void DebugUI::draw_path_tracing(const DebugUIContext &ctx, DebugUIActions &action) {
+        ImGui::Text("Samples: %u", ctx.accumulated_samples);
+
+        auto bounces = static_cast<int>(ctx.settings.max_bounces);
+        if (ImGui::SliderInt("Max Bounces", &bounces, 1, 32)) {
+            ctx.settings.max_bounces = static_cast<uint32_t>(bounces);
+        }
+
+        auto spp = static_cast<int>(ctx.settings.samples_per_frame);
+        if (ImGui::SliderInt("Samples/Frame", &spp, 1, 64)) {
+            ctx.settings.samples_per_frame = static_cast<uint32_t>(spp);
+        }
+
+        slider_float_deferred("Exposure (EV)", &ctx.settings.exposure_ev,
+                              -8.0f, 8.0f, "%.1f");
+
+        slider_angle_deferred("FOV", &ctx.camera.fov,
+                              30.0f, 120.0f, "%.1f\xC2\xB0");
     }
 
     void DebugUI::draw_log_level(DebugUIActions &action) {

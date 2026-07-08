@@ -5,9 +5,12 @@
  * @brief Debug UI panel module (renderer layer).
  */
 
+#include <cstdint>
 #include <string>
 #include <vector>
 
+#include <qualquer/renderer/camera.h>
+#include <qualquer/renderer/render_settings.h>
 #include <qualquer/vulkan/context.h>
 #include <qualquer/vulkan/swapchain.h>
 
@@ -63,6 +66,22 @@ namespace qualquer::renderer {
          * surfaced through DebugUIActions::env_map_load_requested.
          */
         const std::string &env_map_path;
+
+        // ---- Step 8: PT parameters ----
+
+        /**
+         * @brief Runtime render settings (mutable for slider write-back).
+         *
+         * Sliders modify fields directly; the renderer detects changes and
+         * resets accumulation automatically.
+         */
+        RenderSettings &settings;
+
+        /** @brief Camera state (mutable for FOV slider write-back). */
+        Camera &camera;
+
+        /** @brief Number of samples accumulated in the displayed buffer. */
+        uint32_t accumulated_samples = 0;
     };
 
     /**
@@ -102,6 +121,9 @@ namespace qualquer::renderer {
 
         /** @brief Env map path picked by the user (valid only when env_map_load_requested). */
         std::string new_env_map_path;
+
+        /** @brief True if the user clicked the manual accumulation reset button. */
+        bool accum_reset_requested = false;
     };
 
     /**
@@ -227,6 +249,20 @@ namespace qualquer::renderer {
          * @param action Receives log_level_changed and new_log_level on change.
          */
         static void draw_log_level(DebugUIActions &action);
+
+        /**
+         * @brief Renders the Path Tracing section: parameter sliders and sample count.
+         *
+         * Contains max_bounces (SliderInt), samples_per_frame (SliderInt),
+         * exposure (slider_float_deferred, EV), FOV (slider_angle_deferred),
+         * and accumulated sample count (read-only text). Camera position and
+         * yaw/pitch are displayed as read-only text.
+         *
+         * @param ctx    Provides settings (mutable), camera (mutable for FOV),
+         *               and accumulated_samples.
+         * @param action Receives accum_reset_requested on Reset button click.
+         */
+        static void draw_path_tracing(const DebugUIContext &ctx, DebugUIActions &action);
 
         /**
          * @brief Renders the Scene section: current file name and a Load button.
