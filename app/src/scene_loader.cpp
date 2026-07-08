@@ -289,6 +289,28 @@ namespace qualquer::app {
                     }
                 }
 
+                // COLOR_0 (optional, default white — multiplied into base_color)
+                if (const auto it = primitive.findAttribute("COLOR_0");
+                    it != primitive.attributes.end()) {
+                    const auto &accessor = gltf.accessors[it->accessorIndex];
+                    size_t i = 0;
+                    if (accessor.type == fastgltf::AccessorType::Vec4) {
+                        for (auto c : fastgltf::iterateAccessor<fastgltf::math::fvec4>(gltf, accessor)) {
+                            vertices[i].color = {c.x(), c.y(), c.z(), c.w()};
+                            ++i;
+                        }
+                    } else {
+                        for (auto c : fastgltf::iterateAccessor<fastgltf::math::fvec3>(gltf, accessor)) {
+                            vertices[i].color = {c.x(), c.y(), c.z(), 1.0f};
+                            ++i;
+                        }
+                    }
+                } else {
+                    for (auto &v : vertices) {
+                        v.color = {1.0f, 1.0f, 1.0f, 1.0f};
+                    }
+                }
+
                 // TANGENT (optional)
                 bool has_tangent = false;
                 if (const auto it = primitive.findAttribute("TANGENT");
@@ -387,7 +409,6 @@ namespace qualquer::app {
             collect(pbr.baseColorTexture, TextureRole::Color);
             collect(pbr.metallicRoughnessTexture, TextureRole::Linear);
             collect(mat.normalTexture, TextureRole::Normal);
-            collect(mat.occlusionTexture, TextureRole::Linear);
             collect(mat.emissiveTexture, TextureRole::Color);
         }
 
@@ -480,8 +501,6 @@ namespace qualquer::app {
             data.roughness_factor = pbr.roughnessFactor;
             data.normal_scale = mat.normalTexture.has_value()
                                     ? mat.normalTexture->scale : 1.0f;
-            data.occlusion_strength = mat.occlusionTexture.has_value()
-                                          ? mat.occlusionTexture->strength : 1.0f;
             data.alpha_cutoff = mat.alphaCutoff;
             data.alpha_mode = static_cast<uint32_t>(convert_alpha_mode(mat.alphaMode));
             data.double_sided = mat.doubleSided ? 1u : 0u;
@@ -500,10 +519,6 @@ namespace qualquer::app {
                                   ? resolve_texture(mat.normalTexture->textureIndex,
                                                     TextureRole::Normal)
                                   : UINT32_MAX;
-            data.occlusion_tex = mat.occlusionTexture.has_value()
-                                     ? resolve_texture(mat.occlusionTexture->textureIndex,
-                                                       TextureRole::Linear)
-                                     : UINT32_MAX;
             data.emissive_tex = mat.emissiveTexture.has_value()
                                     ? resolve_texture(mat.emissiveTexture->textureIndex,
                                                       TextureRole::Color)
@@ -515,7 +530,6 @@ namespace qualquer::app {
                 constexpr uint32_t kDefaultFlatNormalIdx = 1;
                 data.normal_tex = kDefaultFlatNormalIdx;
             }
-            if (data.occlusion_tex == UINT32_MAX) { data.occlusion_tex = kDefaultWhiteIdx; }
             if (data.emissive_tex == UINT32_MAX) {
                 constexpr uint32_t kDefaultBlackIdx = 2;
                 data.emissive_tex = kDefaultBlackIdx;
