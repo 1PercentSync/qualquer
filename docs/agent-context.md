@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4 — 核心 Path Tracer
-- **进度**：Phase 4 Step 8 第二小项完成：SceneStats + draw_scene_info（camera pos/yaw/pitch + 场景资产统计 11 项）
+- **进度**：Phase 4 Step 8 第三小项完成：Accumulate checkbox + Reset 按钮 + Renderer::reset_accumulation()
 
 ### 下一个任务
 
-Phase 4 Step 8 第三小项：功能开关（开/关累积 + 手动 Reset 累积按钮）
+Phase 4 Step 8 第四小项：参数变化触发累积 reset + deferred slider 模式
 
 ---
 
