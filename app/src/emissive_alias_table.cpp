@@ -86,12 +86,11 @@ namespace qualquer::app {
                     .v1 = {v1.x, v1.y, v1.z}, ._pad1 = 0.0f,
                     .v2 = {v2.x, v2.y, v2.z}, ._pad2 = 0.0f,
                     .emission = {emissive_f.x, emissive_f.y, emissive_f.z},
-                    .area = area,
                     .material_index = mesh.material_id,
-                    ._pad3 = 0,
                     .uv0 = {verts[i0].uv0.x, verts[i0].uv0.y},
                     .uv1 = {verts[i1].uv0.x, verts[i1].uv0.y},
                     .uv2 = {verts[i2].uv0.x, verts[i2].uv0.y},
+                    ._pad3 = 0, ._pad4 = 0,
                 });
 
                 powers.push_back(emissive_lum * area);

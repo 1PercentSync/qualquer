@@ -11,13 +11,9 @@
 #include <optix_device.h>
 
 #include <qualquer/renderer/launch_params.h>
+#include <qualquer/renderer/math_utils.cuh>
 
 namespace qualquer::renderer {
-
-// ---- Math constants (from brdf.cuh, repeated to keep nee.cuh self-contained) -
-constexpr float kNeePi       = 3.14159265358979323846f;
-constexpr float kNeeTwoPi    = 6.28318530717958647692f;
-constexpr float kNeeInvPi    = 0.31830988618379067154f;
 
 // ---- Environment alias table sampling ---------------------------------------
 
@@ -60,8 +56,8 @@ __forceinline__ __device__ float3 sample_env_alias_table(
     const float v = (static_cast<float>(py) + r4) / static_cast<float>(height);
 
     // Equirect UV → direction (matches equirect_to_cubemap.cu convention).
-    const float phi   = (u - 0.5f) * kNeeTwoPi;
-    const float theta = (0.5f - v) * kNeePi;
+    const float phi   = (u - 0.5f) * kTwoPi;
+    const float theta = (0.5f - v) * kPi;
     const float cos_theta = __cosf(theta);
 
     return make_float3(cos_theta * __cosf(phi),
@@ -99,8 +95,8 @@ __forceinline__ __device__ float env_pdf(
     // Direction → equirect UV (inverse of the sampling mapping).
     const float phi   = atan2f(dir.z, dir.x);
     const float theta = asinf(fminf(1.0f, fmaxf(-1.0f, dir.y)));
-    const float u = phi / kNeeTwoPi + 0.5f;
-    const float v = 0.5f - theta * kNeeInvPi;
+    const float u = phi / kTwoPi + 0.5f;
+    const float v = 0.5f - theta * kInvPi;
 
     // UV → nearest pixel index.
     const uint32_t px = min(static_cast<uint32_t>(u * static_cast<float>(width)),  width  - 1);
@@ -110,7 +106,7 @@ __forceinline__ __device__ float env_pdf(
     const float lum = alias_table[pixel].luminance;
 
     return fmaxf(lum * static_cast<float>(width) * static_cast<float>(height)
-                 / (total_luminance * kNeeTwoPi * kNeePi), 1e-7f);
+                 / (total_luminance * kTwoPi * kPi), 1e-7f);
 }
 
 // ---- Shadow ray tracing -----------------------------------------------------

@@ -11,12 +11,11 @@
 #include <cuda_runtime.h>
 
 #include <qualquer/optix/cuda_check_kernel.h>
+#include <qualquer/renderer/math_utils.cuh>
 #include <qualquer/app/equirect_to_cubemap.h>
 
 namespace qualquer::app {
     namespace {
-        constexpr float kTwoPi = 6.28318530717958647692f;
-        constexpr float kInvPi = 0.31830988618379067154f;
         constexpr float kHalfMax = 65504.0f;
 
         /**

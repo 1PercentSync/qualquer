@@ -63,8 +63,7 @@ static_assert(sizeof(EnvAliasEntry) == 12);
 /**
  * @brief World-space emissive triangle for NEE sampling.
  *
- * 96 bytes. Vertices are 16-byte aligned for vector loads; the trailing pad
- * keeps the float2 UV members 8-byte aligned.
+ * 96 bytes (16-byte aligned for vertex vector loads across array elements).
  */
 struct EmissiveTriangle {
     /** @brief First vertex position (world space). */
@@ -80,13 +79,8 @@ struct EmissiveTriangle {
     /** @brief Emission color (material emissive_factor constant, not a texture sample). */
     float3 emission;
 
-    /** @brief World-space triangle area. */
-    float area;
-
     /** @brief Material index; NEE samples the emissive texture via the interpolated UV. */
     uint32_t material_index;
-
-    uint32_t _pad3; ///< Aligns the trailing float2 members to 8 bytes.
 
     /** @brief First vertex texture coordinates. */
     float2 uv0;
@@ -94,6 +88,9 @@ struct EmissiveTriangle {
     float2 uv1;
     /** @brief Third vertex texture coordinates. */
     float2 uv2;
+
+    uint32_t _pad3; ///< Pads to 16-byte aligned struct size (96 = 16 × 6).
+    uint32_t _pad4;
 };
 
 static_assert(sizeof(EmissiveTriangle) == 96);

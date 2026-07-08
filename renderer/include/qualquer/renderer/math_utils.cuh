@@ -9,6 +9,13 @@
 
 using qualquer::renderer::float4x4;
 
+// ---- Mathematical constants --------------------------------------------------
+
+constexpr float kPi       = 3.14159265358979323846f;
+constexpr float kTwoPi    = 6.28318530717958647692f;
+constexpr float kInvPi    = 0.31830988618379067154f;
+constexpr float kInvTwoPi = 0.15915494309189533577f;
+
 // ---- float3 / float2 / float4 arithmetic helpers ----------------------------
 
 __forceinline__ __device__ float3 operator+(const float3 a, const float3 b) {

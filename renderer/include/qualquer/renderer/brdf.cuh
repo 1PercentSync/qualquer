@@ -19,12 +19,8 @@
 
 namespace qualquer::renderer {
 
-// ---- Constants --------------------------------------------------------------
+// ---- Constants (pi constants are in math_utils.cuh) -------------------------
 
-constexpr float kPi       = 3.14159265358979323846f;
-constexpr float kTwoPi    = 6.28318530717958647692f;
-constexpr float kInvPi    = 0.31830988618379067154f;
-constexpr float kInvTwoPi = 0.15915494309189533577f;
 constexpr float kEpsilon  = 1.0e-7f;
 
 // ---- Specular: F0 -----------------------------------------------------------
