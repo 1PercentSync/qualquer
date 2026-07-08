@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4 — 核心 Path Tracer
-- **进度**：Phase 4 Step 7 完成（emissive 三角形收集 + env NEE + emissive NEE + shadow terminator + MIS 闭环，编译验证通过）
+- **进度**：Phase 4 Step 8 第一小项完成：RenderSettings 结构体 + DebugUI PT 面板（4 滑块 + sample 数显示）+ Renderer 参数消费与变化检测
 
 ### 下一个任务
 
-Phase 4 Step 8 第一小项：ImGui 面板（max_bounces 滑块 + samples_per_frame 滑块 + exposure 滑块 + FOV 滑块 + 累积 sample 数显示）
+Phase 4 Step 8 第二小项：只读统计面板（Camera position + yaw/pitch、场景资产统计）
 
 ---
 
