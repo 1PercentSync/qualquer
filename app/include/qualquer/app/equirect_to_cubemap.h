@@ -20,7 +20,7 @@ namespace qualquer::app {
      * compress_texture_bc6h().
      *
      * Face size is derived from the equirect width to match angular resolution:
-     * min(bit_ceil(equirect_width / 4), 2048).
+     * min(bit_ceil(equirect_width / 4), 4096).
      *
      * @param rgb_data       Host pointer to RGB float32 equirect pixels (3 floats/pixel).
      * @param equirect_width  Source image width in pixels.
