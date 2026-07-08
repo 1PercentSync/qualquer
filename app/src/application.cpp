@@ -204,6 +204,7 @@ namespace qualquer::app {
                 CUDA_CHECK(cudaStreamSynchronize(cuda_context_.display_stream));
 
                 if (scene_loader_.load_env_map(actions.new_env_map_path)) {
+                    renderer_.reset_accumulation();
                     update_scene_stats();
                     config_.env_map_path = actions.new_env_map_path;
                     save_config(config_);
@@ -486,6 +487,7 @@ namespace qualquer::app {
             scene_loader_.load_env_map(config_.env_map_path);
         }
 
+        renderer_.reset_accumulation();
         update_scene_stats();
 
         config_.scene_path = path;
