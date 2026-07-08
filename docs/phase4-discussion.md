@@ -37,7 +37,7 @@
 **核心问题**：closesthit → raygen 的数据传递走 OptiX payload registers 还是 global buffer？
 
 **选项摘要**：
-- **A. 全信息 Payload**（~18 registers / 72 bytes）：color, next_origin, next_direction, throughput_update, hit_distance, bounce, env_mis_weight, last_brdf_pdf, cone_width, cone_spread — 全走 registers
+- **A. 全信息 Payload**（18+ registers）：color, next_origin, next_direction, throughput_update, hit_distance, bounce, env_mis_weight, last_brdf_pdf, sample_index — 全走 registers（Phase 4.5 ray cone 扩展至 19）
 - **B. Minimal Payload + Global Buffer**（1 register pixel_index）：closesthit 读写全局 buffer
 - **C. Hybrid**：热路径数据走 payload（~10 regs），冷数据走 global
 
@@ -271,9 +271,11 @@
 **关键考量**：
 - mipmap 基础设施完全就绪（`tex2DLod` 可直接使用）
 - Ray cone 减少 texture aliasing noise → 每个 sample 质量更高 → 自适应 spp 更高效
-- 2 floats 已包含在 Himalaya 的 18 register payload 内
+- Phase 4.5 实现时使用 p16（reserved）+ p18（numPayloadValues = 19）
 
-**决策**：✅ **A. Ray Cone**。payload 已有 2 floats 位置，mipmap 基础设施就绪，`tex2DLod` 直接可用。减少高频纹理 aliasing → 每 sample 质量更高。
+**决策**：✅ **A. Ray Cone**。mipmap 基础设施就绪，`tex2DLod` 直接可用。减少高频纹理 aliasing → 每 sample 质量更高。
+
+**Payload register 计划**：p15 = sample_index（raygen sample loop 传递给 closesthit RNG），p16 reserved。Phase 4.5 实现 ray cone 时：p16 → cone_width，p18 → cone_spread（numPayloadValues = 19）。p15 保留不动。
 
 ---
 
