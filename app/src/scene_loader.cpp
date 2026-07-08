@@ -186,7 +186,8 @@ namespace qualquer::app {
     } // anonymous namespace
 
     bool SceneLoader::load(const std::string &path,
-                           const optix::DefaultTextures &default_textures) {
+                           const optix::DefaultTextures &default_textures,
+                           const cudaStream_t stream) {
         spdlog::info("Loading scene: {}", path);
 
         try {
@@ -215,8 +216,8 @@ namespace qualquer::app {
                          gltf.textures.size(),
                          gltf.nodes.size());
 
-            auto mesh_data = load_meshes(gltf);
-            load_materials(gltf, default_textures);
+            auto mesh_data = load_meshes(gltf, stream);
+            load_materials(gltf, default_textures, stream);
             build_mesh_instances(gltf, mesh_data);
 
             // Collect emissive triangles and build alias table (needs materials
@@ -231,11 +232,11 @@ namespace qualquer::app {
             if (!emissive_result.triangles.empty()) {
                 emissive_triangles_.alloc(emissive_result.triangles.size());
                 emissive_triangles_.upload(emissive_result.triangles.data(),
-                                           emissive_result.triangles.size(), nullptr);
+                                           emissive_result.triangles.size(), stream);
 
                 emissive_alias_table_.alloc(emissive_result.alias_table.size());
                 emissive_alias_table_.upload(emissive_result.alias_table.data(),
-                                             emissive_result.alias_table.size(), nullptr);
+                                             emissive_result.alias_table.size(), stream);
             }
 
             return true;
@@ -246,7 +247,8 @@ namespace qualquer::app {
         }
     }
 
-    SceneLoader::MeshLoadResult SceneLoader::load_meshes(const fastgltf::Asset &gltf) {
+    SceneLoader::MeshLoadResult SceneLoader::load_meshes(const fastgltf::Asset &gltf,
+                                                          const cudaStream_t stream) {
         MeshLoadResult result;
         result.prim_offsets.reserve(gltf.meshes.size() + 1);
 
@@ -367,11 +369,11 @@ namespace qualquer::app {
 
                 optix::CudaBuffer<renderer::Vertex> vb;
                 vb.alloc(vertices.size());
-                vb.upload(vertices.data(), vertices.size(), nullptr);
+                vb.upload(vertices.data(), vertices.size(), stream);
 
                 optix::CudaBuffer<uint32_t> ib;
                 ib.alloc(indices.size());
-                ib.upload(indices.data(), indices.size(), nullptr);
+                ib.upload(indices.data(), indices.size(), stream);
 
                 if (!primitive.materialIndex.has_value()) {
                     throw std::runtime_error("Mesh '" + std::string(gltf_mesh.name)
@@ -407,7 +409,8 @@ namespace qualquer::app {
     }
 
     void SceneLoader::load_materials(const fastgltf::Asset &gltf,
-                                     const optix::DefaultTextures &default_textures) {
+                                     const optix::DefaultTextures &default_textures,
+                                     const cudaStream_t stream) {
         // ---- Default texture indices (reserved at the front of texture_objects_) ----
 
         texture_objects_.push_back(default_textures.white.texture_object);
@@ -567,12 +570,12 @@ namespace qualquer::app {
 
         if (!gpu_materials_.empty()) {
             material_buffer_.alloc(gpu_materials_.size());
-            material_buffer_.upload(gpu_materials_.data(), gpu_materials_.size(), nullptr);
+            material_buffer_.upload(gpu_materials_.data(), gpu_materials_.size(), stream);
         }
 
         if (!texture_objects_.empty()) {
             texture_objects_buffer_.alloc(texture_objects_.size());
-            texture_objects_buffer_.upload(texture_objects_.data(), texture_objects_.size(), nullptr);
+            texture_objects_buffer_.upload(texture_objects_.data(), texture_objects_.size(), stream);
         }
 
         spdlog::info("Loaded {} materials, {} scene textures (+ 3 defaults)",
@@ -622,7 +625,7 @@ namespace qualquer::app {
 
     // ---- Environment map ----
 
-    bool SceneLoader::load_env_map(const std::string &path) {
+    bool SceneLoader::load_env_map(const std::string &path, const cudaStream_t stream) {
         destroy_env_map();
 
         if (path.empty()) {
@@ -688,7 +691,7 @@ namespace qualquer::app {
         // Upload alias table to device
         env_alias_table_.alloc(alias_result.entries.size());
         env_alias_table_.upload(alias_result.entries.data(),
-                                alias_result.entries.size(), nullptr);
+                                alias_result.entries.size(), stream);
 
         // Commit all resources
         env_cubemap_texture_ = std::move(cubemap);

@@ -93,7 +93,8 @@ namespace qualquer::app {
         // --- Scene (default textures → glTF load → AS build → camera framing) ---
         default_textures_ = optix::create_default_textures();
         if (!config_.scene_path.empty()) {
-            if (!scene_loader_.load(config_.scene_path, default_textures_)) {
+            if (!scene_loader_.load(config_.scene_path, default_textures_,
+                                    cuda_context_.compute_stream)) {
                 error_message_ = "Failed to load scene: " + config_.scene_path;
             }
         }
@@ -105,7 +106,8 @@ namespace qualquer::app {
 
         // --- Environment map (HDR → cubemap + alias table) ---
         if (!config_.env_map_path.empty()) {
-            scene_loader_.load_env_map(config_.env_map_path);
+            scene_loader_.load_env_map(config_.env_map_path,
+                                       cuda_context_.compute_stream);
         }
 
         update_scene_stats();
@@ -203,7 +205,8 @@ namespace qualquer::app {
                 CUDA_CHECK(cudaStreamSynchronize(cuda_context_.compute_stream));
                 CUDA_CHECK(cudaStreamSynchronize(cuda_context_.display_stream));
 
-                if (scene_loader_.load_env_map(actions.new_env_map_path)) {
+                if (scene_loader_.load_env_map(actions.new_env_map_path,
+                                               cuda_context_.compute_stream)) {
                     renderer_.reset_accumulation();
                     update_scene_stats();
                     config_.env_map_path = actions.new_env_map_path;
@@ -463,7 +466,8 @@ namespace qualquer::app {
         scene_loader_.destroy();
 
         if (!path.empty()) {
-            if (scene_loader_.load(path, default_textures_)) {
+            if (scene_loader_.load(path, default_textures_,
+                                    cuda_context_.compute_stream)) {
                 error_message_.clear();
             } else {
                 error_message_ = "Failed to load scene: " + path;
@@ -484,7 +488,8 @@ namespace qualquer::app {
 
         // Reload env map (destroy() cleared it along with scene resources)
         if (!config_.env_map_path.empty()) {
-            scene_loader_.load_env_map(config_.env_map_path);
+            scene_loader_.load_env_map(config_.env_map_path,
+                                       cuda_context_.compute_stream);
         }
 
         renderer_.reset_accumulation();

@@ -40,10 +40,13 @@ namespace qualquer::app {
          *
          * @param path             Path to the .gltf or .glb file.
          * @param default_textures Default textures for missing material slots.
+         * @param stream           CUDA stream for GPU uploads (must be the same
+         *                         stream used by downstream consumers like AS build).
          * @return true on success, false on failure (scene remains empty).
          */
         bool load(const std::string &path,
-                  const optix::DefaultTextures &default_textures);
+                  const optix::DefaultTextures &default_textures,
+                  cudaStream_t stream);
 
         /**
          * @brief Loads an HDR environment map and prepares GPU resources.
@@ -56,10 +59,11 @@ namespace qualquer::app {
          * On failure, logs the error and leaves env resources empty (no env
          * lighting, but rendering continues).
          *
-         * @param path Path to the .hdr environment map file.
+         * @param path   Path to the .hdr environment map file.
+         * @param stream CUDA stream for GPU uploads.
          * @return true on success, false on failure.
          */
-        bool load_env_map(const std::string &path);
+        bool load_env_map(const std::string &path, cudaStream_t stream);
 
         /**
          * @brief Destroys environment map GPU resources only.
@@ -207,11 +211,12 @@ namespace qualquer::app {
         };
 
         /** @brief Loads all mesh primitives: vertex/index buffers, local AABBs, material IDs. */
-        MeshLoadResult load_meshes(const fastgltf::Asset &gltf);
+        MeshLoadResult load_meshes(const fastgltf::Asset &gltf, cudaStream_t stream);
 
         /** @brief Loads samplers, textures, and materials from the glTF asset. */
         void load_materials(const fastgltf::Asset &gltf,
-                            const optix::DefaultTextures &default_textures);
+                            const optix::DefaultTextures &default_textures,
+                            cudaStream_t stream);
 
         /** @brief Traverses the scene graph and creates MeshInstances with world transforms. */
         void build_mesh_instances(fastgltf::Asset &gltf,
