@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4 — 核心 Path Tracer
-- **进度**：Phase 4 Step 5 数据结构重构 第4小项完成：Closesthit 适配（移除 AO 采样 + base_color × vertex_color）
+- **进度**：Phase 4 Step 5 数据结构重构完成（AO 清理 + 顶点色接入，编译验证通过）
 
 ### 下一个任务
 
-Phase 4 Step 5 数据结构重构 第5小项：请求用户在 CLion 中编译验证（重构核销）
+Phase 4 Step 5 第7小项：创建 `pt_common.cuh`（PathState + ray offset + normal consistency + MIS power heuristic）
 
 ---
 
