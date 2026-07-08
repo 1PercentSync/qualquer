@@ -383,7 +383,9 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
                     params.env_total_luminance, L);
                 const float mis_w = mis_power_heuristic(pdf_light, brdf_pdf_e);
 
-                nee_radiance = env_color * brdf_val * NdotL * mis_w
+                const float st_factor = shadow_terminator_factor(
+                    N_face, N_shading, L);
+                nee_radiance = env_color * brdf_val * NdotL * mis_w * st_factor
                     / fmaxf(pdf_light, 1e-7f);
             }
         }
@@ -465,8 +467,10 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
                 // MIS weight (light sampling strategy).
                 const float mis_w_emi = mis_power_heuristic(light_pdf_emi, brdf_pdf_emi);
 
+                const float st_factor_emi = shadow_terminator_factor(
+                    N_face, N_shading, L);
                 nee_radiance = nee_radiance + Le * brdf_val_emi * NdotL_emi
-                    * mis_w_emi / fmaxf(light_pdf_emi, 1e-7f);
+                    * mis_w_emi * st_factor_emi / fmaxf(light_pdf_emi, 1e-7f);
             }
         }
     }
