@@ -345,9 +345,52 @@ __global__ void __miss__shadow() { // NOLINT(*-reserved-identifier)
     optixSetPayload_0(1);
 }
 
-/// Intentionally empty — opaque geometry disables any-hit via BLAS
-/// per-geometry flag (OPTIX_GEOMETRY_FLAG_DISABLE_ANYHIT). Non-opaque
-/// geometry will invoke this; alpha test logic is added in a later step.
+/// Any-hit alpha test for non-opaque geometry.
+///
+/// Opaque geometry never reaches this (BLAS flag DISABLE_ANYHIT). For
+/// non-opaque geometry with alpha_mode==Mask, samples the base-color
+/// texture alpha, multiplies by base_color_factor.a and interpolated
+/// vertex color alpha, and discards the intersection if the result is
+/// below alpha_cutoff.
 __global__ void __anyhit__ah() { // NOLINT(*-reserved-identifier)
+    using namespace qualquer::renderer;
+
+    const uint32_t geo_index = optixGetInstanceId() + optixGetSbtGASIndex();
+    const auto &geo = params.geometry_infos[geo_index];
+    const auto &mat = params.materials[geo.material_buffer_offset];
+
+    // Opaque materials should never reach any-hit (BLAS geometry flag
+    // prevents it), but guard against misconfiguration.
+    if (mat.alpha_mode == 0u) {
+        return;
+    }
+
+    // ---- Lightweight UV + vertex color alpha interpolation ----
+    const uint32_t prim_idx = optixGetPrimitiveIndex();
+    const auto *indices = reinterpret_cast<const uint32_t *>(geo.index_buffer_address);
+    const uint32_t i0 = indices[3 * prim_idx];
+    const uint32_t i1 = indices[3 * prim_idx + 1];
+    const uint32_t i2 = indices[3 * prim_idx + 2];
+
+    const auto *verts = reinterpret_cast<const DeviceVertex *>(geo.vertex_buffer_address);
+
+    const float2 bary = optixGetTriangleBarycentrics();
+    const float w0 = 1.0f - bary.x - bary.y;
+    const float w1 = bary.x;
+    const float w2 = bary.y;
+
+    const float2 uv = w0 * verts[i0].uv0 + w1 * verts[i1].uv0 + w2 * verts[i2].uv0;
+    const float vert_alpha = w0 * verts[i0].color.w + w1 * verts[i1].color.w + w2 * verts[i2].color.w;
+
+    // ---- Alpha test ----
+    const cudaTextureObject_t *tex = params.texture_objects;
+    const float texel_alpha = tex2D<float4>(tex[mat.base_color_tex], uv.x, uv.y).w;
+    const float alpha = texel_alpha * mat.base_color_factor.w * vert_alpha;
+
+    if (mat.alpha_mode == 1u) {
+        if (alpha < mat.alpha_cutoff) {
+            optixIgnoreIntersection();
+        }
+    }
 }
 } // extern "C"
