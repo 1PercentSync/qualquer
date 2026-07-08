@@ -30,8 +30,8 @@ namespace qualquer::renderer {
         float exposure_ev = 0.0f;
 
         /**
-         * @brief When false, raygen overwrites the buffer every frame instead
-         *        of accumulating onto previous samples (sample_count forced to 0).
+         * @brief When false, accumulation is paused: samples_per_frame is set
+         *        to 0 so raygen preserves the current buffer, display freezes.
          */
         bool accumulation_enabled = true;
     };

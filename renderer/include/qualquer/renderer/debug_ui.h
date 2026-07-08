@@ -5,7 +5,6 @@
  * @brief Debug UI panel module (renderer layer).
  */
 
-#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -260,8 +259,10 @@ namespace qualquer::renderer {
          * @param ctx    Provides settings (mutable), camera (mutable for FOV),
          *               and accumulated_samples.
          * @param action Receives accum_reset_requested on Reset button click.
+         * @param stats  Frame-time statistics (avg_fps for samples/s display).
          */
-        static void draw_path_tracing(const DebugUIContext &ctx, DebugUIActions &action);
+        static void draw_path_tracing(const DebugUIContext &ctx, DebugUIActions &action,
+                                      const FrameStats &stats);
 
         /**
          * @brief Renders camera position, orientation, and scene asset statistics.

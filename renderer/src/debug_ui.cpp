@@ -158,7 +158,7 @@ namespace qualquer::renderer {
         draw_error_banner(ctx, actions);
 
         ImGui::Separator();
-        draw_path_tracing(ctx, actions);
+        draw_path_tracing(ctx, actions, frame_stats_);
 
         ImGui::Separator();
         draw_scene_info(ctx);
@@ -261,8 +261,10 @@ namespace qualquer::renderer {
         }
     }
 
-    void DebugUI::draw_path_tracing(const DebugUIContext &ctx, DebugUIActions &action) {
-        ImGui::Text("Samples: %u", ctx.accumulated_samples);
+    void DebugUI::draw_path_tracing(const DebugUIContext &ctx, DebugUIActions &action,
+                                    const FrameStats &stats) {
+        const float sps = stats.avg_fps * static_cast<float>(ctx.settings.samples_per_frame);
+        ImGui::Text("Samples: %u  (%.0f sps)", ctx.accumulated_samples, sps);
 
         auto bounces = static_cast<int>(ctx.settings.max_bounces);
         if (ImGui::SliderInt("Max Bounces", &bounces, 1, 32)) {

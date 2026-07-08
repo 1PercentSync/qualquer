@@ -389,9 +389,12 @@ namespace qualquer::renderer {
 
         // Accumulation reset: any change in camera matrices or render settings
         // breaks the chain — chain_count drops to 0 so raygen overwrites instead
-        // of accumulating. accumulation_enabled=false forces chain_count to 0
-        // every frame (no accumulation). No buffer clearing: the read slot keeps
-        // its valid count for tonemap; the write slot's count is set at frame end.
+        // of accumulating. No buffer clearing: the read slot keeps its valid
+        // count for tonemap; the write slot's count is set at frame end.
+        //
+        // Accumulation pause (accumulation_enabled=false): effective_spp=0 so
+        // raygen's sample loop doesn't execute — it reads the old total and
+        // writes it back unchanged, count stays the same, display freezes.
         const float exposure_linear = std::pow(2.0f, scene.settings.exposure_ev);
 
         const bool camera_changed =
@@ -401,9 +404,11 @@ namespace qualquer::renderer {
             scene.settings.max_bounces != prev_max_bounces_ ||
             scene.settings.samples_per_frame != prev_samples_per_frame_ ||
             exposure_linear != prev_exposure_;
-        const bool needs_reset =
-            camera_changed || settings_changed || !scene.settings.accumulation_enabled;
+        const bool needs_reset = camera_changed || settings_changed;
         const uint32_t chain_count = needs_reset ? 0 : accum_counts_[accum_index_];
+        const uint32_t effective_spp = scene.settings.accumulation_enabled
+                                           ? scene.settings.samples_per_frame
+                                           : 0;
 
         prev_inv_view_ = scene.camera.inv_view;
         prev_inv_projection_ = scene.camera.inv_projection;
@@ -428,7 +433,7 @@ namespace qualquer::renderer {
             .inv_view = to_float4x4(scene.camera.inv_view),
             .inv_projection = to_float4x4(scene.camera.inv_projection),
             .max_bounces = scene.settings.max_bounces,
-            .samples_per_frame = scene.settings.samples_per_frame,
+            .samples_per_frame = effective_spp,
             .sample_count = chain_count,
             .exposure = exposure_linear,
             // Env light resources (from SceneLoader via SceneRenderInput).
