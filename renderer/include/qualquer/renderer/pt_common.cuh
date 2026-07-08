@@ -49,9 +49,13 @@ struct PathState {
 
 // ---- Ray origin offset (Wächter & Binder, Ray Tracing Gems Ch.6) -----------
 
-// Integer-scale push for large |p| values; linear push for near-origin values.
+// Three constants from Wächter & Binder (Ray Tracing Gems Ch.6 offset_ray):
+//   int_scale   — integer bit-level push magnitude
+//   float_scale — linear push step for near-origin coordinates
+//   origin      — threshold below which the linear push is used
 constexpr float kRayOriginIntScale   = 256.0f;
 constexpr float kRayOriginFloatScale = 1.0f / 65536.0f;
+constexpr float kRayOriginThreshold  = 1.0f / 32.0f;
 
 /**
  * @brief Offsets a ray origin from a surface to prevent self-intersection.
@@ -77,9 +81,9 @@ __forceinline__ __device__ float3 offset_ray_origin(const float3 p,
 
     // Near the origin the integer offset underflows; use a linear push instead.
     return make_float3(
-        fabsf(p.x) < kRayOriginFloatScale ? p.x + kRayOriginFloatScale * n_geo.x : p_ix,
-        fabsf(p.y) < kRayOriginFloatScale ? p.y + kRayOriginFloatScale * n_geo.y : p_iy,
-        fabsf(p.z) < kRayOriginFloatScale ? p.z + kRayOriginFloatScale * n_geo.z : p_iz);
+        fabsf(p.x) < kRayOriginThreshold ? p.x + kRayOriginFloatScale * n_geo.x : p_ix,
+        fabsf(p.y) < kRayOriginThreshold ? p.y + kRayOriginFloatScale * n_geo.y : p_iy,
+        fabsf(p.z) < kRayOriginThreshold ? p.z + kRayOriginFloatScale * n_geo.z : p_iz);
 }
 
 // ---- Shading normal consistency --------------------------------------------
