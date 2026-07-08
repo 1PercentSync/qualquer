@@ -84,7 +84,7 @@ MUSTREAD:4
 ## Step 8：UI 参数面板
 
 - [x] ImGui 面板：max_bounces（滑块）、samples_per_frame（滑块）、exposure（滑块）、FOV（滑块）、累积 sample 数显示（只读，读 accum_counts）
-- [ ] 只读统计面板：Camera position + yaw/pitch、场景资产统计（Meshes/BLAS、Instances、TLAS Instances、Materials、Textures、Triangles、Vertices、Emissive triangles、Env map resolution）
+- [x] 只读统计面板：Camera position + yaw/pitch、场景资产统计（Meshes/BLAS、Instances、TLAS Instances、Materials、Textures、Triangles、Vertices、Emissive triangles、Env map resolution）
 - [ ] 功能开关：开/关累积（每帧覆写不累积）、手动 Reset 累积按钮
 - [ ] 参数变化触发累积 reset（chain_count 归零，无需清零 buffer）；滑块使用 deferred 模式（拖拽立即生效，Ctrl+Click 文本输入延迟到确认）
 - [ ] SER 性能测试：对比 SER 开/关 以及 hint/无 hint 的帧率差异
