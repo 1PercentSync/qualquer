@@ -14,32 +14,32 @@
 // standalone nvcc custom command does not inherit vcpkg system include paths.
 // static_asserts lock the layout against the host-side originals.
 namespace qualquer::renderer {
+    struct GPUGeometryInfo {
+        CUdeviceptr vertex_buffer_address;
+        CUdeviceptr index_buffer_address;
+        uint32_t material_buffer_offset;
+        // ReSharper disable once CppDeclaratorNeverUsed
+        uint32_t padding;
+    };
 
-struct GPUGeometryInfo {
-    CUdeviceptr vertex_buffer_address;
-    CUdeviceptr index_buffer_address;
-    uint32_t material_buffer_offset;
-    // ReSharper disable once CppDeclaratorNeverUsed
-    uint32_t padding;
-};
-static_assert(sizeof(GPUGeometryInfo) == 24);
+    static_assert(sizeof(GPUGeometryInfo) == 24);
 
-struct alignas(16) Material {
-    float4 base_color_factor;
-    float4 emissive_factor;
-    float metallic_factor;
-    float roughness_factor;
-    float normal_scale;
-    uint32_t base_color_tex;
-    uint32_t emissive_tex;
-    uint32_t metallic_roughness_tex;
-    uint32_t normal_tex;
-    float alpha_cutoff;
-    uint32_t alpha_mode;
-    uint32_t double_sided;
-};
-static_assert(sizeof(Material) == 80);
+    struct alignas(16) Material {
+        float4 base_color_factor;
+        float4 emissive_factor;
+        float metallic_factor;
+        float roughness_factor;
+        float normal_scale;
+        uint32_t base_color_tex;
+        uint32_t emissive_tex;
+        uint32_t metallic_roughness_tex;
+        uint32_t normal_tex;
+        float alpha_cutoff;
+        uint32_t alpha_mode;
+        uint32_t double_sided;
+    };
 
+    static_assert(sizeof(Material) == 80);
 } // namespace qualquer::renderer
 
 #include <qualquer/renderer/math_utils.cuh>
@@ -54,8 +54,8 @@ static_assert(sizeof(Material) == 80);
 extern "C" {
 __constant__ qualquer::renderer::LaunchParams params;
 
-/// Ray generation: single-sample PathState-driven bounce loop.
-/// Sample loop + subpixel jitter added in the next checkpoint.
+/// Ray generation: samples_per_frame paths per pixel with subpixel jitter,
+/// accumulated in registers and written once to the Separate Sum buffer.
 __global__ void __raygen__rg() { // NOLINT(*-reserved-identifier)
     using namespace qualquer::renderer;
 
@@ -69,108 +69,121 @@ __global__ void __raygen__rg() { // NOLINT(*-reserved-identifier)
     if (params.traversable == 0) {
         const float4 old = params.accumulation_buffer_read[pixel_index];
         params.accumulation_buffer[pixel_index] =
-            make_float4(old.x, old.y, old.z, 1.0f);
+                make_float4(old.x, old.y, old.z, 1.0f);
         return;
     }
 
-    // ---- Primary ray (pixel center, no jitter yet) ----
-    const float u = (static_cast<float>(idx.x) + 0.5f) / static_cast<float>(params.width);
-    const float v = (static_cast<float>(idx.y) + 0.5f) / static_cast<float>(params.height);
-    const float ndc_x =  u * 2.0f - 1.0f;
-    const float ndc_y = -(v * 2.0f - 1.0f);
-
-    const float4 clip_target = make_float4(ndc_x, ndc_y, 1.0f, 1.0f);
-    float4 view_target = mul(params.inv_projection, clip_target);
-    const float inv_w = 1.0f / view_target.w;
-    view_target = make_float4(view_target.x * inv_w,
-                              view_target.y * inv_w,
-                              view_target.z * inv_w,
-                              1.0f);
-
+    // Camera origin (constant across all samples within this frame).
     const float4 origin_w = mul(params.inv_view, make_float4(0.0f, 0.0f, 0.0f, 1.0f));
-    const float4 dir_w    = mul(params.inv_view, make_float4(view_target.x,
+    const float3 cam_origin = make_float3(origin_w.x, origin_w.y, origin_w.z);
+
+    // Register-local accumulation across all samples in this frame.
+    float3 frame_radiance = make_float3(0.0f, 0.0f, 0.0f);
+
+    for (uint32_t s = 0; s < params.samples_per_frame; ++s) {
+        const uint32_t sample_index = params.sample_count + s;
+
+        // ---- Primary ray with subpixel jitter ----
+        const float jx = rng(pixel_index, sample_index, kDimJitterX);
+        const float jy = rng(pixel_index, sample_index, kDimJitterY);
+
+        const float u = (static_cast<float>(idx.x) + jx) / static_cast<float>(params.width);
+        const float v = (static_cast<float>(idx.y) + jy) / static_cast<float>(params.height);
+        const float ndc_x = u * 2.0f - 1.0f;
+        const float ndc_y = -(v * 2.0f - 1.0f);
+
+        const float4 clip_target = make_float4(ndc_x, ndc_y, 1.0f, 1.0f);
+        float4 view_target = mul(params.inv_projection, clip_target);
+        const float inv_w = 1.0f / view_target.w;
+        view_target = make_float4(view_target.x * inv_w,
+                                  view_target.y * inv_w,
+                                  view_target.z * inv_w,
+                                  1.0f);
+        const float4 dir_w = mul(params.inv_view, make_float4(view_target.x,
                                                               view_target.y,
                                                               view_target.z,
                                                               0.0f));
 
-    // ---- PathState ----
-    PathState path{};
-    path.origin      = make_float3(origin_w.x, origin_w.y, origin_w.z);
-    path.direction   = normalize(make_float3(dir_w.x, dir_w.y, dir_w.z));
-    path.throughput  = make_float3(1.0f, 1.0f, 1.0f);
-    path.radiance    = make_float3(0.0f, 0.0f, 0.0f);
-    path.pixel_index = pixel_index;
-    path.sample_index = params.sample_count;
-    path.bounce      = 0;
-    path.alive       = true;
+        // ---- PathState ----
+        PathState path{};
+        path.origin = cam_origin;
+        path.direction = normalize(make_float3(dir_w.x, dir_w.y, dir_w.z));
+        path.throughput = make_float3(1.0f, 1.0f, 1.0f);
+        path.radiance = make_float3(0.0f, 0.0f, 0.0f);
+        path.pixel_index = pixel_index;
+        path.sample_index = sample_index;
+        path.bounce = 0;
+        path.alive = true;
 
-    // ---- Bounce loop ----
-    // 18 payload registers persist across bounces so closesthit's
-    // env_mis_weight survives into the next iteration's miss read.
-    uint32_t p0 = 0, p1 = 0, p2 = 0, p3 = 0, p4 = 0, p5 = 0;
-    uint32_t p6 = 0, p7 = 0, p8 = 0, p9 = 0, p10 = 0, p11 = 0;
-    uint32_t p12 = 0, p13 = __float_as_uint(1.0f), p14 = 0;
-    uint32_t p15 = 0, p16 = 0, p17 = 0;
+        // ---- Bounce loop ----
+        // Payload registers persist across bounces: closesthit's env_mis_weight
+        // (p13) survives into the next iteration's miss read.
+        uint32_t p0 = 0, p1 = 0, p2 = 0, p3 = 0, p4 = 0, p5 = 0;
+        uint32_t p6 = 0, p7 = 0, p8 = 0, p9 = 0, p10 = 0, p11 = 0;
+        uint32_t p12 = 0, p13 = __float_as_uint(1.0f), p14 = 0;
+        uint32_t p15 = 0, p16 = 0, p17 = 0;
 
-    while (path.alive && path.bounce < params.max_bounces) {
-        p17 = path.bounce;
+        while (path.alive && path.bounce < params.max_bounces) {
+            p15 = sample_index;
+            p17 = path.bounce;
 
-        optixTrace(params.traversable,
-                   path.origin,
-                   path.direction,
-                   0.0f,           // tmin
-                   1e16f,          // tmax
-                   0.0f,           // rayTime
-                   0xFF,           // visibilityMask
-                   OPTIX_RAY_FLAG_NONE,
-                   0,              // SBT offset
-                   1,              // SBT stride
-                   0,              // miss SBT index
-                   p0, p1, p2, p3, p4, p5,
-                   p6, p7, p8, p9, p10, p11,
-                   p12, p13, p14, p15, p16, p17);
+            optixTrace(params.traversable,
+                       path.origin,
+                       path.direction,
+                       0.0f, // tmin
+                       1e16f, // tmax
+                       0.0f, // rayTime
+                       0xFF, // visibilityMask
+                       OPTIX_RAY_FLAG_NONE,
+                       0, // SBT offset
+                       1, // SBT stride
+                       0, // miss SBT index
+                       p0, p1, p2, p3, p4, p5,
+                       p6, p7, p8, p9, p10, p11,
+                       p12, p13, p14, p15, p16, p17);
 
-        const PayloadData d = payload_unpack(
-            p0, p1, p2, p3, p4, p5,
-            p6, p7, p8, p9, p10, p11,
-            p12, p13, p14, p15, p16, p17);
+            const PayloadData d = payload_unpack(
+                p0, p1, p2, p3, p4, p5,
+                p6, p7, p8, p9, p10, p11,
+                p12, p13, p14, p15, p16, p17);
 
-        // Accumulate radiance contribution from this bounce.
-        float3 contribution = path.throughput * d.color;
-        if (d.hit_distance < 0.0f) {
-            // Miss (or invalid BRDF sample): apply env MIS weight.
-            contribution = contribution * d.env_mis_weight;
+            // Accumulate radiance contribution from this bounce.
+            float3 contribution = path.throughput * d.color;
+            if (d.hit_distance < 0.0f) {
+                contribution = contribution * d.env_mis_weight;
+            }
+            path.radiance = path.radiance + contribution;
+
+            if (d.hit_distance < 0.0f) {
+                path.alive = false;
+                break;
+            }
+
+            path.throughput = path.throughput * d.throughput_update;
+
+            if (fmaxf(path.throughput.x, fmaxf(path.throughput.y, path.throughput.z)) < 1e-6f) {
+                path.alive = false;
+                break;
+            }
+
+            path.origin = d.next_origin;
+            path.direction = d.next_direction;
+            path.bounce += 1;
         }
-        path.radiance = path.radiance + contribution;
 
-        // Miss terminates the path.
-        if (d.hit_distance < 0.0f) {
-            path.alive = false;
-            break;
-        }
-
-        // Update throughput and advance ray.
-        path.throughput = path.throughput * d.throughput_update;
-
-        // Early termination if throughput is negligible.
-        if (fmaxf(path.throughput.x, fmaxf(path.throughput.y, path.throughput.z)) < 1e-6f) {
-            path.alive = false;
-            break;
-        }
-
-        path.origin    = d.next_origin;
-        path.direction = d.next_direction;
-        path.bounce   += 1;
+        frame_radiance = frame_radiance + path.radiance;
     }
 
-    // ---- Separate Sum accumulation ----
-    const float3 r = path.radiance;
+    // ---- Separate Sum accumulation (all samples written at once) ----
     if (params.sample_count == 0) {
-        params.accumulation_buffer[pixel_index] = make_float4(r.x, r.y, r.z, 1.0f);
+        params.accumulation_buffer[pixel_index] =
+                make_float4(frame_radiance.x, frame_radiance.y, frame_radiance.z, 1.0f);
     } else {
         const float4 old = params.accumulation_buffer_read[pixel_index];
         params.accumulation_buffer[pixel_index] =
-            make_float4(old.x + r.x, old.y + r.y, old.z + r.z, 1.0f);
+                make_float4(old.x + frame_radiance.x,
+                            old.y + frame_radiance.y,
+                            old.z + frame_radiance.z, 1.0f);
     }
 }
 
@@ -218,11 +231,11 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
     const float w1 = bary.x;
     const float w2 = bary.y;
 
-    const float3 obj_pos     = w0 * v0.position + w1 * v1.position + w2 * v2.position;
-    const float3 obj_normal  = w0 * v0.normal   + w1 * v1.normal   + w2 * v2.normal;
-    const float2 uv          = w0 * v0.uv0      + w1 * v1.uv0      + w2 * v2.uv0;
-    const float4 vert_color  = w0 * v0.color    + w1 * v1.color    + w2 * v2.color;
-    const float4 tangent     = w0 * v0.tangent  + w1 * v1.tangent  + w2 * v2.tangent;
+    const float3 obj_pos = w0 * v0.position + w1 * v1.position + w2 * v2.position;
+    const float3 obj_normal = w0 * v0.normal + w1 * v1.normal + w2 * v2.normal;
+    const float2 uv = w0 * v0.uv0 + w1 * v1.uv0 + w2 * v2.uv0;
+    const float4 vert_color = w0 * v0.color + w1 * v1.color + w2 * v2.color;
+    const float4 tangent = w0 * v0.tangent + w1 * v1.tangent + w2 * v2.tangent;
 
     const float3 face_normal_obj = cross(v1.position - v0.position,
                                          v2.position - v0.position);
@@ -230,14 +243,14 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
     // ---- World-space transforms ----
     const float3 world_pos = optixTransformPointFromObjectToWorldSpace(obj_pos);
     float3 N_interp = normalize(optixTransformNormalFromObjectToWorldSpace(obj_normal));
-    float3 N_face   = normalize(optixTransformNormalFromObjectToWorldSpace(face_normal_obj));
+    float3 N_face = normalize(optixTransformNormalFromObjectToWorldSpace(face_normal_obj));
     const float3 T_world = normalize(optixTransformVectorFromObjectToWorldSpace(
         make_float3(tangent.x, tangent.y, tangent.z)));
 
     // ---- Back-face flip ----
     const float3 ray_dir = optixGetWorldRayDirection();
     if (dot(N_face, ray_dir) > 0.0f) {
-        N_face   = -N_face;
+        N_face = -N_face;
         N_interp = -N_interp;
     }
 
@@ -250,9 +263,9 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
                                           bc_texel.z * mat.base_color_factor.z * vert_color.z);
 
     const auto mr_texel = tex2D<float4>(tex[mat.metallic_roughness_tex], uv.x, uv.y);
-    const float metallic  = mr_texel.z * mat.metallic_factor;
+    const float metallic = mr_texel.z * mat.metallic_factor;
     const float roughness = fmaxf(mr_texel.y * mat.roughness_factor, 0.04f);
-    const float alpha     = fmaxf(roughness * roughness, 1e-4f);
+    const float alpha = fmaxf(roughness * roughness, 1e-4f);
 
     // ---- Normal mapping + consistency ----
     const auto nm_texel = tex2D<float4>(tex[mat.normal_tex], uv.x, uv.y);
@@ -280,13 +293,13 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
 
     const uint3 launch_idx = optixGetLaunchIndex();
     const uint32_t pixel_index = launch_idx.y * params.width + launch_idx.x;
-    const uint32_t sample_index = params.sample_count;
+    const uint32_t sample_index = payload_get_sample_index();
     const uint32_t bounce = payload_get_bounce();
     const uint32_t dim_base = bounce_dim_base(bounce);
 
     const float u_lobe = rng(pixel_index, sample_index, dim_base + kBounceOffsetLobeSelect);
-    const float u0     = rng(pixel_index, sample_index, dim_base + kBounceOffsetBrdfXi0);
-    const float u1     = rng(pixel_index, sample_index, dim_base + kBounceOffsetBrdfXi1);
+    const float u0 = rng(pixel_index, sample_index, dim_base + kBounceOffsetBrdfXi0);
+    const float u1 = rng(pixel_index, sample_index, dim_base + kBounceOffsetBrdfXi1);
 
     const BrdfSample bs = brdf_sample(bp, u_lobe, u0, u1);
 
@@ -315,5 +328,4 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
 /// Intentionally empty — opaque geometry disables any-hit.
 __global__ void __anyhit__ah() { // NOLINT(*-reserved-identifier)
 }
-
-}  // extern "C"
+} // extern "C"

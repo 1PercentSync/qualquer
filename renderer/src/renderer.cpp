@@ -491,8 +491,8 @@ namespace qualquer::renderer {
         constexpr cudaExternalSemaphoreSignalParams signal_params{};
         CUDA_CHECK(cudaSignalExternalSemaphoresAsync(&sem, &signal_params, 1, cuda_context.display_stream));
 
-        // The write slot now holds chain_count + 1 samples (raygen added one).
-        accum_counts_[1 - accum_index_] = chain_count + 1;
+        // The write slot now holds chain_count + samples_per_frame samples.
+        accum_counts_[1 - accum_index_] = chain_count + params.samples_per_frame;
         accum_index_ = 1 - accum_index_;
         ++frame_counter_;
     }
