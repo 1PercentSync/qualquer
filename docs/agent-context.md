@@ -15,7 +15,7 @@
 
 ### 下一个任务
 
-Phase 4 Step 6 第五小项：SceneLoader / Renderer 适配（geom.opaque 按 alpha_mode 判断、BLAS flag 设置）
+Phase 4 Step 6 第五小项：Mesh 新增 `opaque` 字段，SceneLoader 填充，group_meshes 读取
 
 ---
 
