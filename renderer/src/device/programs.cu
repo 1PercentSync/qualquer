@@ -309,11 +309,30 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
         make_float2(nm_texel.x, nm_texel.y), mat.normal_scale);
     const float3 N_shading = ensure_normal_consistency(N_mapped, N_interp);
 
-    // ---- Emissive ----
+    // ---- Emissive (with BRDF-strategy MIS weight for bounce > 0) ----
     const auto em_texel = tex2D<float4>(tex[mat.emissive_tex], uv.x, uv.y);
-    const float3 emissive = make_float3(em_texel.x * mat.emissive_factor.x,
-                                        em_texel.y * mat.emissive_factor.y,
-                                        em_texel.z * mat.emissive_factor.z);
+    float3 emissive = make_float3(em_texel.x * mat.emissive_factor.x,
+                                  em_texel.y * mat.emissive_factor.y,
+                                  em_texel.z * mat.emissive_factor.z);
+
+    // Bounce 0 (direct view): weight 1.0 — primary ray is not a BRDF sample.
+    // Bounce > 0 with emissive NEE active: BRDF hit emissive is one of two MIS
+    // strategies, weight by power_heuristic(brdf_pdf, light_pdf).
+    // Bounce > 0 without emissive NEE: weight 1.0 — no competing strategy.
+    const uint32_t bounce = payload_get_bounce();
+    if (bounce > 0 && params.emissive_count > 0) {
+        const float emi_lum = 0.2126f * mat.emissive_factor.x
+            + 0.7152f * mat.emissive_factor.y + 0.0722f * mat.emissive_factor.z;
+        if (emi_lum > 0.0f) {
+            const float cos_theta_l = fabsf(dot(N_face, ray_dir));
+            const float hit_dist = optixGetRayTmax();
+            const float light_pdf = emissive_light_pdf(
+                emi_lum, hit_dist, cos_theta_l, params.emissive_total_power);
+            const float last_brdf_pdf = payload_get_last_brdf_pdf();
+            const float mis_w = mis_power_heuristic(last_brdf_pdf, light_pdf);
+            emissive = emissive * mis_w;
+        }
+    }
 
     // ---- Ray offset ----
     const float3 offset_pos = offset_ray_origin(world_pos, N_face);
@@ -329,7 +348,6 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
     const uint3 launch_idx = optixGetLaunchIndex();
     const uint32_t pixel_index = launch_idx.y * params.width + launch_idx.x;
     const uint32_t sample_index = payload_get_sample_index();
-    const uint32_t bounce = payload_get_bounce();
     const uint32_t dim_base = bounce_dim_base(bounce);
 
     const float u_lobe = rng(pixel_index, sample_index, dim_base + kBounceOffsetLobeSelect);

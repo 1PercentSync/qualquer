@@ -135,4 +135,9 @@ namespace qualquer::renderer {
     __forceinline__ __device__ uint32_t payload_get_sample_index() {
         return optixGetPayload_15();
     }
+
+    /** @brief Reads last_brdf_pdf from p14 (set by previous closesthit). */
+    __forceinline__ __device__ float payload_get_last_brdf_pdf() {
+        return __uint_as_float(optixGetPayload_14());
+    }
 } // namespace qualquer::renderer
