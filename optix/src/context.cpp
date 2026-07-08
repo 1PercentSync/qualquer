@@ -245,14 +245,13 @@ namespace qualquer::optix {
 
     void Context::release_display_buffer() {
         // Reverse creation order: the surface wraps array_, so it must go before
-        // array_; array_ is a level of mipmap_array_, which is mapped onto
-        // external_memory_, so each is freed before its backing object.
+        // mipmap_array_, which is mapped onto external_memory_.
         if (display_surface != 0) {
             CUDA_CHECK(cudaDestroySurfaceObject(display_surface));
         }
-        if (array_ != nullptr) {
-            CUDA_CHECK(cudaFreeArray(array_));
-        }
+        // array_ is a level view obtained from cudaGetMipmappedArrayLevel —
+        // not allocated by cudaMallocArray, so must not be passed to
+        // cudaFreeArray. It is invalidated when mipmap_array_ is freed.
         if (mipmap_array_ != nullptr) {
             CUDA_CHECK(cudaFreeMipmappedArray(mipmap_array_));
         }
