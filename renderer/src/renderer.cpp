@@ -728,4 +728,8 @@ namespace qualquer::renderer {
     uint32_t Renderer::accumulated_samples() const {
         return accum_counts_[accum_index_];
     }
+
+    void Renderer::reset_accumulation() {
+        accum_counts_ = {0, 0};
+    }
 } // namespace qualquer::renderer

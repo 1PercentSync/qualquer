@@ -185,6 +185,9 @@ namespace qualquer::app {
             if (actions.error_dismissed) {
                 error_message_.clear();
             }
+            if (actions.accum_reset_requested) {
+                renderer_.reset_accumulation();
+            }
             if (actions.scene_load_requested) {
                 // switch_scene drains the CUDA streams, so this frame's already-
                 // submitted raygen/tonemap finish before the old scene buffers are

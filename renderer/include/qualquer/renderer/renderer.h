@@ -237,6 +237,14 @@ namespace qualquer::renderer {
          */
         [[nodiscard]] uint32_t accumulated_samples() const;
 
+        /**
+         * @brief Forces the next frame to overwrite instead of accumulating.
+         *
+         * Zeros both per-slot sample counts so the next submit_cuda sees
+         * chain_count=0 regardless of camera/settings state.
+         */
+        void reset_accumulation();
+
     private:
         /** @brief OptiX pipeline (module, program groups, linked handle). */
         optix::Pipeline pipeline_;

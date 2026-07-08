@@ -279,6 +279,12 @@ namespace qualquer::renderer {
 
         slider_angle_deferred("FOV", &ctx.camera.fov,
                               30.0f, 120.0f, "%.1f\xC2\xB0");
+
+        ImGui::Checkbox("Accumulate", &ctx.settings.accumulation_enabled);
+
+        if (ImGui::Button("Reset")) {
+            action.accum_reset_requested = true;
+        }
     }
 
     void DebugUI::draw_scene_info(const DebugUIContext &ctx) {
