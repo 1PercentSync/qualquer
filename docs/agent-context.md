@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4 — 核心 Path Tracer
-- **进度**：Phase 4 Step 6 完成（alpha mask + double-sided pass-through + shadow miss + BLAS opaque flag，编译验证通过）
+- **进度**：Phase 4 Step 7 第一小项完成：emissive_alias_table.h/cpp 已创建，SceneLoader 集成 emissive 三角形收集 + alias table 构建 + GPU 上传，数据链贯通到 LaunchParams
 
 ### 下一个任务
 
-Phase 4 Step 7 第一小项：Emissive 三角形收集（SceneLoader 遍历 emissive 材质三角形 + alias table 构建）
+Phase 4 Step 7 第二小项：Env NEE（closesthit 中 alias table 采样环境光方向 + env pdf + shadow ray + BRDF eval + MIS weight）
 
 ---
 
