@@ -132,22 +132,24 @@ __global__ void __raygen__rg() { // NOLINT(*-reserved-identifier)
 /// Samples the HDR environment cubemap along the missed ray direction.
 /// Falls back to a constant background when no env cubemap is loaded.
 __global__ void __miss__env() { // NOLINT(*-reserved-identifier)
+    using namespace qualquer::renderer;
+
+    float3 env_color = make_float3(0.0f, 0.0f, 0.0f);
     if (params.env_cubemap != 0) {
         const float3 dir = optixGetWorldRayDirection();
         const auto texel = texCubemap<float4>(params.env_cubemap, dir.x, dir.y, dir.z);
-        optixSetPayload_0(__float_as_uint(texel.x));
-        optixSetPayload_1(__float_as_uint(texel.y));
-        optixSetPayload_2(__float_as_uint(texel.z));
-    } else {
-        optixSetPayload_0(__float_as_uint(0.0f));
-        optixSetPayload_1(__float_as_uint(0.0f));
-        optixSetPayload_2(__float_as_uint(0.0f));
+        env_color = make_float3(texel.x, texel.y, texel.z);
     }
+
+    payload_set_color(env_color);
+    payload_set_hit_distance(-1.0f);
 }
 
-/// Closest hit: geometry lookup → vertex interpolation → PBR texture sampling
-/// → normal mapping → ambient shading (baseColor × occlusion) → payload.
+/// Closest hit: geometry + material setup, normal mapping, ray offset,
+/// 18-register payload write. BRDF sampling added in the next checkpoint.
 __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
+    using namespace qualquer::renderer;
+
     // ---- Geometry info + material lookup ----
     const uint32_t geo_index = optixGetInstanceId() + optixGetSbtGASIndex();
     const auto &geo = params.geometry_infos[geo_index];
@@ -171,19 +173,20 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
     const float w1 = bary.x;
     const float w2 = bary.y;
 
-    const float3 obj_normal  = w0 * v0.normal  + w1 * v1.normal  + w2 * v2.normal;
-    const float2 uv          = w0 * v0.uv0     + w1 * v1.uv0     + w2 * v2.uv0;
-    const float4 vert_color  = w0 * v0.color   + w1 * v1.color   + w2 * v2.color;
-    const float4 tangent     = w0 * v0.tangent + w1 * v1.tangent + w2 * v2.tangent;
+    const float3 obj_pos     = w0 * v0.position + w1 * v1.position + w2 * v2.position;
+    const float3 obj_normal  = w0 * v0.normal   + w1 * v1.normal   + w2 * v2.normal;
+    const float2 uv          = w0 * v0.uv0      + w1 * v1.uv0      + w2 * v2.uv0;
+    const float4 vert_color  = w0 * v0.color    + w1 * v1.color    + w2 * v2.color;
+    const float4 tangent     = w0 * v0.tangent  + w1 * v1.tangent  + w2 * v2.tangent;
 
-    // Face normal from triangle edges (object space, not normalized)
     const float3 face_normal_obj = cross(v1.position - v0.position,
                                          v2.position - v0.position);
 
     // ---- World-space transforms ----
+    const float3 world_pos = optixTransformPointFromObjectToWorldSpace(obj_pos);
     float3 N_interp = normalize(optixTransformNormalFromObjectToWorldSpace(obj_normal));
     float3 N_face   = normalize(optixTransformNormalFromObjectToWorldSpace(face_normal_obj));
-    const float3 T_world  = normalize(optixTransformVectorFromObjectToWorldSpace(
+    const float3 T_world = normalize(optixTransformVectorFromObjectToWorldSpace(
         make_float3(tangent.x, tangent.y, tangent.z)));
 
     // ---- Back-face flip ----
@@ -200,25 +203,43 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
                                           bc_texel.y * mat.base_color_factor.y * vert_color.y,
                                           bc_texel.z * mat.base_color_factor.z * vert_color.z);
 
-    // Metallic-roughness and emissive sampled for pipeline validation
     const auto mr_texel = tex2D<float4>(tex[mat.metallic_roughness_tex], uv.x, uv.y);
-    const auto em_texel = tex2D<float4>(tex[mat.emissive_tex], uv.x, uv.y);
-    (void)mr_texel;
-    (void)em_texel;
+    const float metallic  = mr_texel.z * mat.metallic_factor;
+    const float roughness = fmaxf(mr_texel.y * mat.roughness_factor, 0.04f);
+    const float alpha     = fmaxf(roughness * roughness, 1e-4f);
 
-    // ---- Normal mapping (TBN + BC5 normal map) ----
+    // ---- Normal mapping + consistency ----
     const auto nm_texel = tex2D<float4>(tex[mat.normal_tex], uv.x, uv.y);
-    const float3 N_shading = get_shading_normal(
+    const float3 N_mapped = get_shading_normal(
         N_interp, T_world, tangent.w,
         make_float2(nm_texel.x, nm_texel.y), mat.normal_scale);
+    const float3 N_shading = ensure_normal_consistency(N_mapped, N_interp);
+
+    // ---- Emissive ----
+    const auto em_texel = tex2D<float4>(tex[mat.emissive_tex], uv.x, uv.y);
+    const float3 emissive = make_float3(em_texel.x * mat.emissive_factor.x,
+                                        em_texel.y * mat.emissive_factor.y,
+                                        em_texel.z * mat.emissive_factor.z);
+
+    // ---- Ray offset ----
+    const float3 offset_pos = offset_ray_origin(world_pos, N_face);
+
+    // Material params extracted for BRDF sampling (next checkpoint).
+    (void)metallic;
+    (void)roughness;
+    (void)alpha;
+    (void)base_color;
     (void)N_shading;
 
-    // ---- Ambient shading: baseColor (includes vertex color) ----
-    const float3 color = base_color;
-
-    optixSetPayload_0(__float_as_uint(color.x));
-    optixSetPayload_1(__float_as_uint(color.y));
-    optixSetPayload_2(__float_as_uint(color.z));
+    // ---- 18-register payload (basic: emissive only, terminate path) ----
+    payload_set_next_origin(offset_pos);
+    payload_set_next_direction(make_float3(0.0f, 0.0f, 0.0f));
+    payload_set_throughput_update(make_float3(0.0f, 0.0f, 0.0f));
+    payload_set_color(emissive);
+    payload_set_hit_distance(optixGetRayTmax());
+    payload_set_env_mis_weight(1.0f);
+    payload_set_last_brdf_pdf(0.0f);
+    payload_set_bounce(payload_get_bounce());
 }
 
 /// Intentionally empty — opaque geometry disables any-hit.
