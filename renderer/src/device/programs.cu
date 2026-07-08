@@ -190,7 +190,8 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
         make_float3(tangent.x, tangent.y, tangent.z)));
 
     // ---- Back-face flip ----
-    if (const float3 ray_dir = optixGetWorldRayDirection(); dot(N_face, ray_dir) > 0.0f) {
+    const float3 ray_dir = optixGetWorldRayDirection();
+    if (dot(N_face, ray_dir) > 0.0f) {
         N_face   = -N_face;
         N_interp = -N_interp;
     }
@@ -224,22 +225,46 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
     // ---- Ray offset ----
     const float3 offset_pos = offset_ray_origin(world_pos, N_face);
 
-    // Material params extracted for BRDF sampling (next checkpoint).
-    (void)metallic;
-    (void)roughness;
-    (void)alpha;
-    (void)base_color;
-    (void)N_shading;
+    // ---- BRDF sampling ----
+    const float3 V = -ray_dir;
+    float3 T_basis, B_basis;
+    build_orthonormal_basis(N_shading, T_basis, B_basis);
+    const BrdfParams bp = init_brdf_params(
+        V, N_shading, T_basis, B_basis,
+        base_color, metallic, roughness, alpha);
 
-    // ---- 18-register payload (basic: emissive only, terminate path) ----
+    const uint3 launch_idx = optixGetLaunchIndex();
+    const uint32_t pixel_index = launch_idx.y * params.width + launch_idx.x;
+    const uint32_t sample_index = params.sample_count;
+    const uint32_t bounce = payload_get_bounce();
+    const uint32_t dim_base = bounce_dim_base(bounce);
+
+    const float u_lobe = rng(pixel_index, sample_index, dim_base + kBounceOffsetLobeSelect);
+    const float u0     = rng(pixel_index, sample_index, dim_base + kBounceOffsetBrdfXi0);
+    const float u1     = rng(pixel_index, sample_index, dim_base + kBounceOffsetBrdfXi1);
+
+    const BrdfSample bs = brdf_sample(bp, u_lobe, u0, u1);
+
+    // ---- Write 18-register payload ----
     payload_set_next_origin(offset_pos);
-    payload_set_next_direction(make_float3(0.0f, 0.0f, 0.0f));
-    payload_set_throughput_update(make_float3(0.0f, 0.0f, 0.0f));
     payload_set_color(emissive);
+    payload_set_bounce(bounce);
+
+    if (bs.pdf_combined == 0.0f) {
+        // Invalid BRDF sample (specular reflected below surface): terminate.
+        payload_set_next_direction(make_float3(0.0f, 0.0f, 0.0f));
+        payload_set_throughput_update(make_float3(0.0f, 0.0f, 0.0f));
+        payload_set_hit_distance(-1.0f);
+        payload_set_env_mis_weight(1.0f);
+        payload_set_last_brdf_pdf(0.0f);
+        return;
+    }
+
+    payload_set_next_direction(bs.next_dir);
+    payload_set_throughput_update(bs.throughput_update);
     payload_set_hit_distance(optixGetRayTmax());
     payload_set_env_mis_weight(1.0f);
-    payload_set_last_brdf_pdf(0.0f);
-    payload_set_bounce(payload_get_bounce());
+    payload_set_last_brdf_pdf(bs.pdf_combined);
 }
 
 /// Intentionally empty — opaque geometry disables any-hit.
