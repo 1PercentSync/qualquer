@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4 — 核心 Path Tracer
-- **进度**：Phase 4 Step 7 第一小项完成：emissive_alias_table.h/cpp 已创建，SceneLoader 集成 emissive 三角形收集 + alias table 构建 + GPU 上传，数据链贯通到 LaunchParams
+- **进度**：Phase 4 Step 7 第二小项完成：nee.cuh 已创建（env alias table 采样 + env_pdf + shadow ray helper），closesthit 集成 env NEE（采样→shadow ray→BRDF eval→MIS weight）+ env_mis_weight 修正
 
 ### 下一个任务
 
-Phase 4 Step 7 第二小项：Env NEE（closesthit 中 alias table 采样环境光方向 + env pdf + shadow ray + BRDF eval + MIS weight）
+Phase 4 Step 7 第三小项：Emissive NEE（closesthit 中 alias table 采样发光三角形 + uniform 三角形采样 + 光源法线检查 + emissive pdf + shadow ray + BRDF eval + MIS weight）
 
 ---
 

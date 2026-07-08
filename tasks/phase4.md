@@ -75,7 +75,7 @@ MUSTREAD:4
 ## Step 7：NEE + MIS
 
 - [x] Emissive 三角形收集：SceneLoader 遍历材质 emissiveFactor > 0 的三角形、变换到世界坐标、计算面积 × luminance(emissive_factor) power、构建 EmissiveTriangle 数组 + AliasEntry alias table、上传 GPU
-- [ ] Env NEE：closesthit 中 alias table O(1) 采样环境光方向、计算 env pdf（查 EnvAliasEntry.luminance）、发射 shadow ray、BRDF eval at light direction、MIS weight
+- [x] Env NEE：closesthit 中 alias table O(1) 采样环境光方向、计算 env pdf（查 EnvAliasEntry.luminance）、发射 shadow ray、BRDF eval at light direction、MIS weight
 - [ ] Emissive NEE：closesthit 中 alias table O(1) 采样发光三角形、uniform 三角形采样点、光源法线朝向检查（single-sided 背面拒绝）、计算 emissive pdf、发射 shadow ray、BRDF eval at light direction、MIS weight
 - [ ] Shadow Terminator 修复：Chiang et al. 2019 几何因子平滑过渡，消除低模 + 平滑着色法线时 NEE 直接光照的硬阴影切边
 - [ ] MIS 完成：BRDF hit emissive 时的反向 MIS weight（bounce > 0 hit emissive surface → power_heuristic(last_brdf_pdf, light_pdf)）、BRDF miss env 时的 env_mis_weight 应用
