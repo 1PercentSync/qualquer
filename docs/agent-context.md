@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4 — 核心 Path Tracer
-- **进度**：Phase 4 Step 6 第二小项完成：`__anyhit__ah` 实现 alpha mask test（纹理 alpha × factor × 顶点色 alpha < cutoff → optixIgnoreIntersection）
+- **进度**：Phase 4 Step 6 第三小项完成：closesthit 新增 back-face + !double_sided pass-through（origin 推进、throughput 不变、消耗 bounce）
 
 ### 下一个任务
 
-Phase 4 Step 6 第三小项：Closesthit 扩展（back-face + !double_sided pass-through）
+Phase 4 Step 6 第四小项：创建 `__miss__shadow`（missIndex=1，设 visible=1）
 
 ---
 

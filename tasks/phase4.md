@@ -67,7 +67,7 @@ MUSTREAD:4
 
 - [x] SBT + Pipeline 扩展：Pipeline 新增 `__miss__shadow` program group，miss SBT 扩展为 2 条 record，optixTraverse stride 改 0，hitgroup 保持 1 个（CH + AH，BLAS flag 控制 anyhit）
 - [x] 创建 `__anyhit__alpha`：alpha_mode==Mask 时采样 alpha 纹理、< alphaCutoff 则 optixIgnoreIntersection
-- [ ] Closesthit 扩展：back-face + !double_sided 时 pass-through（throughput 不变，消耗一次 bounce）
+- [x] Closesthit 扩展：back-face + !double_sided 时 pass-through（throughput 不变，消耗一次 bounce）
 - [ ] 创建 `__miss__shadow`（missIndex=1）：设 visible=1
 - [ ] SceneLoader / Renderer 适配：load_scene 接收材质信息，`geom.opaque` 按 `alpha_mode == 0` 判断、BLAS geometry flag 按 opaque 设置
 - [ ] 请求用户在 CLion 中编译验证（树叶/栅栏正确镂空，单面材质背面穿透）
