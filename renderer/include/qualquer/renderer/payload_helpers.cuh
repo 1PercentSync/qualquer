@@ -13,8 +13,10 @@
 //   p12     hit_distance (float) — negative means miss
 //   p13     env_mis_weight (float)
 //   p14     last_brdf_pdf (float)
-//   p15-p16 reserved (Phase 4.5 ray cone)
+//   p15     sample_index (uint32) — raygen → closesthit for RNG
+//   p16     reserved (Phase 4.5 → cone_width)
 //   p17     bounce index (uint32)
+//   p18     reserved (Phase 4.5 → cone_spread)
 
 #include <cstdint>
 

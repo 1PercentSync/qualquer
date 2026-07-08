@@ -127,20 +127,33 @@ __global__ void __raygen__rg() { // NOLINT(*-reserved-identifier)
             p15 = sample_index;
             p17 = path.bounce;
 
-            optixTrace(params.traversable,
-                       path.origin,
-                       path.direction,
-                       0.0f, // tmin
-                       1e16f, // tmax
-                       0.0f, // rayTime
-                       0xFF, // visibilityMask
-                       OPTIX_RAY_FLAG_NONE,
-                       0, // SBT offset
-                       1, // SBT stride
-                       0, // miss SBT index
-                       p0, p1, p2, p3, p4, p5,
-                       p6, p7, p8, p9, p10, p11,
-                       p12, p13, p14, p15, p16, p17);
+            optixTraverse(params.traversable,
+                          path.origin,
+                          path.direction,
+                          0.0f, // tmin
+                          1e16f, // tmax
+                          0.0f, // rayTime
+                          0xFF, // visibilityMask
+                          OPTIX_RAY_FLAG_NONE,
+                          0, // SBT offset
+                          1, // SBT stride
+                          0, // miss SBT index
+                          p0, p1, p2, p3, p4, p5,
+                          p6, p7, p8, p9, p10, p11,
+                          p12, p13, p14, p15, p16, p17);
+            // SER: reorder by material for texture cache coherence.
+            // Megakernel shares one SBT record for all opaque geometry, so
+            // the default (SBT-based) hint only separates hit vs miss.
+            uint32_t reorder_hint = 0;
+            if (optixHitObjectIsHit()) {
+                const uint32_t geo_idx = optixHitObjectGetInstanceId()
+                                       + optixHitObjectGetSbtGASIndex();
+                reorder_hint = params.geometry_infos[geo_idx].material_buffer_offset;
+            }
+            optixReorder(reorder_hint, 16);
+            optixInvoke(p0, p1, p2, p3, p4, p5,
+                        p6, p7, p8, p9, p10, p11,
+                        p12, p13, p14, p15, p16, p17);
 
             const PayloadData d = payload_unpack(
                 p0, p1, p2, p3, p4, p5,
