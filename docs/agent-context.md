@@ -15,7 +15,7 @@
 
 ### 下一个任务
 
-Phase 4 Step 8 第一小项：ImGui 面板（max_bounces 滑块 + samples_per_frame 滑块 + exposure 滑块 + 累积 sample 数显示）
+Phase 4 Step 8 第一小项：ImGui 面板（max_bounces 滑块 + samples_per_frame 滑块 + exposure 滑块 + FOV 滑块 + 累积 sample 数显示）
 
 ---
 

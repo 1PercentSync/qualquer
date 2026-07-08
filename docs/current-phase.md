@@ -483,6 +483,6 @@ Phase 3 建纹理管线时，资产预处理和 CUDA 上传写在同一个 `text
 - 累积收敛可见（静止相机下噪声减少）
 - 累积 reset 正确（相机/参数变化时重新开始）
 - Tonemap 正确（PBR Neutral）
-- UI 参数可调（max_bounces, samples_per_frame, exposure）
+- UI 参数可调（max_bounces, samples_per_frame, exposure, FOV）
 - 4000 spp 下各类场景大致收敛
 - 无 OptiX / CUDA 报错
