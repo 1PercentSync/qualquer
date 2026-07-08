@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4 — 核心 Path Tracer
-- **进度**：Phase 4 Step 8 第四小项完成：参数变化 reset + deferred slider（均已在第一小项实现，本项确认无遗漏）
+- **进度**：Phase 4 Step 8 完成（UI 参数面板、只读统计、功能开关、SER 性能测试、编译验证通过）
 
 ### 下一个任务
 
-Phase 4 Step 8 第五小项：SER 性能测试（对比 SER 开/关 + hint/无 hint 帧率差异）
+Phase 4.5 第一小项（待规划）
 
 ---
 

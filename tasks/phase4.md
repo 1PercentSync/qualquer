@@ -87,5 +87,5 @@ MUSTREAD:4
 - [x] 只读统计面板：Camera position + yaw/pitch、场景资产统计（Meshes/BLAS、Instances、TLAS Instances、Materials、Textures、Triangles、Vertices、Emissive triangles、Env map resolution）
 - [x] 功能开关：开/关累积（关闭时 spp=0 冻结画面，保留已收敛结果）、手动 Reset 累积按钮
 - [x] 参数变化触发累积 reset（chain_count 归零，无需清零 buffer）；滑块使用 deferred 模式（拖拽立即生效，Ctrl+Click 文本输入延迟到确认）
-- [ ] SER 性能测试：对比 SER 开/关 以及 hint/无 hint 的帧率差异
-- [ ] 请求用户在 CLion 中编译验证（运行时参数可调，Phase 4 完成）
+- [x] SER 性能测试：对比 SER 开/关 以及 hint/无 hint 的帧率差异
+- [x] 请求用户在 CLion 中编译验证（运行时参数可调，Phase 4 完成）
