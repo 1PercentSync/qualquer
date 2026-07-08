@@ -151,9 +151,9 @@ Shadow ray 方向高度聚合（大量线程指向同一光源），可将 ray d
 |------|------|------|
 | Raygen | 1 | `__raygen__rg` |
 | Miss | 2 | `__miss__env`（missIndex=0）、`__miss__shadow`（missIndex=1） |
-| Hitgroup | 2 | 0: opaque（DISABLE_ANYHIT）、1: non-opaque（closesthit + anyhit） |
+| Hitgroup | 1 | closesthit + anyhit，BLAS per-geometry flag 控制 anyhit 调用 |
 
-stride=1。几何体通过 `sbtOffset` 选择 hitgroup。Shadow ray 用 `DISABLE_CLOSESTHIT` flag。
+stride=0。opaque 几何体通过 BLAS geometry flag（`OPTIX_GEOMETRY_FLAG_DISABLE_ANYHIT`）跳过 anyhit，non-opaque 几何体通过 `OPTIX_GEOMETRY_FLAG_REQUIRE_SINGLE_ANYHIT_CALL` 触发 anyhit。Shadow ray 用 `DISABLE_CLOSESTHIT` flag。
 
 ### LaunchParams 扩展
 

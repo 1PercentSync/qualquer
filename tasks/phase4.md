@@ -65,12 +65,11 @@
 MUSTREAD:4
 ## Step 6：Alpha 处理 + SBT 扩展
 
-- [ ] SBT 扩展为 2 hitgroup：opaque（DISABLE_ANYHIT）+ non-opaque（closesthit + anyhit），SBT record 数组重建
-- [ ] Pipeline 更新：anyhit program 注册
+- [ ] SBT + Pipeline 扩展：Pipeline 新增 `__miss__shadow` program group，miss SBT 扩展为 2 条 record，optixTraverse stride 改 0，hitgroup 保持 1 个（CH + AH，BLAS flag 控制 anyhit）
 - [ ] 创建 `__anyhit__alpha`：alpha_mode==Mask 时采样 alpha 纹理、< alphaCutoff 则 optixIgnoreIntersection
 - [ ] Closesthit 扩展：back-face + !double_sided 时 pass-through（throughput 不变，消耗一次 bounce）
-- [ ] 创建 `__miss__shadow`（missIndex=1）：设 visible=1。Shadow ray 调用时用 DISABLE_CLOSESTHIT + TERMINATE_ON_FIRST_HIT flag
-- [ ] SceneLoader / Renderer 适配：几何体按 alpha_mode 分配 sbtOffset（0=opaque, 1=non-opaque）、BLAS opaque flag 按 material 判断
+- [ ] 创建 `__miss__shadow`（missIndex=1）：设 visible=1
+- [ ] SceneLoader / Renderer 适配：load_scene 接收材质信息，`geom.opaque` 按 `alpha_mode == 0` 判断、BLAS geometry flag 按 opaque 设置
 - [ ] 请求用户在 CLion 中编译验证（树叶/栅栏正确镂空，单面材质背面穿透）
 
 ## Step 7：NEE + MIS
