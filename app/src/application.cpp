@@ -203,10 +203,14 @@ namespace qualquer::app {
                 CUDA_CHECK(cudaStreamSynchronize(cuda_context_.compute_stream));
                 CUDA_CHECK(cudaStreamSynchronize(cuda_context_.display_stream));
 
-                scene_loader_.load_env_map(actions.new_env_map_path);
-                update_scene_stats();
-                config_.env_map_path = actions.new_env_map_path;
-                save_config(config_);
+                if (scene_loader_.load_env_map(actions.new_env_map_path)) {
+                    update_scene_stats();
+                    config_.env_map_path = actions.new_env_map_path;
+                    save_config(config_);
+                } else {
+                    error_message_ = "Failed to load env map: " + actions.new_env_map_path;
+                    update_scene_stats();
+                }
             }
             // present_mode_changed is acted on after end_frame (see below): recreating
             // mid-frame would invalidate the image acquired in acquire_image before it is
