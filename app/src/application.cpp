@@ -411,6 +411,17 @@ namespace qualquer::app {
     }
 
     void Application::recreate_swapchain() {
+        // Guard against 0-size framebuffer (e.g. window minimized while a modal
+        // file dialog was running its own message pump). Vulkan forbids 0-extent
+        // swapchain creation; the main loop's while(fb==0) guard handles the
+        // normal minimization path, but modal dialogs bypass it.
+        int fb_width = 0;
+        int fb_height = 0;
+        glfwGetFramebufferSize(window_, &fb_width, &fb_height);
+        if (fb_width == 0 || fb_height == 0) {
+            return;
+        }
+
         // Drain both CUDA streams before releasing resources they use.
         // compute_stream: raygen may still be reading/writing accum buffers.
         // display_stream: tonemap may still be writing display_surface.
