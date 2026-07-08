@@ -358,6 +358,9 @@ namespace qualquer::app {
                 }
                 const auto prim_material_id = static_cast<uint32_t>(*primitive.materialIndex);
 
+                const bool prim_opaque = gltf.materials[prim_material_id].alphaMode
+                                         == fastgltf::AlphaMode::Opaque;
+
                 meshes_.push_back({
                     .vertex_buffer = std::move(vb),
                     .index_buffer = std::move(ib),
@@ -365,6 +368,7 @@ namespace qualquer::app {
                     .index_count = static_cast<uint32_t>(indices.size()),
                     .group_id = static_cast<uint32_t>(mesh_idx),
                     .material_id = prim_material_id,
+                    .opaque = prim_opaque,
                 });
 
                 result.material_ids.push_back(prim_material_id);

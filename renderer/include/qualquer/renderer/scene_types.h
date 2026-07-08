@@ -69,10 +69,19 @@ namespace qualquer::renderer {
         uint32_t group_id = 0;
 
         /**
-         * @brief Material index; selects the material for alpha-mode queries
-         *        during AS construction and for GPUGeometryInfo::material_buffer_offset.
+         * @brief Material index for GPUGeometryInfo::material_buffer_offset.
          */
         uint32_t material_id = 0;
+
+        /**
+         * @brief True when the material's alpha_mode is Opaque.
+         *
+         * Controls the BLAS per-geometry flag: opaque geometries get
+         * OPTIX_GEOMETRY_FLAG_DISABLE_ANYHIT (hardware skips any-hit),
+         * non-opaque geometries get OPTIX_GEOMETRY_FLAG_REQUIRE_SINGLE_ANYHIT_CALL.
+         * Set by SceneLoader from the glTF material at load time.
+         */
+        bool opaque = true;
     };
 
     /**

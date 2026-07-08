@@ -157,7 +157,8 @@ namespace qualquer::renderer {
          *
          * Independent of init(): callable any time after init to load or switch
          * scenes. Destroys the previously built scene resources first (AS +
-         * geometry-info buffer). All geometries build as opaque (DISABLE_ANYHIT).
+         * geometry-info buffer). Each geometry's BLAS opaque flag is read from
+         * Mesh::opaque (set by SceneLoader from glTF alpha_mode at load time).
          * An empty mesh list skips AS construction, leaving the TLAS handle at 0
          * (submit_cuda must then keep the traversable at 0 so raygen skips optixTrace).
          *

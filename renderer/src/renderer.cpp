@@ -107,7 +107,7 @@ namespace qualquer::renderer {
                     .vertex_count = mesh.vertex_count,
                     .index_count = mesh.index_count,
                     .vertex_stride = sizeof(Vertex),
-                    .opaque = true,
+                    .opaque = mesh.opaque,
                 });
                 grouping.group_mat_ids[mesh.group_id].push_back(mesh.material_id);
                 ++grouping.group_prim_count[mesh.group_id];
