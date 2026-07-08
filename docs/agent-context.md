@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4 — 核心 Path Tracer
-- **进度**：Phase 4 Step 6 第三小项完成：closesthit 新增 back-face + !double_sided pass-through（origin 推进、throughput 不变、消耗 bounce）
+- **进度**：Phase 4 Step 6 第四小项完成：`__miss__shadow` 已在第一小项中实现（missIndex=1，设 p0=1）
 
 ### 下一个任务
 
-Phase 4 Step 6 第四小项：创建 `__miss__shadow`（missIndex=1，设 visible=1）
+Phase 4 Step 6 第五小项：SceneLoader / Renderer 适配（geom.opaque 按 alpha_mode 判断、BLAS flag 设置）
 
 ---
 
