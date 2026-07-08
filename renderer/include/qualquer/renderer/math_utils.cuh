@@ -94,14 +94,15 @@ __forceinline__ __device__ float4 mul(const float4x4 &m, const float4 &v) {
 
 // ---- Device vertex layout ---------------------------------------------------
 
-/// Matches host Vertex (vertex.h): position/normal/uv0/tangent, 48 bytes.
+/// Matches host Vertex (vertex.h): position/normal/uv0/color/tangent, 64 bytes.
 struct DeviceVertex {
     float3 position;
     float3 normal;
     float2 uv0;
+    float4 color;
     float4 tangent;
 };
-static_assert(sizeof(DeviceVertex) == 48);
+static_assert(sizeof(DeviceVertex) == 64);
 
 // ---- Normal mapping (ported from Himalaya normal.glsl) ----------------------
 

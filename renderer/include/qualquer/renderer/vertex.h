@@ -17,9 +17,9 @@ namespace qualquer::renderer {
      * host fills it at load time, device reads it during RT intersection, and the
      * raw bytes cross the host/device boundary via cudaMemcpy — hence the layout
      * must stay identical on both sides. Missing source attributes are filled
-     * with defaults at load time (normal → +Z, uv0 → 0, tangent → MikkTSpace-
-     * generated or +X), so every field is always valid and the device shader
-     * can sample unconditionally.
+     * with defaults at load time (normal → +Z, uv0 → 0, color → white,
+     * tangent → MikkTSpace-generated or +X), so every field is always valid
+     * and the device shader can sample unconditionally.
      */
     struct Vertex {
         /** @brief Geometric position (local space in the mesh vertex buffer; world transform is applied via TLAS instance). */
@@ -31,11 +31,14 @@ namespace qualquer::renderer {
         /** @brief Primary texture coordinates. */
         glm::vec2 uv0;
 
+        /** @brief Vertex color (RGBA, default white). Multiplied into base_color. */
+        glm::vec4 color;
+
         /** @brief Tangent vector with handedness in w (MikkTSpace convention). */
         glm::vec4 tangent;
     };
 
-    static_assert(sizeof(Vertex) == 48, "Vertex must stay 48 bytes (host/device layout lock)");
+    static_assert(sizeof(Vertex) == 64, "Vertex must stay 64 bytes (host/device layout lock)");
     static_assert(
         offsetof(Vertex, position) == 0,
         "position must sit at offset 0 — OptiX vertex fetch reads FLOAT3 at stride = sizeof(Vertex) from the buffer base")
