@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4 — 核心 Path Tracer
-- **进度**：Phase 4 Step 5 第10小项完成：Closesthit 重写（BRDF 采样）— init_brdf_params + brdf_sample + RNG 维度采样
+- **进度**：Phase 4 Step 5 第11小项完成：Raygen 重写（单 sample 骨架）— PathState 驱动 bounce loop + 18-register payload + Separate Sum 累积
 
 ### 下一个任务
 
-Phase 4 Step 5 第11小项：Raygen 重写（单 sample 骨架）
+Phase 4 Step 5 第12小项：Raygen 完整（sample loop + subpixel jitter + accum_counts）
 
 ---
 

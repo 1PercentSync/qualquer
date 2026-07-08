@@ -57,7 +57,7 @@
 - [x] 创建 `payload_helpers.cuh`：18-register payload pack/unpack 内联函数（float↔uint bit cast helpers + per-field set/get）
 - [x] Closesthit 重写（基础）：顶点插值（含顶点色）+ normal mapping + material 参数提取 + base_color × vertex_color + back-face flip + ray offset + normal consistency + 18-register payload 写回（emissive 直写 emissive_factor，throughput_update = 0 终止 path）
 - [x] Closesthit 重写（BRDF 采样）：build_orthonormal_basis + specular_probability + lobe selection + VNDF/cosine sampling + throughput_update 计算 + env_mis_weight + last_brdf_pdf 写入 payload
-- [ ] Raygen 重写（单 sample 骨架）：单 sample + bounce loop + PathState 驱动
+- [x] Raygen 重写（单 sample 骨架）：单 sample + bounce loop + PathState 驱动
 - [ ] Raygen 完整：sample loop（samples_per_frame 次）+ subpixel jitter + accum_counts 更新
 - [ ] SER 集成：optixTraverse + optixReorder + optixInvoke 替换 optixTrace
 - [ ] 请求用户在 CLion 中编译验证（多 bounce PT 在 HDR env 下工作，累积收敛可见）
