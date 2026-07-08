@@ -107,6 +107,8 @@ namespace qualquer::app {
         if (!config_.env_map_path.empty()) {
             scene_loader_.load_env_map(config_.env_map_path);
         }
+
+        update_scene_stats();
     }
 
     void Application::run() {
@@ -176,6 +178,7 @@ namespace qualquer::app {
                 .settings = render_settings_,
                 .camera = camera_,
                 .accumulated_samples = renderer_.accumulated_samples(),
+                .scene_stats = scene_stats_,
             };
             const auto actions = debug_ui_.draw(ui_ctx); // only CPU side, render command is in record()
 
@@ -198,6 +201,7 @@ namespace qualquer::app {
                 CUDA_CHECK(cudaStreamSynchronize(cuda_context_.display_stream));
 
                 scene_loader_.load_env_map(actions.new_env_map_path);
+                update_scene_stats();
                 config_.env_map_path = actions.new_env_map_path;
                 save_config(config_);
             }
@@ -475,8 +479,39 @@ namespace qualquer::app {
             scene_loader_.load_env_map(config_.env_map_path);
         }
 
+        update_scene_stats();
+
         config_.scene_path = path;
         save_config(config_);
+    }
+
+    void Application::update_scene_stats() {
+        const auto meshes = scene_loader_.meshes();
+        const auto instances = scene_loader_.mesh_instances();
+
+        uint32_t total_triangles = 0;
+        uint32_t total_vertices = 0;
+        uint32_t max_group_id = 0;
+        for (const auto &m : meshes) {
+            total_triangles += m.index_count / 3;
+            total_vertices += m.vertex_count;
+            if (m.group_id > max_group_id) {
+                max_group_id = m.group_id;
+            }
+        }
+
+        scene_stats_ = renderer::SceneStats{
+            .meshes = meshes.empty() ? 0u : max_group_id + 1,
+            .instances = static_cast<uint32_t>(instances.size()),
+            .tlas_instances = static_cast<uint32_t>(instances.size()),
+            .materials = static_cast<uint32_t>(scene_loader_.material_buffer().count()),
+            .textures = static_cast<uint32_t>(scene_loader_.texture_objects_buffer().count()),
+            .triangles = total_triangles,
+            .vertices = total_vertices,
+            .emissive_triangles = scene_loader_.emissive_count(),
+            .env_map_width = scene_loader_.env_alias_width(),
+            .env_map_height = scene_loader_.env_alias_height(),
+        };
     }
 
     void Application::release_display_buffer_to_external() {

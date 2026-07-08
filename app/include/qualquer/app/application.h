@@ -15,6 +15,7 @@
 #include <qualquer/renderer/camera.h>
 #include <qualquer/renderer/debug_ui.h>
 #include <qualquer/renderer/render_settings.h>
+#include <qualquer/renderer/scene_stats.h>
 #include <qualquer/vulkan/imgui_backend.h>
 #include <qualquer/renderer/renderer.h>
 #include <qualquer/optix/cuda_texture_upload.h>
@@ -102,6 +103,13 @@ namespace qualquer::app {
         void auto_position_camera(const renderer::AABB &bounds);
 
         /**
+         * @brief Recomputes scene_stats_ from scene_loader_ and renderer_ state.
+         *
+         * Called after scene loading, env map loading, or scene switching.
+         */
+        void update_scene_stats();
+
+        /**
          * @brief Switches to a new scene at runtime.
          *
          * Drains the CUDA streams (so in-flight raygen/tonemap finish before their
@@ -171,6 +179,9 @@ namespace qualquer::app {
 
         /** @brief Runtime render settings (UI-adjustable, not persisted). */
         renderer::RenderSettings render_settings_{};
+
+        /** @brief Cached scene asset statistics (recomputed on scene/env load). */
+        renderer::SceneStats scene_stats_{};
 
         /** @brief Free-roaming camera controller (WASD + mouse rotation). */
         CameraController camera_controller_{};

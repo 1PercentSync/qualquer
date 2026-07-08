@@ -11,6 +11,7 @@
 
 #include <qualquer/renderer/camera.h>
 #include <qualquer/renderer/render_settings.h>
+#include <qualquer/renderer/scene_stats.h>
 #include <qualquer/vulkan/context.h>
 #include <qualquer/vulkan/swapchain.h>
 
@@ -82,6 +83,9 @@ namespace qualquer::renderer {
 
         /** @brief Number of samples accumulated in the displayed buffer. */
         uint32_t accumulated_samples = 0;
+
+        /** @brief Scene asset statistics (read-only snapshot). */
+        const SceneStats &scene_stats;
     };
 
     /**
@@ -253,16 +257,18 @@ namespace qualquer::renderer {
         /**
          * @brief Renders the Path Tracing section: parameter sliders and sample count.
          *
-         * Contains max_bounces (SliderInt), samples_per_frame (SliderInt),
-         * exposure (slider_float_deferred, EV), FOV (slider_angle_deferred),
-         * and accumulated sample count (read-only text). Camera position and
-         * yaw/pitch are displayed as read-only text.
-         *
          * @param ctx    Provides settings (mutable), camera (mutable for FOV),
          *               and accumulated_samples.
          * @param action Receives accum_reset_requested on Reset button click.
          */
         static void draw_path_tracing(const DebugUIContext &ctx, DebugUIActions &action);
+
+        /**
+         * @brief Renders camera position, orientation, and scene asset statistics.
+         *
+         * @param ctx Provides camera (read-only pos/yaw/pitch) and scene_stats.
+         */
+        static void draw_scene_info(const DebugUIContext &ctx);
 
         /**
          * @brief Renders the Scene section: current file name and a Load button.

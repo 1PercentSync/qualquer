@@ -10,6 +10,8 @@
 #include <ranges>
 #include <string>
 
+#include <glm/trigonometric.hpp>
+
 #include <imgui.h>
 #include <spdlog/spdlog.h>
 
@@ -159,6 +161,9 @@ namespace qualquer::renderer {
         draw_path_tracing(ctx, actions);
 
         ImGui::Separator();
+        draw_scene_info(ctx);
+
+        ImGui::Separator();
         draw_log_level(actions);
 
         ImGui::Separator();
@@ -274,6 +279,26 @@ namespace qualquer::renderer {
 
         slider_angle_deferred("FOV", &ctx.camera.fov,
                               30.0f, 120.0f, "%.1f\xC2\xB0");
+    }
+
+    void DebugUI::draw_scene_info(const DebugUIContext &ctx) {
+        const auto &pos = ctx.camera.position;
+        ImGui::Text("Pos: (%.2f, %.2f, %.2f)", pos.x, pos.y, pos.z);
+        ImGui::Text("Yaw: %.1f%s  Pitch: %.1f%s",
+                    glm::degrees(ctx.camera.yaw), "\xC2\xB0",
+                    glm::degrees(ctx.camera.pitch), "\xC2\xB0");
+
+        const auto &s = ctx.scene_stats;
+        ImGui::Text("Meshes/BLAS: %u  Instances: %u", s.meshes, s.instances);
+        ImGui::Text("TLAS Instances: %u", s.tlas_instances);
+        ImGui::Text("Materials: %u  Textures: %u", s.materials, s.textures);
+        ImGui::Text("Triangles: %u  Vertices: %u", s.triangles, s.vertices);
+        ImGui::Text("Emissive Triangles: %u", s.emissive_triangles);
+        if (s.env_map_width > 0) {
+            ImGui::Text("Env Map: %u x %u", s.env_map_width, s.env_map_height);
+        } else {
+            ImGui::TextDisabled("Env Map: None");
+        }
     }
 
     void DebugUI::draw_log_level(DebugUIActions &action) {
