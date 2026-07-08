@@ -118,7 +118,7 @@ __forceinline__ __device__ float3 sample_ggx_vndf(const float3 Ve,
     const float r    = sqrtf(xi.x);
     const float phi  = kTwoPi * xi.y;
     float sin_phi, cos_phi;
-    sincosf(phi, &sin_phi, &cos_phi);
+    __sincosf(phi, &sin_phi, &cos_phi);
     const float t1   = r * cos_phi;
     float       t2   = r * sin_phi;
     const float s    = 0.5f * (1.0f + Vh.z);
@@ -337,7 +337,7 @@ __forceinline__ __device__ float4 cltc_sample(const float3 wo_local,
     const float R     = sqrtf(u1);
     const float phi   = kTwoPi * u2;
     float sin_phi, cos_phi;
-    sincosf(phi, &sin_phi, &cos_phi);
+    __sincosf(phi, &sin_phi, &cos_phi);
     const float x_disk = R * cos_phi;
     const float y     = R * sin_phi;
     const float vz    = 1.0f / sqrtf(d * d + 1.0f);
@@ -397,7 +397,7 @@ __forceinline__ __device__ float3 uniform_lobe_sample(const float u1, const floa
     const float sin_theta = sqrtf(fmaxf(0.0f, 1.0f - u1 * u1));
     const float phi = kTwoPi * u2;
     float sin_phi, cos_phi;
-    sincosf(phi, &sin_phi, &cos_phi);
+    __sincosf(phi, &sin_phi, &cos_phi);
     return make_float3(sin_theta * cos_phi, sin_theta * sin_phi, u1);
 }
 

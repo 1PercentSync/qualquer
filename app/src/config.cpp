@@ -14,11 +14,15 @@ namespace qualquer::app {
     std::filesystem::path config_file_path() {
         std::filesystem::path dir;
 
+#if defined(__clang__)
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#endif
         // ReSharper disable once CppDeprecatedEntity
         if (const char *local_app_data = std::getenv("LOCALAPPDATA")) {
+#if defined(__clang__)
 #pragma clang diagnostic pop
+#endif
             dir = std::filesystem::path(local_app_data) / "qualquer";
         } else {
             spdlog::warn("LOCALAPPDATA not set, using current directory for config");

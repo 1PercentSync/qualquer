@@ -46,6 +46,11 @@ function(compile_optix_ir target)
     endforeach()
     list(APPEND _include_flags "-I${OptiX_INCLUDE_DIR}")
 
+    # Collect all .cuh device headers so changes trigger recompilation.
+    # All .cuh files are included (directly or transitively) by the .cu sources;
+    # a flat glob is simpler and more robust than manually listing each header.
+    file(GLOB_RECURSE _cuh_deps "${CMAKE_CURRENT_SOURCE_DIR}/*.cuh")
+
     set(_optixir_files)
     foreach(_cu ${_cu_files})
         if(NOT IS_ABSOLUTE "${_cu}")
@@ -76,7 +81,7 @@ function(compile_optix_ir target)
                     ${_include_flags}
                     -o "${_out}"
                     "${_cu_abs}"
-            DEPENDS "${_cu_abs}"
+            DEPENDS "${_cu_abs}" ${_cuh_deps}
             COMMENT "Compiling OptiX IR: ${_name}"
             VERBATIM
         )

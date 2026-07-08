@@ -62,11 +62,11 @@ __forceinline__ __device__ float3 sample_env_alias_table(
     // Equirect UV → direction (matches equirect_to_cubemap.cu convention).
     const float phi   = (u - 0.5f) * kNeeTwoPi;
     const float theta = (0.5f - v) * kNeePi;
-    const float cos_theta = cosf(theta);
+    const float cos_theta = __cosf(theta);
 
-    return make_float3(cos_theta * cosf(phi),
-                       sinf(theta),
-                       cos_theta * sinf(phi));
+    return make_float3(cos_theta * __cosf(phi),
+                       __sinf(theta),
+                       cos_theta * __sinf(phi));
 }
 
 /**
