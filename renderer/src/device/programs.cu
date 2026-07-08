@@ -54,78 +54,123 @@ static_assert(sizeof(Material) == 80);
 extern "C" {
 __constant__ qualquer::renderer::LaunchParams params;
 
-/// Ray generation: primary ray via inverse camera matrices → optixTrace →
-/// payload → accumulation buffer.
+/// Ray generation: single-sample PathState-driven bounce loop.
+/// Sample loop + subpixel jitter added in the next checkpoint.
 __global__ void __raygen__rg() { // NOLINT(*-reserved-identifier)
-    const uint3 idx = optixGetLaunchIndex();
-    const uint32_t linear_index = idx.y * params.width + idx.x;
+    using namespace qualquer::renderer;
 
-    // Empty scene (no geometry loaded → traversable == 0): optixTrace on a null
-    // traversable is undefined behavior, so write the miss background color
-    // directly and skip tracing. Matches __miss__env fallback output, keeping
-    // the frame consistent with a fully-miss scene.
+    const uint3 idx = optixGetLaunchIndex();
+    const uint32_t pixel_index = idx.y * params.width + idx.x;
+
+    // Empty scene (no geometry loaded → traversable == 0): optixTrace on a
+    // null traversable is undefined behavior. Copy the read buffer to the write
+    // buffer so the Separate Sum chain stays valid and tonemap keeps showing
+    // the last frame (or black on first frame).
     if (params.traversable == 0) {
-        const float4 old = params.accumulation_buffer_read[linear_index];
-        params.accumulation_buffer[linear_index] =
+        const float4 old = params.accumulation_buffer_read[pixel_index];
+        params.accumulation_buffer[pixel_index] =
             make_float4(old.x, old.y, old.z, 1.0f);
         return;
     }
 
-    // Pixel center → NDC ([-1,1], Y flipped so +Y = up)
+    // ---- Primary ray (pixel center, no jitter yet) ----
     const float u = (static_cast<float>(idx.x) + 0.5f) / static_cast<float>(params.width);
     const float v = (static_cast<float>(idx.y) + 0.5f) / static_cast<float>(params.height);
     const float ndc_x =  u * 2.0f - 1.0f;
     const float ndc_y = -(v * 2.0f - 1.0f);
 
-    // NDC → view space via inv_projection (z=1 near plane, w=1 homogeneous)
     const float4 clip_target = make_float4(ndc_x, ndc_y, 1.0f, 1.0f);
     float4 view_target = mul(params.inv_projection, clip_target);
-    // Perspective divide
     const float inv_w = 1.0f / view_target.w;
     view_target = make_float4(view_target.x * inv_w,
                               view_target.y * inv_w,
                               view_target.z * inv_w,
                               1.0f);
 
-    // View space → world space via inv_view
     const float4 origin_w = mul(params.inv_view, make_float4(0.0f, 0.0f, 0.0f, 1.0f));
     const float4 dir_w    = mul(params.inv_view, make_float4(view_target.x,
                                                               view_target.y,
                                                               view_target.z,
                                                               0.0f));
-    const float3 ray_origin    = make_float3(origin_w.x, origin_w.y, origin_w.z);
-    const float3 ray_direction = normalize(make_float3(dir_w.x, dir_w.y, dir_w.z));
 
-    // Payload registers: p0-p2 = shading color (RGB)
-    uint32_t p0 = 0;
-    uint32_t p1 = 0;
-    uint32_t p2 = 0;
+    // ---- PathState ----
+    PathState path{};
+    path.origin      = make_float3(origin_w.x, origin_w.y, origin_w.z);
+    path.direction   = normalize(make_float3(dir_w.x, dir_w.y, dir_w.z));
+    path.throughput  = make_float3(1.0f, 1.0f, 1.0f);
+    path.radiance    = make_float3(0.0f, 0.0f, 0.0f);
+    path.pixel_index = pixel_index;
+    path.sample_index = params.sample_count;
+    path.bounce      = 0;
+    path.alive       = true;
 
-    optixTrace(params.traversable,
-               ray_origin,
-               ray_direction,
-               0.0f,           // tmin
-               1e16f,          // tmax
-               0.0f,           // rayTime
-               0xFF,           // visibilityMask
-               OPTIX_RAY_FLAG_NONE,
-               0,              // SBT offset
-               1,              // SBT stride
-               0,              // miss SBT index
-               p0, p1, p2);
+    // ---- Bounce loop ----
+    // 18 payload registers persist across bounces so closesthit's
+    // env_mis_weight survives into the next iteration's miss read.
+    uint32_t p0 = 0, p1 = 0, p2 = 0, p3 = 0, p4 = 0, p5 = 0;
+    uint32_t p6 = 0, p7 = 0, p8 = 0, p9 = 0, p10 = 0, p11 = 0;
+    uint32_t p12 = 0, p13 = __float_as_uint(1.0f), p14 = 0;
+    uint32_t p15 = 0, p16 = 0, p17 = 0;
 
-    const float r = __uint_as_float(p0);
-    const float g = __uint_as_float(p1);
-    const float b = __uint_as_float(p2);
+    while (path.alive && path.bounce < params.max_bounces) {
+        p17 = path.bounce;
 
+        optixTrace(params.traversable,
+                   path.origin,
+                   path.direction,
+                   0.0f,           // tmin
+                   1e16f,          // tmax
+                   0.0f,           // rayTime
+                   0xFF,           // visibilityMask
+                   OPTIX_RAY_FLAG_NONE,
+                   0,              // SBT offset
+                   1,              // SBT stride
+                   0,              // miss SBT index
+                   p0, p1, p2, p3, p4, p5,
+                   p6, p7, p8, p9, p10, p11,
+                   p12, p13, p14, p15, p16, p17);
+
+        const PayloadData d = payload_unpack(
+            p0, p1, p2, p3, p4, p5,
+            p6, p7, p8, p9, p10, p11,
+            p12, p13, p14, p15, p16, p17);
+
+        // Accumulate radiance contribution from this bounce.
+        float3 contribution = path.throughput * d.color;
+        if (d.hit_distance < 0.0f) {
+            // Miss (or invalid BRDF sample): apply env MIS weight.
+            contribution = contribution * d.env_mis_weight;
+        }
+        path.radiance = path.radiance + contribution;
+
+        // Miss terminates the path.
+        if (d.hit_distance < 0.0f) {
+            path.alive = false;
+            break;
+        }
+
+        // Update throughput and advance ray.
+        path.throughput = path.throughput * d.throughput_update;
+
+        // Early termination if throughput is negligible.
+        if (fmaxf(path.throughput.x, fmaxf(path.throughput.y, path.throughput.z)) < 1e-6f) {
+            path.alive = false;
+            break;
+        }
+
+        path.origin    = d.next_origin;
+        path.direction = d.next_direction;
+        path.bounce   += 1;
+    }
+
+    // ---- Separate Sum accumulation ----
+    const float3 r = path.radiance;
     if (params.sample_count == 0) {
-        // First sample after reset (or init): overwrite — the read buffer
-        // holds stale data from a previous accumulation chain.
-        params.accumulation_buffer[linear_index] = make_float4(r, g, b, 1.0f);
+        params.accumulation_buffer[pixel_index] = make_float4(r.x, r.y, r.z, 1.0f);
     } else {
-        const float4 old = params.accumulation_buffer_read[linear_index];
-        params.accumulation_buffer[linear_index] =
-            make_float4(old.x + r, old.y + g, old.z + b, 1.0f);
+        const float4 old = params.accumulation_buffer_read[pixel_index];
+        params.accumulation_buffer[pixel_index] =
+            make_float4(old.x + r.x, old.y + r.y, old.z + r.z, 1.0f);
     }
 }
 
