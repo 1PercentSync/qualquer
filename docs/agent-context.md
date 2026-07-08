@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4 — 核心 Path Tracer
-- **进度**：Phase 4 Step 5 数据结构重构 第3小项完成：SceneLoader 适配（COLOR_0 读取 + AO 加载移除）
+- **进度**：Phase 4 Step 5 数据结构重构 第4小项完成：Closesthit 适配（移除 AO 采样 + base_color × vertex_color）
 
 ### 下一个任务
 
-Phase 4 Step 5 数据结构重构 第4小项：Closesthit 适配（移除 AO 采样 + base_color × vertex_color）
+Phase 4 Step 5 数据结构重构 第5小项：请求用户在 CLion 中编译验证（重构核销）
 
 ---
 
