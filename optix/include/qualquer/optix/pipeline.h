@@ -25,9 +25,9 @@ namespace qualquer::optix {
         /**
          * @brief Builds the pipeline from a compiled .optixir file.
          *
-         * Reads the file, creates the Module, creates the three program groups
-         * (raygen, miss, hitgroup containing closest-hit + any-hit), links the
-         * pipeline, and configures the stack size.
+         * Reads the file, creates the Module, creates four program groups
+         * (raygen, two miss, hitgroup containing closest-hit + any-hit), links
+         * the pipeline, and configures the stack size.
          * @param device_context              OptiX device context to build against.
          * @param optixir_path                Path to the compiled .optixir file.
          * @param launch_params_size          Size of the launch-params struct in bytes
@@ -57,8 +57,11 @@ namespace qualquer::optix {
         /** @brief Ray-generation program group; null before init and after destroy. */
         OptixProgramGroup raygen_program = nullptr;
 
-        /** @brief Miss program group; null before init and after destroy. */
-        OptixProgramGroup miss_program = nullptr;
+        /** @brief Environment miss program group (missIndex=0); null before init and after destroy. */
+        OptixProgramGroup miss_env_program = nullptr;
+
+        /** @brief Shadow miss program group (missIndex=1); null before init and after destroy. */
+        OptixProgramGroup miss_shadow_program = nullptr;
 
         /** @brief Hit-group program (closest-hit + any-hit); null before init and after destroy. */
         OptixProgramGroup hitgroup_program = nullptr;

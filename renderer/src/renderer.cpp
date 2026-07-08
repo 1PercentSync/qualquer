@@ -223,15 +223,18 @@ namespace qualquer::renderer {
                        sizeof(LaunchParams),
                        "params");
 
-        // Raygen and miss SBT records are header-only (global data via LaunchParams).
+        // SBT records are header-only (global data via LaunchParams).
+        // Miss SBT has 2 entries: env (missIndex=0) and shadow (missIndex=1).
         SbtRecord record{};
         OPTIX_CHECK(optixSbtRecordPackHeader(pipeline_.raygen_program, &record));
         sbt_raygen_.alloc(1);
         sbt_raygen_.upload(&record, 1, cuda_context.compute_stream);
 
-        OPTIX_CHECK(optixSbtRecordPackHeader(pipeline_.miss_program, &record));
-        sbt_miss_.alloc(1);
-        sbt_miss_.upload(&record, 1, cuda_context.compute_stream);
+        std::array<SbtRecord, 2> miss_records{};
+        OPTIX_CHECK(optixSbtRecordPackHeader(pipeline_.miss_env_program, &miss_records[0]));
+        OPTIX_CHECK(optixSbtRecordPackHeader(pipeline_.miss_shadow_program, &miss_records[1]));
+        sbt_miss_.alloc(2);
+        sbt_miss_.upload(miss_records.data(), 2, cuda_context.compute_stream);
 
         OPTIX_CHECK(optixSbtRecordPackHeader(pipeline_.hitgroup_program, &record));
         sbt_hit_.alloc(1);
@@ -265,7 +268,7 @@ namespace qualquer::renderer {
         spdlog::info("Renderer initialized ({}x{}, {} SBT records)",
                      width,
                      height,
-                     3);
+                     4);
     }
 
     void Renderer::resize(const optix::Context &cuda_context,
@@ -435,7 +438,7 @@ namespace qualquer::renderer {
             .exceptionRecord = 0,
             .missRecordBase = sbt_miss_.device_ptr(),
             .missRecordStrideInBytes = sizeof(SbtRecord),
-            .missRecordCount = 1,
+            .missRecordCount = 2,
             .hitgroupRecordBase = sbt_hit_.device_ptr(),
             .hitgroupRecordStrideInBytes = sizeof(SbtRecord),
             .hitgroupRecordCount = 1,

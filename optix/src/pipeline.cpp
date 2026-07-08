@@ -93,9 +93,10 @@ namespace qualquer::optix {
 
         // Entry function names are the extern "C" symbols defined in the device
         // program source; OptiX resolves each program group by matching these
-        // symbol names. The hit group pairs closest-hit with any-hit so a single
-        // SBT hit record covers both stages.
-        const std::array<OptixProgramGroupDesc, 3> program_descs{{
+        // symbol names. Two miss programs: environment (missIndex=0) and shadow
+        // (missIndex=1). The hit group pairs closest-hit with any-hit; BLAS
+        // per-geometry flags control whether any-hit is invoked.
+        const std::array<OptixProgramGroupDesc, 4> program_descs{{
             {
                 .kind = OPTIX_PROGRAM_GROUP_KIND_RAYGEN,
                 .raygen = {.module = module_, .entryFunctionName = "__raygen__rg"},
@@ -103,6 +104,10 @@ namespace qualquer::optix {
             {
                 .kind = OPTIX_PROGRAM_GROUP_KIND_MISS,
                 .miss = {.module = module_, .entryFunctionName = "__miss__env"},
+            },
+            {
+                .kind = OPTIX_PROGRAM_GROUP_KIND_MISS,
+                .miss = {.module = module_, .entryFunctionName = "__miss__shadow"},
             },
             {
                 .kind = OPTIX_PROGRAM_GROUP_KIND_HITGROUP,
@@ -115,7 +120,7 @@ namespace qualquer::optix {
             },
         }};
 
-        std::array<OptixProgramGroup, 3> program_groups{};
+        std::array<OptixProgramGroup, 4> program_groups{};
         // optixProgramGroupCreate dereferences the options pointer; null crashes.
         // A zero-initialized options leaves payloadType null, letting OptiX deduce
         // a unique payload type.
@@ -128,8 +133,9 @@ namespace qualquer::optix {
                                             nullptr,
                                             program_groups.data()));
         raygen_program = program_groups[0];
-        miss_program = program_groups[1];
-        hitgroup_program = program_groups[2];
+        miss_env_program = program_groups[1];
+        miss_shadow_program = program_groups[2];
+        hitgroup_program = program_groups[3];
 
         // maxTraceDepth=2: raygen traces the primary/bounce ray (depth 1), and
         // closesthit may trace a shadow ray for NEE (depth 2). The bounce loop
@@ -174,9 +180,13 @@ namespace qualquer::optix {
             OPTIX_CHECK(optixProgramGroupDestroy(raygen_program));
             raygen_program = nullptr;
         }
-        if (miss_program != nullptr) {
-            OPTIX_CHECK(optixProgramGroupDestroy(miss_program));
-            miss_program = nullptr;
+        if (miss_env_program != nullptr) {
+            OPTIX_CHECK(optixProgramGroupDestroy(miss_env_program));
+            miss_env_program = nullptr;
+        }
+        if (miss_shadow_program != nullptr) {
+            OPTIX_CHECK(optixProgramGroupDestroy(miss_shadow_program));
+            miss_shadow_program = nullptr;
         }
         if (hitgroup_program != nullptr) {
             OPTIX_CHECK(optixProgramGroupDestroy(hitgroup_program));

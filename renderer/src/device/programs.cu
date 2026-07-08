@@ -136,14 +136,14 @@ __global__ void __raygen__rg() { // NOLINT(*-reserved-identifier)
                           0xFF, // visibilityMask
                           OPTIX_RAY_FLAG_NONE,
                           0, // SBT offset
-                          1, // SBT stride
-                          0, // miss SBT index
+                          0, // SBT stride (all geometries share one hitgroup record)
+                          0, // miss SBT index (env)
                           p0, p1, p2, p3, p4, p5,
                           p6, p7, p8, p9, p10, p11,
                           p12, p13, p14, p15, p16, p17);
             // SER: reorder by material for texture cache coherence.
-            // Megakernel shares one SBT record for all opaque geometry, so
-            // the default (SBT-based) hint only separates hit vs miss.
+            // Single hitgroup record; the default hint only separates hit
+            // vs miss. Material-based hint improves texture cache locality.
             uint32_t reorder_hint = 0;
             if (optixHitObjectIsHit()) {
                 const uint32_t geo_idx = optixHitObjectGetInstanceId()
@@ -338,7 +338,16 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
     payload_set_last_brdf_pdf(bs.pdf_combined);
 }
 
-/// Intentionally empty — opaque geometry disables any-hit.
+/// Shadow miss (missIndex=1): the shadow ray reached tMax without hitting
+/// geometry, so the light source is visible (not occluded). Sets visible=1
+/// via payload register p0. The caller initializes p0=0 before tracing.
+__global__ void __miss__shadow() { // NOLINT(*-reserved-identifier)
+    optixSetPayload_0(1);
+}
+
+/// Intentionally empty — opaque geometry disables any-hit via BLAS
+/// per-geometry flag (OPTIX_GEOMETRY_FLAG_DISABLE_ANYHIT). Non-opaque
+/// geometry will invoke this; alpha test logic is added in a later step.
 __global__ void __anyhit__ah() { // NOLINT(*-reserved-identifier)
 }
 } // extern "C"
