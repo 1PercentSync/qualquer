@@ -412,7 +412,7 @@ namespace qualquer::renderer {
             .texture_objects = scene.texture_objects.data(),
             .inv_view = to_float4x4(scene.camera.inv_view),
             .inv_projection = to_float4x4(scene.camera.inv_projection),
-            .max_bounces = 0,
+            .max_bounces = 16,
             .samples_per_frame = 1,
             .sample_count = chain_count,
             .exposure = 1.0f,
