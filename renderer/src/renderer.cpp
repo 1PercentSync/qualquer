@@ -402,8 +402,7 @@ namespace qualquer::renderer {
             scene.camera.inv_projection != prev_inv_projection_;
         const bool settings_changed =
             scene.settings.max_bounces != prev_max_bounces_ ||
-            scene.settings.samples_per_frame != prev_samples_per_frame_ ||
-            exposure_linear != prev_exposure_;
+            scene.settings.samples_per_frame != prev_samples_per_frame_;
         const bool needs_reset = camera_changed || settings_changed || reset_requested_;
         reset_requested_ = false;
         const uint32_t chain_count = needs_reset ? 0 : accum_counts_[accum_index_];
@@ -415,7 +414,6 @@ namespace qualquer::renderer {
         prev_inv_projection_ = scene.camera.inv_projection;
         prev_max_bounces_ = scene.settings.max_bounces;
         prev_samples_per_frame_ = scene.settings.samples_per_frame;
-        prev_exposure_ = exposure_linear;
 
         const LaunchParams params{
             // Separate-Sum: raygen reads the previous total and writes the new
@@ -436,7 +434,6 @@ namespace qualquer::renderer {
             .max_bounces = scene.settings.max_bounces,
             .samples_per_frame = effective_spp,
             .sample_count = chain_count,
-            .exposure = exposure_linear,
             // Env light resources (from SceneLoader via SceneRenderInput).
             .env_cubemap = scene.env_cubemap,
             .env_alias_table = scene.env_alias_table,

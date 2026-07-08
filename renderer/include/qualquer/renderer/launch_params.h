@@ -159,13 +159,6 @@ struct LaunchParams {
      */
     uint32_t sample_count;
 
-    /** @brief Exposure as a linear color multiplier applied before tonemap.
-     *
-     * The app stores an EV value and converts it to this linear multiplier
-     * (pow(2, ev)) before upload; device code multiplies color directly.
-     */
-    float exposure;
-
     // ---- Environment light ----
 
     /** @brief Cubemap texture sampled on miss and for environment NEE. */
