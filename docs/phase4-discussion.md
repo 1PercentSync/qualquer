@@ -578,6 +578,33 @@ Phase 4 完整采纳 EON + CLTC 采样（掠射角方差降 100×）。
 
 ---
 
+### D30. Step 8 UI 架构设计
+
+**来源**：Step 8 实现前的架构讨论。DebugUIContext 在 Phase 3 规模（6 字段）下合理，Step 8 新增 15+ 字段后膨胀为"万物袋"。
+
+**问题**：Step 8 新增可调参数（max_bounces, samples_per_frame, exposure_ev, fov）、只读统计（sample count, camera pos/yaw/pitch, 场景资产统计 10 项）、功能开关（accumulation_enabled）等字段。平铺进 DebugUIContext 会产生散装标量堆积。
+
+**决策**：✅ 提取领域结构体，DebugUIContext 组合引用。
+
+1. **`RenderSettings`**（renderer 层，与 Camera 同级）——用户可调的 PT 旋钮：
+   - `max_bounces`（uint32_t, 默认 16）、`samples_per_frame`（uint32_t, 默认 1）、`exposure_ev`（float, 默认 0.0）、`accumulation_enabled`（bool, 默认 true）
+   - Application 拥有，运行时 live 参数，不持久化到 config.json
+   - 通过 SceneRenderInput 传入 Renderer::submit_cuda（exposure 在 Application 做 `pow(2, ev)` 转线性）
+
+2. **`SceneStats`**（renderer 层）——只读场景资产快照：
+   - meshes, blas_groups, instances, tlas_instances, materials, textures, triangles, vertices, emissive_triangles, env_map_width, env_map_height
+   - Application 在 load_scene 后统计并缓存
+
+3. **DebugUIContext 新增引用**：`RenderSettings&`（mutable）、`Camera&`（mutable，FOV 滑块）、`accumulated_samples`（只读快照）、`const SceneStats&`
+
+4. **现有 6 字段保持不动**：delta_time、context、swapchain、error_message、scene_path、env_map_path 各自是单一引用指向明确所有者，不存在散装堆积问题，不为统一而硬塞进某结构体
+
+5. **参数变化检测**：Renderer 自行比对前帧参数值（与 camera 变化检测同机制），变化时 chain_count=0。不依赖 UI 层 flag。手动 Reset 按钮走 DebugUIActions::accum_reset_requested
+
+6. **Deferred slider**：`slider_float_deferred` + `slider_angle_deferred` 作为 debug_ui.cpp 匿名命名空间工具函数
+
+---
+
 ## Phase 划分
 
 > 基于 D1-D29 决策结果划分 Phase 4 与 Phase 4.5 的特性边界。
