@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4 — 核心 Path Tracer
-- **进度**：Phase 4 Step 5 第8小项完成：`payload_helpers.cuh` 已创建（18-register payload pack/unpack）
+- **进度**：Phase 4 Step 5 第9小项完成：Closesthit 重写（基础）— 18-register payload + ray offset + normal consistency + emissive 直写
 
 ### 下一个任务
 
-Phase 4 Step 5 第9小项：Closesthit 重写（基础）
+Phase 4 Step 5 第10小项：Closesthit 重写（BRDF 采样）
 
 ---
 
