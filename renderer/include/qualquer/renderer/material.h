@@ -41,9 +41,6 @@ namespace qualquer::renderer {
         /** @brief glTF normalTexture scale. */
         float normal_scale;
 
-        /** @brief glTF occlusionTexture strength. */
-        float occlusion_strength;
-
         /** @brief Index into the texture-object array for the base color map. */
         uint32_t base_color_tex;
 
@@ -55,9 +52,6 @@ namespace qualquer::renderer {
 
         /** @brief Index into the texture-object array for the normal map. */
         uint32_t normal_tex;
-
-        /** @brief Index into the texture-object array for the occlusion map. */
-        uint32_t occlusion_tex;
 
         /** @brief glTF alphaCutoff (Mask-mode discard threshold). */
         float alpha_cutoff;
@@ -71,8 +65,8 @@ namespace qualquer::renderer {
 
     static_assert(sizeof(Material) == 80, "Material must stay 80 bytes (host/device layout lock)");
     static_assert(offsetof(Material, base_color_factor) == 0);
-    static_assert(offsetof(Material, base_color_tex) == 48);
-    static_assert(offsetof(Material, alpha_mode) == 72);
+    static_assert(offsetof(Material, base_color_tex) == 44);
+    static_assert(offsetof(Material, alpha_mode) == 64);
 
     /**
      * @brief Per-geometry RT query data read by the closest-hit shader.

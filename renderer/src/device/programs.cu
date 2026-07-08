@@ -30,12 +30,10 @@ struct alignas(16) Material {
     float metallic_factor;
     float roughness_factor;
     float normal_scale;
-    float occlusion_strength;
     uint32_t base_color_tex;
     uint32_t emissive_tex;
     uint32_t metallic_roughness_tex;
     uint32_t normal_tex;
-    uint32_t occlusion_tex;
     float alpha_cutoff;
     uint32_t alpha_mode;
     uint32_t double_sided;
