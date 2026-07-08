@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4 — 核心 Path Tracer
-- **进度**：Phase 4 Step 7 第四小项完成：pt_common.cuh 新增 shadow_terminator_factor，env NEE 和 emissive NEE 均应用平滑几何因子
+- **进度**：Phase 4 Step 7 完成（emissive 三角形收集 + env NEE + emissive NEE + shadow terminator + MIS 闭环，编译验证通过）
 
 ### 下一个任务
 
-Phase 4 Step 7 第五小项：MIS 完成（BRDF hit emissive 时的反向 MIS weight + BRDF miss env 时的 env_mis_weight 应用）
+Phase 4 Step 8 第一小项：ImGui 面板（max_bounces 滑块 + samples_per_frame 滑块 + exposure 滑块 + 累积 sample 数显示）
 
 ---
 

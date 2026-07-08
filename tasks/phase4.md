@@ -78,8 +78,8 @@ MUSTREAD:4
 - [x] Env NEE：closesthit 中 alias table O(1) 采样环境光方向、计算 env pdf（查 EnvAliasEntry.luminance）、发射 shadow ray、BRDF eval at light direction、MIS weight
 - [x] Emissive NEE：closesthit 中 alias table O(1) 采样发光三角形、uniform 三角形采样点、光源法线朝向检查（single-sided 背面拒绝）、计算 emissive pdf、发射 shadow ray、BRDF eval at light direction、MIS weight
 - [x] Shadow Terminator 修复：Chiang et al. 2019 几何因子平滑过渡，消除低模 + 平滑着色法线时 NEE 直接光照的硬阴影切边
-- [ ] MIS 完成：BRDF hit emissive 时的反向 MIS weight（bounce > 0 hit emissive surface → power_heuristic(last_brdf_pdf, light_pdf)）、BRDF miss env 时的 env_mis_weight 应用
-- [ ] 请求用户在 CLion 中编译验证（噪声大幅降低，小光源可见，4000 spp 大致收敛）
+- [x] MIS 完成：BRDF hit emissive 时的反向 MIS weight（bounce > 0 hit emissive surface → power_heuristic(last_brdf_pdf, light_pdf)）、BRDF miss env 时的 env_mis_weight 应用
+- [x] 请求用户在 CLion 中编译验证（噪声大幅降低，小光源可见，4000 spp 大致收敛）
 
 ## Step 8：UI 参数面板
 
