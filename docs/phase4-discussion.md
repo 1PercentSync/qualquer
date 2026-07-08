@@ -567,7 +567,7 @@ Phase 4 完整采纳 EON + CLTC 采样（掠射角方差降 100×）。
 |------|--------|---------------|
 | 可调参数 | FOV 滑块 | near/far（PT 中对渲染结果零影响）、roughness clamp（0.04 已是业界通用值）、其他底层阈值/epsilon |
 | 只读统计 | Camera pos + yaw/pitch、场景资产统计（Meshes/BLAS、Instances、TLAS Instances、Materials、Textures、Triangles、Vertices、Emissive triangles、Env map resolution） | 帧号/ping-pong slot 诊断、含默认纹理总数、opaque 计数、emissive 功率、alias table 细节、AABB、对角线、常量；ms/sample（帧率已有） |
-| 功能开关 | 开/关累积（chain_count 恒 0） | 暂停渲染（需处理 semaphore 链，复杂度高）、NEE/MIS/BRDF/tonemap 等开关（不纳入 Phase 4） |
+| 功能开关 | 开/关累积（关闭时 spp=0 冻结画面，保留已收敛结果；原方案 chain_count 恒 0 每帧覆写导致 1 spp 噪声闪烁，实现后改为冻结） | 暂停渲染（需处理 semaphore 链，复杂度高）、NEE/MIS/BRDF/tonemap 等开关（不纳入 Phase 4） |
 | 按钮 | 手动 Reset 累积 | 缓存清理按钮 |
 | 可视化 | 无 | 全部不纳入 Phase 4（Phase 4.5 有 aux data + debug view） |
 | 交互改进 | Deferred slider（Himalaya slider_float_deferred） | — |
