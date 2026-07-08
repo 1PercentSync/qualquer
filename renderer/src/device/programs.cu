@@ -389,6 +389,88 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
         }
     }
 
+    // ---- NEE: Emissive area lights (alias table importance sampling + MIS) ----
+    if (params.emissive_count > 0 && params.emissive_triangles != nullptr) {
+        const float emi_r1 = rng(pixel_index, sample_index, dim_base + kBounceOffsetEmissiveNee);
+        const float emi_r2 = rng(pixel_index, sample_index, dim_base + kBounceOffsetEmissiveNee + 1);
+        const float emi_r3 = rng(pixel_index, sample_index, dim_base + kBounceOffsetEmissiveNee + 2);
+        const float emi_r4 = rng(pixel_index, sample_index, dim_base + kBounceOffsetEmissiveNee + 3);
+
+        // Select emissive triangle from power-weighted alias table.
+        const uint32_t tri_idx = sample_emissive_alias_table(
+            params.emissive_alias_table, params.emissive_count, emi_r1, emi_r2);
+        const EmissiveTriangle &tri = params.emissive_triangles[tri_idx];
+
+        // Uniform sample point on triangle.
+        const float3 light_bary = triangle_barycentric(emi_r3, emi_r4);
+        const float3 light_pos = tri.v0 * light_bary.x + tri.v1 * light_bary.y + tri.v2 * light_bary.z;
+
+        // Direction and distance to the light sample.
+        const float3 to_light = light_pos - offset_pos;
+        const float dist2 = dot(to_light, to_light);
+        const float dist = sqrtf(dist2);
+        const float3 L = to_light * (1.0f / dist);
+
+        // Light triangle geometric normal.
+        const float3 light_edge1 = tri.v1 - tri.v0;
+        const float3 light_edge2 = tri.v2 - tri.v0;
+        const float3 light_normal = normalize(cross(light_edge1, light_edge2));
+        float cos_theta_light = dot(light_normal, -L);
+
+        // Double-sided handling: follow material double_sided flag.
+        const Material &light_mat = params.materials[tri.material_index];
+        bool light_visible = cos_theta_light > 0.0f;
+        if (!light_visible && light_mat.double_sided == 1u) {
+            cos_theta_light = -cos_theta_light;
+            light_visible = true;
+        }
+
+        const float NdotL_emi = dot(N_shading, L);
+
+        if (light_visible && NdotL_emi > 0.0f) {
+            // Shadow ray (tMax shortened to avoid hitting the target triangle).
+            const uint32_t visible = trace_shadow_ray(
+                params.traversable, offset_pos, L, dist * (1.0f - 1e-4f));
+
+            if (visible) {
+                // Emissive radiance at the sample point (textured emission).
+                const float2 light_uv = tri.uv0 * light_bary.x + tri.uv1 * light_bary.y
+                                       + tri.uv2 * light_bary.z;
+                const auto le_texel = tex2D<float4>(
+                    tex[light_mat.emissive_tex], light_uv.x, light_uv.y);
+                const float3 Le = make_float3(
+                    le_texel.x * light_mat.emissive_factor.x,
+                    le_texel.y * light_mat.emissive_factor.y,
+                    le_texel.z * light_mat.emissive_factor.z);
+
+                // Evaluate BRDF at the light direction.
+                const float3 brdf_val_emi = brdf_eval(bp, L, NdotL_emi);
+
+                // Light PDF (solid-angle).
+                const float emission_lum = 0.2126f * tri.emission.x
+                    + 0.7152f * tri.emission.y + 0.0722f * tri.emission.z;
+                const float light_pdf_emi = emissive_light_pdf(
+                    emission_lum, dist, cos_theta_light, params.emissive_total_power);
+
+                // Combined multi-lobe BRDF PDF at the light direction.
+                const float3 H_emi = normalize(bp.V + L);
+                const float NdotH_emi = fmaxf(dot(N_shading, H_emi), 0.0f);
+                const float pdf_spec_emi = pdf_ggx_vndf(NdotH_emi, bp.NdotV, bp.alpha);
+                const float3 V_ts_emi = world_to_tangent(bp.T, bp.B, bp.N, bp.V);
+                const float3 L_ts_emi = world_to_tangent(bp.T, bp.B, bp.N, L);
+                const float pdf_diff_emi = pdf_EON(V_ts_emi, L_ts_emi, bp.r);
+                const float brdf_pdf_emi = combined_lobe_pdf(
+                    pdf_spec_emi, pdf_diff_emi, bp.p_spec);
+
+                // MIS weight (light sampling strategy).
+                const float mis_w_emi = mis_power_heuristic(light_pdf_emi, brdf_pdf_emi);
+
+                nee_radiance = nee_radiance + Le * brdf_val_emi * NdotL_emi
+                    * mis_w_emi / fmaxf(light_pdf_emi, 1e-7f);
+            }
+        }
+    }
+
     // ---- Env MIS weight for BRDF-sampled direction ----
     // When the BRDF ray misses (hits environment), the raygen loop scales its
     // contribution by this weight. Without NEE it is 1.0; with env NEE it is

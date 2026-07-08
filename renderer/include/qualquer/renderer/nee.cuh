@@ -148,4 +148,66 @@ __forceinline__ __device__ uint32_t trace_shadow_ray(
     return visible;
 }
 
+// ---- Emissive triangle sampling ---------------------------------------------
+
+/**
+ * @brief Uniform barycentric coordinates on a triangle (Turk 1990).
+ *
+ * @param r1 Uniform random [0,1).
+ * @param r2 Uniform random [0,1).
+ * @return Barycentric weights (u, v, w) with u + v + w = 1.
+ */
+__forceinline__ __device__ float3 triangle_barycentric(const float r1, const float r2) {
+    const float sqrt_r1 = sqrtf(r1);
+    const float u = 1.0f - sqrt_r1;
+    const float v = r2 * sqrt_r1;
+    return make_float3(u, v, 1.0f - u - v);
+}
+
+/**
+ * @brief Selects an emissive triangle from the power-weighted alias table.
+ *
+ * @param alias_table Device alias table entries (one per emissive triangle).
+ * @param count       Number of emissive triangles.
+ * @param r1          Uniform random [0,1) — bin selection.
+ * @param r2          Uniform random [0,1) — accept/reject.
+ * @return Index of the selected emissive triangle.
+ */
+__forceinline__ __device__ uint32_t sample_emissive_alias_table(
+        const AliasEntry *alias_table, const uint32_t count,
+        const float r1, const float r2) {
+
+    const uint32_t idx = min(static_cast<uint32_t>(r1 * static_cast<float>(count)),
+                             count - 1);
+    const AliasEntry &e = alias_table[idx];
+    return (r2 < e.prob) ? idx : e.alias;
+}
+
+/**
+ * @brief Solid-angle PDF of sampling a specific emissive triangle.
+ *
+ * The alias table selects triangle i with probability:
+ *   P(i) = power_i / total_power = luminance(emission_i) × area_i / total_power
+ * Combined with uniform point sampling (1 / area_i), the area-measure PDF is:
+ *   pdf_area = luminance(emission_i) / total_power
+ * Converting to solid-angle measure:
+ *   pdf_omega = pdf_area × dist² / |cos_theta_light|
+ *
+ * @param emission_luminance luminance(emissive_factor) of the triangle.
+ * @param dist               Distance from shading point to light sample point.
+ * @param cos_theta_light    |dot(light_normal, dir_to_shading_point)|.
+ * @param total_power        Total power sum across all emissive triangles.
+ * @return Solid-angle PDF (>= 1e-7).
+ */
+__forceinline__ __device__ float emissive_light_pdf(
+        const float emission_luminance, const float dist,
+        const float cos_theta_light, const float total_power) {
+
+    if (total_power <= 0.0f || cos_theta_light <= 0.0f) {
+        return 1e-7f;
+    }
+    const float pdf_area = emission_luminance / total_power;
+    return fmaxf(pdf_area * dist * dist / cos_theta_light, 1e-7f);
+}
+
 } // namespace qualquer::renderer
