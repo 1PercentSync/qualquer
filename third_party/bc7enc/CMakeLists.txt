@@ -14,9 +14,9 @@ target_include_directories(bc7enc PRIVATE include/qualquer/bc7enc)
 
 # ISPC: target multiple SIMD widths; ISPC runtime picks the best at call time
 set_source_files_properties(src/bc7e.ispc PROPERTIES
-        COMPILE_OPTIONS "--opt=fast-math;--opt=disable-assertions"
+        COMPILE_OPTIONS "--opt=fast-math;--opt=disable-assertions;--woff"
 )
 set_property(TARGET bc7enc PROPERTY ISPC_INSTRUCTION_SETS sse2-i32x4;sse4-i32x4;avx2-i32x8;avx512icl-x16)
 
-# Suppress warnings in third-party code (CXX only; ISPC has its own flags)
+# Suppress warnings in third-party code (CXX: /W0, ISPC: --woff above)
 target_compile_options(bc7enc PRIVATE $<$<COMPILE_LANGUAGE:CXX>:/W0>)

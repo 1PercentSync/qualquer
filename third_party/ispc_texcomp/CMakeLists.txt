@@ -14,9 +14,9 @@ target_include_directories(ispc_texcomp PRIVATE include/qualquer/ispc_texcomp)
 
 # ISPC: target multiple SIMD widths; ISPC runtime picks the best at call time
 set_source_files_properties(src/kernel.ispc PROPERTIES
-        COMPILE_OPTIONS "--opt=fast-math;--opt=disable-assertions"
+        COMPILE_OPTIONS "--opt=fast-math;--opt=disable-assertions;--woff"
 )
 set_property(TARGET ispc_texcomp PROPERTY ISPC_INSTRUCTION_SETS sse2-i32x4;sse4-i32x4;avx2-i32x8;avx512icl-x16)
 
-# Suppress warnings in third-party code (CXX only; ISPC has its own flags)
+# Suppress warnings in third-party code (CXX: /W0, ISPC: --woff above)
 target_compile_options(ispc_texcomp PRIVATE $<$<COMPILE_LANGUAGE:CXX>:/W0>)
