@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4 — 核心 Path Tracer
-- **进度**：Phase 4 Step 5 数据结构重构 第1小项完成：Material 重构（移除 occlusion_tex / occlusion_strength）
+- **进度**：Phase 4 Step 5 数据结构重构 第2小项完成：Vertex 重构（新增 color 字段，48 → 64 字节）
 
 ### 下一个任务
 
-Phase 4 Step 5 数据结构重构 第2小项：Vertex 重构（新增 color 字段，48 → 64 字节）
+Phase 4 Step 5 数据结构重构 第3小项：SceneLoader 适配（COLOR_0 读取 + AO 加载移除）
 
 ---
 

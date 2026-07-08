@@ -49,7 +49,7 @@
 
 - [x] 创建 `rng.cuh`：PCG hash RNG（pixel_index × sample_index × dimension）、维度分配方案（dim 0-1 subpixel jitter，per-bounce base = 2 + bounce × 12）
 - [x] Material 重构：移除 `occlusion_tex`（uint32_t）和 `occlusion_strength`（float），host 端 `material.h` + device 端 `programs.cu` 镜像同步，更新 static_assert
-- [ ] Vertex 重构：新增 `color`（glm::vec4 / float4，默认 `{1,1,1,1}`），host 端 `vertex.h` + device 端 `math_utils.cuh` DeviceVertex 同步，更新 static_assert（48 → 64 字节）
+- [x] Vertex 重构：新增 `color`（glm::vec4 / float4，默认 `{1,1,1,1}`），host 端 `vertex.h` + device 端 `math_utils.cuh` DeviceVertex 同步，更新 static_assert（48 → 64 字节）
 - [ ] SceneLoader 适配：`load_meshes` 读取 glTF `COLOR_0`（VEC3/VEC4，缺失默认白）；`load_materials` 移除 AO 纹理收集、加载、默认值回退
 - [ ] Closesthit 适配：移除 AO 采样，ambient 着色改为 `base_color × vertex_color`（插值顶点色后乘入 base_color）
 - [ ] 请求用户在 CLion 中编译验证（重构核销：现有渲染行为正确，顶点色生效，AO 已清除）
