@@ -260,9 +260,30 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
     const float3 T_world = normalize(optixTransformVectorFromObjectToWorldSpace(
         make_float3(tangent.x, tangent.y, tangent.z)));
 
-    // ---- Back-face flip ----
+    // ---- Back-face detection + single-sided pass-through ----
     const float3 ray_dir = optixGetWorldRayDirection();
-    if (dot(N_face, ray_dir) > 0.0f) {
+    const bool is_back_face = dot(N_face, ray_dir) > 0.0f;
+
+    if (is_back_face && mat.double_sided == 0u) {
+        // Single-sided material hit from behind: pass through the surface.
+        // Throughput unchanged, consumes one bounce. Origin is pushed past
+        // the hit point along the ray direction to avoid re-intersection.
+        const float hit_t = optixGetRayTmax();
+        const float pass_eps = fmaxf(hit_t * 1e-4f, 1e-6f);
+        const float3 pass_origin = optixGetWorldRayOrigin() + ray_dir * (hit_t + pass_eps);
+
+        payload_set_next_origin(pass_origin);
+        payload_set_next_direction(ray_dir);
+        payload_set_throughput_update(make_float3(1.0f, 1.0f, 1.0f));
+        payload_set_color(make_float3(0.0f, 0.0f, 0.0f));
+        payload_set_hit_distance(hit_t);
+        payload_set_env_mis_weight(1.0f);
+        payload_set_last_brdf_pdf(0.0f);
+        return;
+    }
+
+    // Double-sided back-face: flip normals to face the incoming ray.
+    if (is_back_face) {
         N_face = -N_face;
         N_interp = -N_interp;
     }
