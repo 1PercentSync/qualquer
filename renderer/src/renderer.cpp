@@ -512,7 +512,12 @@ namespace qualquer::renderer {
         CUDA_CHECK(cudaSignalExternalSemaphoresAsync(&sem, &signal_params, 1, cuda_context.display_stream));
 
         // The write slot now holds chain_count + samples_per_frame samples.
-        accum_counts_[1 - accum_index_] = chain_count + params.samples_per_frame;
+        // Empty scene (traversable == 0): device wrote black, no valid samples
+        // produced — keep the write-slot count at 0 so tonemap shows black and
+        // the next frame enters overwrite mode when a scene is loaded.
+        accum_counts_[1 - accum_index_] = accel_.tlas_handle() == 0
+                                              ? 0
+                                              : chain_count + params.samples_per_frame;
         accum_index_ = 1 - accum_index_;
         ++frame_counter_;
     }

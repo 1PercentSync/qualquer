@@ -64,13 +64,12 @@ __global__ void __raygen__rg() { // NOLINT(*-reserved-identifier)
     const uint32_t pixel_index = idx.y * params.width + idx.x;
 
     // Empty scene (no geometry loaded → traversable == 0): optixTrace on a
-    // null traversable is undefined behavior. Copy the read buffer to the write
-    // buffer so the Separate Sum chain stays valid and tonemap keeps showing
-    // the last frame (or black on first frame).
+    // null traversable is undefined behavior. Write black directly — reading
+    // the read buffer would access uninitialized memory on the first frame
+    // after allocation. Host sets the write-slot count to 0 to match.
     if (params.traversable == 0) {
-        const float4 old = params.accumulation_buffer_read[pixel_index];
         params.accumulation_buffer[pixel_index] =
-                make_float4(old.x, old.y, old.z, 1.0f);
+                make_float4(0.0f, 0.0f, 0.0f, 1.0f);
         return;
     }
 
