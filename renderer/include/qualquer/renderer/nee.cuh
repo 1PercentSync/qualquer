@@ -1,0 +1,151 @@
+#pragma once
+
+/**
+ * @file nee.cuh
+ * @brief Next Event Estimation helpers for environment and emissive NEE (renderer layer).
+ */
+
+#include <cstdint>
+
+#include <cuda_runtime.h>
+#include <optix_device.h>
+
+#include <qualquer/renderer/launch_params.h>
+
+namespace qualquer::renderer {
+
+// ---- Math constants (from brdf.cuh, repeated to keep nee.cuh self-contained) -
+constexpr float kNeePi       = 3.14159265358979323846f;
+constexpr float kNeeTwoPi    = 6.28318530717958647692f;
+constexpr float kNeeInvPi    = 0.31830988618379067154f;
+
+// ---- Environment alias table sampling ---------------------------------------
+
+/**
+ * @brief Samples a world-space direction from the environment alias table.
+ *
+ * O(1) importance sampling proportional to luminance × sin(theta). Sub-pixel
+ * jitter (r3, r4) within the selected pixel eliminates aliasing at pixel
+ * boundaries.
+ *
+ * @param alias_table  Device alias table entries (one per equirect pixel).
+ * @param entry_count  Total entries (width × height).
+ * @param width        Equirect source width.
+ * @param height       Equirect source height.
+ * @param r1           Uniform random [0,1) — bin selection.
+ * @param r2           Uniform random [0,1) — accept/reject.
+ * @param r3           Uniform random [0,1) — horizontal sub-pixel jitter.
+ * @param r4           Uniform random [0,1) — vertical sub-pixel jitter.
+ * @return Sampled world-space direction (normalized).
+ */
+__forceinline__ __device__ float3 sample_env_alias_table(
+        const EnvAliasEntry *alias_table,
+        const uint32_t entry_count,
+        const uint32_t width, const uint32_t height,
+        const float r1, const float r2, const float r3, const float r4) {
+
+    if (entry_count == 0) {
+        return make_float3(0.0f, 1.0f, 0.0f);
+    }
+
+    const uint32_t idx = min(static_cast<uint32_t>(r1 * static_cast<float>(entry_count)),
+                             entry_count - 1);
+    const EnvAliasEntry &e = alias_table[idx];
+    const uint32_t pixel = (r2 < e.prob) ? idx : e.alias;
+
+    // Pixel → equirect UV (jittered within pixel).
+    const uint32_t px = pixel % width;
+    const uint32_t py = pixel / width;
+    const float u = (static_cast<float>(px) + r3) / static_cast<float>(width);
+    const float v = (static_cast<float>(py) + r4) / static_cast<float>(height);
+
+    // Equirect UV → direction (matches equirect_to_cubemap.cu convention).
+    const float phi   = (u - 0.5f) * kNeeTwoPi;
+    const float theta = (0.5f - v) * kNeePi;
+    const float cos_theta = cosf(theta);
+
+    return make_float3(cos_theta * cosf(phi),
+                       sinf(theta),
+                       cos_theta * sinf(phi));
+}
+
+/**
+ * @brief Solid-angle PDF of a direction under the environment alias table distribution.
+ *
+ * Converts the direction to equirect UV, looks up the stored per-pixel luminance,
+ * and converts to a solid-angle PDF. Using the stored luminance (same values that
+ * built the alias table) ensures exact PDF/sampling consistency, eliminating MIS
+ * bias from cubemap compression or resolution differences.
+ *
+ * pdf = luminance × W × H / (total_luminance × 2π²)
+ *
+ * @param alias_table      Device alias table entries.
+ * @param width            Equirect source width.
+ * @param height           Equirect source height.
+ * @param total_luminance  Sum of all pixel weights (luminance × sin_theta).
+ * @param dir              World-space direction (normalized).
+ * @return Solid-angle PDF (>= 1e-7).
+ */
+__forceinline__ __device__ float env_pdf(
+        const EnvAliasEntry *alias_table,
+        const uint32_t width, const uint32_t height,
+        const float total_luminance,
+        const float3 dir) {
+
+    if (total_luminance <= 0.0f) {
+        return 1e-7f;
+    }
+
+    // Direction → equirect UV (inverse of the sampling mapping).
+    const float phi   = atan2f(dir.z, dir.x);
+    const float theta = asinf(fminf(1.0f, fmaxf(-1.0f, dir.y)));
+    const float u = phi / kNeeTwoPi + 0.5f;
+    const float v = 0.5f - theta * kNeeInvPi;
+
+    // UV → nearest pixel index.
+    const uint32_t px = min(static_cast<uint32_t>(u * static_cast<float>(width)),  width  - 1);
+    const uint32_t py = min(static_cast<uint32_t>(v * static_cast<float>(height)), height - 1);
+    const uint32_t pixel = py * width + px;
+
+    const float lum = alias_table[pixel].luminance;
+
+    return fmaxf(lum * static_cast<float>(width) * static_cast<float>(height)
+                 / (total_luminance * kNeeTwoPi * kNeePi), 1e-7f);
+}
+
+// ---- Shadow ray tracing -----------------------------------------------------
+
+/**
+ * @brief Traces a shadow ray and returns visibility (1 = visible, 0 = occluded).
+ *
+ * Uses TERMINATE_ON_FIRST_HIT | DISABLE_CLOSESTHIT for maximum efficiency.
+ * missIndex=1 invokes __miss__shadow which sets payload_0 = 1.
+ *
+ * @param traversable TLAS handle.
+ * @param origin      Ray origin (offset from surface).
+ * @param direction   Ray direction (normalized, toward light).
+ * @param tmax        Maximum ray distance (1e16 for env, dist*(1-eps) for area).
+ * @return 1 if the light is visible, 0 if occluded.
+ */
+__forceinline__ __device__ uint32_t trace_shadow_ray(
+        const OptixTraversableHandle traversable,
+        const float3 origin, const float3 direction,
+        const float tmax) {
+
+    uint32_t visible = 0;
+    optixTrace(traversable,
+               origin, direction,
+               0.0f,   // tmin
+               tmax,
+               0.0f,   // rayTime
+               0xFF,   // visibilityMask
+               OPTIX_RAY_FLAG_TERMINATE_ON_FIRST_HIT
+                   | OPTIX_RAY_FLAG_DISABLE_CLOSESTHIT,
+               0,      // SBT offset
+               0,      // SBT stride
+               1,      // missIndex (shadow miss)
+               visible);
+    return visible;
+}
+
+} // namespace qualquer::renderer

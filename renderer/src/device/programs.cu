@@ -47,6 +47,7 @@ namespace qualquer::renderer {
 #include <qualquer/renderer/rng.cuh>
 #include <qualquer/renderer/pt_common.cuh>
 #include <qualquer/renderer/payload_helpers.cuh>
+#include <qualquer/renderer/nee.cuh>
 
 // OptiX locates program groups by the entry function symbol name (e.g.
 // "__raygen__rg"), so entry points must be extern "C" at global scope. The
@@ -337,9 +338,73 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
 
     const BrdfSample bs = brdf_sample(bp, u_lobe, u0, u1);
 
+    // ---- NEE: Environment light (alias table importance sampling + MIS) ----
+    float3 nee_radiance = make_float3(0.0f, 0.0f, 0.0f);
+
+    if (params.env_cubemap != 0 && params.env_alias_table != nullptr) {
+        const float env_r1 = rng(pixel_index, sample_index, dim_base + kBounceOffsetEnvNee);
+        const float env_r2 = rng(pixel_index, sample_index, dim_base + kBounceOffsetEnvNee + 1);
+        const float env_r3 = rng(pixel_index, sample_index, dim_base + kBounceOffsetEnvNee + 2);
+        const float env_r4 = rng(pixel_index, sample_index, dim_base + kBounceOffsetEnvNee + 3);
+
+        const float3 L = sample_env_alias_table(
+            params.env_alias_table, params.env_alias_count,
+            params.env_alias_width, params.env_alias_height,
+            env_r1, env_r2, env_r3, env_r4);
+        const float NdotL = dot(N_shading, L);
+
+        if (NdotL > 0.0f) {
+            const uint32_t visible = trace_shadow_ray(
+                params.traversable, offset_pos, L, 1e16f);
+
+            if (visible) {
+                // Environment radiance at the sampled direction.
+                const auto env_texel = texCubemap<float4>(
+                    params.env_cubemap, L.x, L.y, L.z);
+                const float3 env_color = make_float3(
+                    env_texel.x, env_texel.y, env_texel.z);
+
+                // Evaluate BRDF at the light direction.
+                const float3 brdf_val = brdf_eval(bp, L, NdotL);
+
+                // Combined multi-lobe BRDF PDF at the light direction.
+                const float3 H = normalize(bp.V + L);
+                const float NdotH_e = fmaxf(dot(N_shading, H), 0.0f);
+                const float pdf_spec_e = pdf_ggx_vndf(NdotH_e, bp.NdotV, bp.alpha);
+                const float3 V_ts = world_to_tangent(bp.T, bp.B, bp.N, bp.V);
+                const float3 L_ts = world_to_tangent(bp.T, bp.B, bp.N, L);
+                const float pdf_diff_e = pdf_EON(V_ts, L_ts, bp.r);
+                const float brdf_pdf_e = combined_lobe_pdf(pdf_spec_e, pdf_diff_e, bp.p_spec);
+
+                // Light-strategy MIS weight.
+                const float pdf_light = env_pdf(
+                    params.env_alias_table,
+                    params.env_alias_width, params.env_alias_height,
+                    params.env_total_luminance, L);
+                const float mis_w = mis_power_heuristic(pdf_light, brdf_pdf_e);
+
+                nee_radiance = env_color * brdf_val * NdotL * mis_w
+                    / fmaxf(pdf_light, 1e-7f);
+            }
+        }
+    }
+
+    // ---- Env MIS weight for BRDF-sampled direction ----
+    // When the BRDF ray misses (hits environment), the raygen loop scales its
+    // contribution by this weight. Without NEE it is 1.0; with env NEE it is
+    // power_heuristic(brdf_pdf, env_pdf(brdf_dir)) to avoid double-counting.
+    float env_mis_w = 1.0f;
+    if (bs.pdf_combined > 0.0f && params.env_alias_table != nullptr) {
+        const float pdf_env_at_brdf = env_pdf(
+            params.env_alias_table,
+            params.env_alias_width, params.env_alias_height,
+            params.env_total_luminance, bs.next_dir);
+        env_mis_w = mis_power_heuristic(bs.pdf_combined, pdf_env_at_brdf);
+    }
+
     // ---- Write 18-register payload ----
     payload_set_next_origin(offset_pos);
-    payload_set_color(emissive);
+    payload_set_color(emissive + nee_radiance);
     payload_set_bounce(bounce);
 
     if (bs.pdf_combined == 0.0f) {
@@ -355,7 +420,7 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
     payload_set_next_direction(bs.next_dir);
     payload_set_throughput_update(bs.throughput_update);
     payload_set_hit_distance(optixGetRayTmax());
-    payload_set_env_mis_weight(1.0f);
+    payload_set_env_mis_weight(env_mis_w);
     payload_set_last_brdf_pdf(bs.pdf_combined);
 }
 
