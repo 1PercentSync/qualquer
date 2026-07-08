@@ -43,6 +43,9 @@ static_assert(sizeof(Material) == 80);
 } // namespace qualquer::renderer
 
 #include <qualquer/renderer/math_utils.cuh>
+#include <qualquer/renderer/brdf.cuh>
+#include <qualquer/renderer/rng.cuh>
+#include <qualquer/renderer/pt_common.cuh>
 
 // OptiX locates program groups by the entry function symbol name (e.g.
 // "__raygen__rg"), so entry points must be extern "C" at global scope. The
