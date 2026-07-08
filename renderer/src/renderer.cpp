@@ -404,7 +404,8 @@ namespace qualquer::renderer {
             scene.settings.max_bounces != prev_max_bounces_ ||
             scene.settings.samples_per_frame != prev_samples_per_frame_ ||
             exposure_linear != prev_exposure_;
-        const bool needs_reset = camera_changed || settings_changed;
+        const bool needs_reset = camera_changed || settings_changed || reset_requested_;
+        reset_requested_ = false;
         const uint32_t chain_count = needs_reset ? 0 : accum_counts_[accum_index_];
         const uint32_t effective_spp = scene.settings.accumulation_enabled
                                            ? scene.settings.samples_per_frame
@@ -740,6 +741,6 @@ namespace qualquer::renderer {
     }
 
     void Renderer::reset_accumulation() {
-        accum_counts_ = {0, 0};
+        reset_requested_ = true;
     }
 } // namespace qualquer::renderer

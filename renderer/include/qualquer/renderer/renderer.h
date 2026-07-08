@@ -298,6 +298,15 @@ namespace qualquer::renderer {
         std::array<uint32_t, 2> accum_counts_ = {0, 0};
 
         /**
+         * @brief Deferred reset flag set by reset_accumulation().
+         *
+         * Consumed by submit_cuda on the next frame: forces chain_count to 0
+         * (same path as camera-change reset) without clearing accum_counts_,
+         * so the read slot keeps a valid count and tonemap avoids a black frame.
+         */
+        bool reset_requested_ = false;
+
+        /**
          * @brief Previous-frame inverse view matrix (accumulation-reset detection).
          *
          * Exact byte-compare against the current frame's inv_view; any change
