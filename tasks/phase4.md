@@ -60,7 +60,7 @@
 - [x] Raygen 重写（单 sample 骨架）：单 sample + bounce loop + PathState 驱动
 - [x] Raygen 完整：sample loop（samples_per_frame 次）+ subpixel jitter + accum_counts 更新
 - [x] SER 集成：optixTraverse + optixReorder + optixInvoke 替换 optixTrace
-- [ ] 请求用户在 CLion 中编译验证（多 bounce PT 在 HDR env 下工作，累积收敛可见）
+- [x] 请求用户在 CLion 中编译验证（多 bounce PT 在 HDR env 下工作，累积收敛可见）
 
 MUSTREAD:4
 ## Step 6：Alpha 处理 + SBT 扩展

@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4 — 核心 Path Tracer
-- **进度**：Phase 4 Step 5 第13小项完成：SER 集成（optixTraverse + optixReorder + optixInvoke + material coherence hint）
+- **进度**：Phase 4 Step 5 完成（bounce loop + 累积 + 数据结构重构 + SER，编译验证通过）
 
 ### 下一个任务
 
-Phase 4 Step 5 最终小项：请求用户在 CLion 中编译验证（多 bounce PT 在 HDR env 下工作，累积收敛可见）
+Phase 4 Step 6 第一小项：SBT 扩展为 2 hitgroup（opaque + non-opaque）
 
 ---
 
