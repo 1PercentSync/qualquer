@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4 — 核心 Path Tracer
-- **进度**：Phase 4 Step 5 第9小项完成：Closesthit 重写（基础）— 18-register payload + ray offset + normal consistency + emissive 直写
+- **进度**：Phase 4 Step 5 第10小项完成：Closesthit 重写（BRDF 采样）— init_brdf_params + brdf_sample + RNG 维度采样
 
 ### 下一个任务
 
-Phase 4 Step 5 第10小项：Closesthit 重写（BRDF 采样）
+Phase 4 Step 5 第11小项：Raygen 重写（单 sample 骨架）
 
 ---
 
