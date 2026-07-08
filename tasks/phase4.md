@@ -70,7 +70,7 @@ MUSTREAD:4
 - [x] Closesthit 扩展：back-face + !double_sided 时 pass-through（throughput 不变，消耗一次 bounce）
 - [x] 创建 `__miss__shadow`（missIndex=1）：设 visible=1
 - [x] SceneLoader / Renderer 适配：Mesh 新增 `opaque` 字段，SceneLoader 按 `alpha_mode == 0` 填充，`group_meshes` 从 `mesh.opaque` 读取（不再硬编码 `true`）
-- [ ] 请求用户在 CLion 中编译验证（树叶/栅栏正确镂空，单面材质背面穿透）
+- [x] 请求用户在 CLion 中编译验证（树叶/栅栏正确镂空，单面材质背面穿透）
 
 ## Step 7：NEE + MIS
 

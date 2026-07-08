@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4 — 核心 Path Tracer
-- **进度**：Phase 4 Step 6 第五小项完成：Mesh 新增 `opaque` 字段，SceneLoader 从 glTF alphaMode 填充，group_meshes 读取
+- **进度**：Phase 4 Step 6 完成（alpha mask + double-sided pass-through + shadow miss + BLAS opaque flag，编译验证通过）
 
 ### 下一个任务
 
-Phase 4 Step 6 第六小项：请求用户在 CLion 中编译验证
+Phase 4 Step 7 第一小项：Emissive 三角形收集（SceneLoader 遍历 emissive 材质三角形 + alias table 构建）
 
 ---
 
