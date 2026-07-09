@@ -46,10 +46,14 @@ function(compile_optix_ir target)
     endforeach()
     list(APPEND _include_flags "-I${OptiX_INCLUDE_DIR}")
 
-    # Collect all .cuh device headers so changes trigger recompilation.
-    # All .cuh files are included (directly or transitively) by the .cu sources;
-    # a flat glob is simpler and more robust than manually listing each header.
-    file(GLOB_RECURSE _cuh_deps "${CMAKE_CURRENT_SOURCE_DIR}/*.cuh")
+    # Collect all device-visible headers so changes trigger recompilation.
+    # Both .cuh and .h files are included (directly or transitively) by the
+    # .cu sources (e.g. launch_params.h). A flat glob is simpler and more
+    # robust than manually listing each header.
+    file(GLOB_RECURSE _cuh_deps
+        "${CMAKE_CURRENT_SOURCE_DIR}/*.cuh"
+        "${CMAKE_CURRENT_SOURCE_DIR}/*.h"
+    )
 
     set(_optixir_files)
     foreach(_cu ${_cu_files})
@@ -69,6 +73,12 @@ function(compile_optix_ir target)
         # -Xcompiler=/utf-8 mirrors the top-level add_compile_options for CUDA:
         # this custom command bypasses it, and without it MSVC under code page
         # 936 spams C4819 on non-ASCII bytes inside NVIDIA's own CUDA headers.
+        # Clear the OptiX JIT cache when device code is recompiled. The cache
+        # keys the compiled SASS by .optixir content, but stale entries have
+        # been observed to cause the runtime to use an outdated kernel. Removing
+        # the cache file forces a fresh JIT on the next launch.
+        set(_optix_cache "$ENV{LOCALAPPDATA}/NVIDIA/OptixCache/optix7cache.db")
+
         add_custom_command(
             OUTPUT "${_out}"
             COMMAND ${CMAKE_COMMAND} -E make_directory "${QUALQUER_OPTIX_IR_DIR}"
@@ -81,6 +91,7 @@ function(compile_optix_ir target)
                     ${_include_flags}
                     -o "${_out}"
                     "${_cu_abs}"
+            COMMAND ${CMAKE_COMMAND} -E rm -f "${_optix_cache}"
             DEPENDS "${_cu_abs}" ${_cuh_deps}
             COMMENT "Compiling OptiX IR: ${_name}"
             VERBATIM
