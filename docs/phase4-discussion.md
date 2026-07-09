@@ -143,9 +143,9 @@
 - **B. Global memory buffer**（手动归一化，但 16KB 几乎全在 L2）
 
 **决策**：✅
-1. **Sobol + Blue Noise**：128 维低差异序列 + Cranley-Patterson rotation + golden-ratio temporal scramble，dim ≥ 128 降级 PCG hash。
-2. **Sobol Table → `__constant__` memory**：warp 内同维度查询命中 constant cache 广播，16KB 远低于 64KB 限制。
-3. **Blue Noise → CUDA Texture Object**：`tex2D<float>` 硬件归一化，走 texture cache，与已有纹理管线一致。
+1. **Sobol + hash 去相关**（D33 更新）：128 维低差异序列 + 加法 Cranley-Patterson rotation + golden-ratio temporal offset，dim ≥ 128 降级 xxhash32。Blue Noise 已移除。
+2. **Sobol Table → LaunchParams 内嵌数组**：`uint32_t sobol_directions[4096]` 嵌入 LaunchParams，`optixLaunch` 将 device buffer 复制到 `__constant__` memory，获得专用 L1 constant cache 广播（全 warp 读同一地址 ~8 cycles）。结构体 ~16.5 KB，占 64 KB 限制的 25%。OptiX 模块中非 LaunchParams 的 `__constant__` 变量无公开 API 从 host 端初始化，因此通过 LaunchParams 内嵌是唯一在 `__constant__` memory 中放置自定义数据的方式。
+3. ~~**Blue Noise → CUDA Texture Object**~~：已移除（D33）。
 
 ---
 
@@ -380,7 +380,7 @@
 - Sobol + Blue noise 是静态数据，嵌入更可靠；env map 和 emissive 是场景相关
 
 **决策**：✅
-1. **静态数据（Sobol）**：`inline constexpr` C 数组嵌入头文件（16 KB，4096 × uint32_t）。数据固定不变，零运行时 I/O，不依赖文件路径，不需要 CMake binary embedding 机制。Blue Noise 已移除（D33）。
+1. **静态数据（Sobol）**：`inline constexpr` C 数组（`sobol_direction_data.h`，16 KB，4096 × uint32_t），host 端初始化 LaunchParams 内嵌数组时作为数据源。数据固定不变，零运行时 I/O。通过 LaunchParams 内嵌进入 `__constant__` memory（D7）。Blue Noise 已移除（D33）。
 2. **场景数据（Emissive 三角形 + Env Map）**：`load_scene` 扩展逻辑。Emissive 扫描 + alias table 构建；Env HDR 加载 + equirect→cubemap 转换。
 
 ---
