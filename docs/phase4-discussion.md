@@ -368,7 +368,7 @@
 **决策**：✅ **Phase 4 实际写入 aux data + debug view**。
 1. LaunchParams 增加 aux buffer 指针（albedo + normal + depth），motion vectors 指针预留位置不分配
 2. 分配 aux buffers（跟随 render_width × render_height）
-3. closesthit bounce==0 时写入 albedo、world normal、linear depth（`optixGetRayTmax()`）
+3. closesthit bounce==0 时写入 albedo、world normal、linear depth（view-space Z）
 4. UI 提供 debug view 切换（显示 aux buffer 内容），提前验证数据正确性
 
 ---
@@ -736,7 +736,7 @@ DLSS-RR 同时做时域累积、去噪、放大，OptiX Denoiser 只做去噪。
 | 参数 | 格式 | 来源 |
 |------|------|------|
 | pInColor | float4 HDR | raygen 单帧 noisy 输出 |
-| pInDepth | R32F | `optixGetRayTmax()`（linear depth，`InUseHWDepth = Linear`） |
+| pInDepth | R32F | view-space Z：`dot(camera_forward, hitPos - camera_origin)`（`InUseHWDepth = Linear`） |
 | pInMotionVectors | RG32F | 前帧 VP 投影差（静态场景仅 camera motion） |
 | pInDiffuseAlbedo | float4 | raw `base_color`（跟随 vk_denoise_dlssrr，存疑见 current-phase.md） |
 | pInSpecularAlbedo | float4 | E_glossy 逐通道（见下） |

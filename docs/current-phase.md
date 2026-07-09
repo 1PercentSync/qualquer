@@ -622,7 +622,7 @@ ngxParams->Set(NVSDK_NGX_Parameter_FreeMemOnReleaseFeature, 1);
 
 **每帧执行**：填充 `NVSDK_NGX_CUDA_DLSSD_Eval_Params`，调用 `NGX_CUDA_EVALUATE_DLSSD_EXT`。Jitter offset = `-(jx - 0.5)`, `-(jy - 0.5)`（取反：投影矩阵 jitter 方向与像素偏移方向相反，两个 NVIDIA 官方参考均取反）。InMVScale = 1.0。MVJittered flag 不设（Flag=0，MV 两端均用 unjittered VP 投影，只含几何运动，与 vk_gltf_renderer 一致）。InIndicatorInvertYAxis = 1（OptiX/CUDA Y-up 坐标系，与 optix-subd / Blender Cycles 一致）。
 
-**矩阵传递**：pInWorldToViewMatrix / pInViewToClipMatrix 直接传 `glm::value_ptr(mat4)`，不经过 `to_float4x4()` 转换。GLM column-major + right-multiply 与 DLSS 要求的 row-major + left-multiply 两次转置互相抵消（vk_denoise_dlssrr `dlssrr_wrapper.cpp:374-380` 注释确认）。`to_float4x4()` 仅用于 LaunchParams 供 device `mul()` 使用。
+**矩阵传递**：pInWorldToViewMatrix / pInViewToClipMatrix 传 `glm::value_ptr(glm::transpose(mat4))`——GLM column-major 转置后按 row-major 读取即为原始矩阵（vk_gltf_renderer `dlss_wrapper.cpp:488-491` 做法，optix-subd 的 row-major `otk::Matrix4x4` 直接传等价）。`to_float4x4()` 仅用于 LaunchParams 供 device `mul()` 使用，不用于 DLSS 矩阵传递。
 
 **前帧 VP 矩阵**：LaunchParams 传当前帧和前帧各一个 unjittered `VP = projection × view`（`float4x4`，row-major 供 device `mul()` 使用），MV 计算将 world pos 分别投影到两帧 VP 取差（vk_gltf_renderer `dlss_util.h:87-96` 做法）。host 端每帧末缓存当前帧 VP 作为下帧的 prevVP。
 
