@@ -251,6 +251,8 @@ namespace qualquer::renderer {
         for (auto &buffer: accum_buffers_) {
             buffer.alloc(pixel_count);
         }
+        render_width_ = width;
+        render_height_ = height;
 
         params_buffer_.alloc(1);
         accum_index_ = 0;
@@ -283,6 +285,10 @@ namespace qualquer::renderer {
         for (auto &buffer: accum_buffers_) {
             buffer.resize(pixel_count);
         }
+        // Keep the allocation tracking consistent so the next submit_cuda's
+        // render-resolution comparison sees what is actually allocated.
+        render_width_ = width;
+        render_height_ = height;
         accum_index_ = 0;
         // Counts reset to 0: raygen will overwrite (ignoring uninitialised
         // buffer content) and tonemap will output black until valid data arrives.
@@ -376,6 +382,28 @@ namespace qualquer::renderer {
                                const uint32_t width,
                                const uint32_t height,
                                const uint32_t frame_index) {
+        // Accumulation buffers follow the render resolution, not the display
+        // resolution. On mismatch both streams are drained first — the previous
+        // frame's raygen/tonemap may still be reading or writing the old
+        // allocations. Counts reset to 0: raygen enters overwrite mode (never
+        // reads the fresh buffers) and tonemap outputs black until valid data
+        // arrives, so the uninitialised contents are never consumed.
+        const uint32_t render_height = scene.settings.render_height;
+        const uint32_t render_width = compute_render_width(render_height, width, height);
+        if (render_width != render_width_ || render_height != render_height_) {
+            CUDA_CHECK(cudaStreamSynchronize(cuda_context.compute_stream));
+            CUDA_CHECK(cudaStreamSynchronize(cuda_context.display_stream));
+            const std::size_t pixel_count = static_cast<std::size_t>(render_width) * render_height;
+            for (auto &buffer: accum_buffers_) {
+                buffer.resize(pixel_count);
+            }
+            accum_counts_ = {0, 0};
+            render_width_ = render_width;
+            render_height_ = render_height;
+            spdlog::info("Accumulation buffers reallocated ({}x{} render resolution)",
+                         render_width, render_height);
+        }
+
         // Dual-stream overlap: compute_stream runs raygen while display_stream
         // runs tonemap + semaphore signal in parallel. Ping-pong buffers guarantee
         // raygen and tonemap access different buffers within the same frame; CUDA

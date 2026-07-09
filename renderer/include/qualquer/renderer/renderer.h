@@ -150,8 +150,9 @@ namespace qualquer::renderer {
          *                      pipeline builds against; the stream sequences SBT
          *                      uploads and accumulation-buffer clears before the first
          *                      frame's optixLaunch on the same stream.
-         * @param width          Output width in pixels.
-         * @param height         Output height in pixels.
+         * @param width          Initial render resolution width in pixels
+         *                       (accumulation buffer size).
+         * @param height         Initial render resolution height in pixels.
          * @param optixir_path   Path to the compiled .optixir file (passed to the
          *                       pipeline; resolved relative to the process working
          *                       directory, so the build must deploy the file there).
@@ -210,6 +211,11 @@ namespace qualquer::renderer {
          * semaphore. The two streams run in parallel; CUDA events enforce the
          * ping-pong buffer dependencies, the reverse semaphore protects the display
          * surface's write-after-read dependency (blit read before tonemap write).
+         *
+         * The render resolution derives from scene.settings.render_height and the
+         * display aspect ratio; when it differs from the current accumulation-buffer
+         * allocation, both streams are drained and the buffers are reallocated
+         * (sample counts reset to 0).
          * @param cuda_context CUDA context (surface, streams, external semaphores).
          * @param scene        Camera and scene data (materials, texture objects).
          * @param width        Display buffer width in pixels.
@@ -279,6 +285,18 @@ namespace qualquer::renderer {
 
         /** @brief Index into accum_buffers_ of the buffer read this frame; flipped per frame. */
         uint32_t accum_index_ = 0;
+
+        /**
+         * @brief Render resolution width the accumulation buffers are allocated for.
+         *
+         * submit_cuda compares the desired render resolution (derived from
+         * RenderSettings::render_height and the display aspect ratio) against
+         * this pair and reallocates the buffers on mismatch.
+         */
+        uint32_t render_width_ = 0;
+
+        /** @brief Render resolution height the accumulation buffers are allocated for (see render_width_). */
+        uint32_t render_height_ = 0;
 
         /**
          * @brief Monotonic frame counter; never reset.
