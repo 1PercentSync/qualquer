@@ -686,6 +686,24 @@ __forceinline__ __device__ float sobol_rng(uint32_t pixel_index, uint32_t sequen
 
 维度分配基本不变：per-bounce base = 2 + bounce × 12。**dim 0-1（subpixel jitter）改为 per-frame**（D37：由 frame_index 驱动，帧内所有 sample 共享同一 jitter，跨帧变化保留 DLSS-RR 时域超分辨率）。dim 2+ 仍 per-sample。
 
+#### Render Resolution Decoupling
+
+渲染分辨率与 swapchain 解耦（D15 机制修正后的落地方案）：
+
+**参数**：`RenderSettings::render_height`（UI 滑块 [240, 2160]，释放时生效——拖拽期间不触发 buffer 重分配；Ctrl+Click 手动输入可超范围）。`render_width = round(render_height × display_aspect)`，render_height 为原生高度（默认值）时恰等于 display_width。camera aspect 保持显示纵横比（render_width 按显示纵横比推导，拉伸映射不改变屏幕几何投影）。
+
+**分辨率流向**：累积 buffer 分配、optixLaunch 维度、`LaunchParams::width/height`（含 raygen jitter 的 u/v 像素尺度）均为渲染分辨率；显示分辨率只有 tonemap 需要，走 kernel 参数，LaunchParams 无新增字段。
+
+**按需重分配**：Renderer 记录已分配的渲染分辨率，submit_cuda 比对期望值，变化时同步双 stream → resize 累积 buffer → accum_counts = {0,0}（覆写模式 + tonemap 黑帧守卫，同原 resize 语义）。`Renderer::resize` 移除；窗口 resize 只重建显示 buffer——纵横比不变时渲染分辨率不变、累积不重置，纵横比变化时 render_width 变化自然触发重分配（inv_projection 变化同时触发累积 reset）。
+
+**Tonemap 重采样**：kernel 以显示分辨率 launch，在线性 HDR（mean，除以 count 后）空间对渲染分辨率累积 buffer 重采样，再 exposure + tonemap 写全幅 display buffer。放大与缩小各用其标准算法，不强行统一：
+
+- 放大（render < display）：Catmull-Rom 双三次（固定 4×4 taps），结果 clamp ≥ 0（HDR 高对比处防负 lobe 振铃产生负辐射度）
+- 缩小（render > display）：footprint box 平均（每显示像素平均其覆盖的源像素，边缘按覆盖比例加权）——SSAA resolve 语义，无振铃，任意比例无欠采样
+- render == display：1:1 直读
+
+blit / record_vulkan 全幅不变，Vulkan 侧不感知渲染分辨率。DLSS-RR 关闭或不可用时此路径为长期 fallback（开启时 tonemap 读显示分辨率中间 HDR buffer，1:1）。
+
 #### 自适应帧率策略
 
 通过调整每帧 samples_per_frame 控制帧时间，使实际帧率稳定在目标帧率水平。呈现模式（MAILBOX/FIFO）独立于自适应策略。

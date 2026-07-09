@@ -309,7 +309,13 @@
 - A 为未来自适应渲染分辨率（每帧变化）预留了路
 - 8 个紧耦合点需要改造（Part 2 §4.3 已列出）
 
-**决策**：✅ **A. Display buffer 保持 swapchain 大小**。tonemap 写子区域，blit 上采样。InteropImage 不因渲染分辨率变化重建，为未来自适应分辨率 / DLSS-RR 预留路径。显存浪费可忽略。
+**决策**：✅ **A. Display buffer 保持 swapchain 大小**。InteropImage 不因渲染分辨率变化重建，为未来自适应分辨率 / DLSS-RR 预留路径。显存浪费可忽略。
+
+**机制修正（Step 11 实现前，替代原"tonemap 写子区域 + VK blit 上采样"草图）**：缩放在 tonemap kernel 内完成——kernel 以显示分辨率 launch，在线性 HDR（mean）空间对渲染分辨率累积 buffer 重采样，tonemap 后写全幅 display buffer；blit 保持全幅 1:1。理由：
+
+- 重采样须在线性 HDR、tonemap 之前完成；blit 滤波发生在 tonemap 后的 LDR（UNORM8）空间，上限只有双线性，对缩小（render > display，超采样）更无 footprint 滤波——放大缩小两向的高质量要求均无法满足
+- Vulkan 侧零感知：blit src 无需知道渲染分辨率，record_vulkan 不改
+- 终态一致：Step 14 后 DLSS-RR 输出显示分辨率、tonemap 全幅 1:1 写 display buffer；DLSS-RR 关闭/不可用时本缩放路径是长期 fallback，非临时桥接
 
 ---
 
@@ -337,7 +343,7 @@
 **需要讨论**：
 1. **Tonemap 函数**：ACES / Reinhard / AgX / 可运行时切换？
 2. **Exposure 控制**：固定值 / auto-exposure / UI 可调？
-3. **与渲染分辨率解耦的交互**：tonemap kernel 处理 render_width × render_height 子区域
+3. **与渲染分辨率解耦的交互**：tonemap kernel 以显示分辨率 launch、重采样渲染分辨率输入（机制见 D15 修正）
 
 **决策**：✅
 1. **Tonemap 函数**：Khronos PBR Neutral。专为 PBR 设计，baseColor 低于阈值时 1:1 精确还原，仅压缩高亮，无风格化色偏。
