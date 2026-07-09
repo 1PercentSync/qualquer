@@ -83,9 +83,11 @@ __global__ void __raygen__rg() { // NOLINT(*-reserved-identifier)
     for (uint32_t s = 0; s < params.samples_per_frame; ++s) {
         const uint32_t sample_index = params.sample_count + s;
 
-        // ---- Primary ray with subpixel jitter ----
-        const float jx = rng(pixel_index, sample_index, kDimJitterX);
-        const float jy = rng(pixel_index, sample_index, kDimJitterY);
+        // ---- Primary ray with subpixel jitter (per-frame, D37) ----
+        const float jx = sobol_rng(params.sobol_directions, pixel_index,
+                                   params.frame_index, params.frame_index, kDimJitterX);
+        const float jy = sobol_rng(params.sobol_directions, pixel_index,
+                                   params.frame_index, params.frame_index, kDimJitterY);
 
         const float u = (static_cast<float>(idx.x) + jx) / static_cast<float>(params.width);
         const float v = (static_cast<float>(idx.y) + jy) / static_cast<float>(params.height);
@@ -127,7 +129,8 @@ __global__ void __raygen__rg() { // NOLINT(*-reserved-identifier)
             // ---- Russian Roulette (bounce >= 2) ----
             if (path.bounce >= 2) {
                 const uint32_t rr_dim = bounce_dim_base(path.bounce) + kBounceOffsetRR;
-                const float rr_rand = rng(pixel_index, sample_index, rr_dim);
+                const float rr_rand = sobol_rng(params.sobol_directions, pixel_index,
+                                               sample_index, params.frame_index, rr_dim);
                 const float rr_prob = fminf(0.95f,
                     fmaxf(0.05f, fmaxf(path.throughput.x,
                                        fmaxf(path.throughput.y, path.throughput.z))));
@@ -371,9 +374,12 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
     const uint32_t sample_index = payload_get_sample_index();
     const uint32_t dim_base = bounce_dim_base(bounce);
 
-    const float u_lobe = rng(pixel_index, sample_index, dim_base + kBounceOffsetLobeSelect);
-    const float u0 = rng(pixel_index, sample_index, dim_base + kBounceOffsetBrdfXi0);
-    const float u1 = rng(pixel_index, sample_index, dim_base + kBounceOffsetBrdfXi1);
+    const float u_lobe = sobol_rng(params.sobol_directions, pixel_index,
+                                   sample_index, params.frame_index, dim_base + kBounceOffsetLobeSelect);
+    const float u0 = sobol_rng(params.sobol_directions, pixel_index,
+                               sample_index, params.frame_index, dim_base + kBounceOffsetBrdfXi0);
+    const float u1 = sobol_rng(params.sobol_directions, pixel_index,
+                               sample_index, params.frame_index, dim_base + kBounceOffsetBrdfXi1);
 
     const BrdfSample bs = brdf_sample(bp, u_lobe, u0, u1);
 
@@ -381,10 +387,14 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
     float3 nee_radiance = make_float3(0.0f, 0.0f, 0.0f);
 
     if (params.env_cubemap != 0 && params.env_alias_table != nullptr) {
-        const float env_r1 = rng(pixel_index, sample_index, dim_base + kBounceOffsetEnvNee);
-        const float env_r2 = rng(pixel_index, sample_index, dim_base + kBounceOffsetEnvNee + 1);
-        const float env_r3 = rng(pixel_index, sample_index, dim_base + kBounceOffsetEnvNee + 2);
-        const float env_r4 = rng(pixel_index, sample_index, dim_base + kBounceOffsetEnvNee + 3);
+        const float env_r1 = sobol_rng(params.sobol_directions, pixel_index,
+                                       sample_index, params.frame_index, dim_base + kBounceOffsetEnvNee);
+        const float env_r2 = sobol_rng(params.sobol_directions, pixel_index,
+                                       sample_index, params.frame_index, dim_base + kBounceOffsetEnvNee + 1);
+        const float env_r3 = sobol_rng(params.sobol_directions, pixel_index,
+                                       sample_index, params.frame_index, dim_base + kBounceOffsetEnvNee + 2);
+        const float env_r4 = sobol_rng(params.sobol_directions, pixel_index,
+                                       sample_index, params.frame_index, dim_base + kBounceOffsetEnvNee + 3);
 
         const float3 L = sample_env_alias_table(
             params.env_alias_table, params.env_alias_count,
@@ -437,10 +447,14 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
 
     // ---- NEE: Emissive area lights (alias table importance sampling + MIS) ----
     if (params.emissive_count > 0 && params.emissive_triangles != nullptr) {
-        const float emi_r1 = rng(pixel_index, sample_index, dim_base + kBounceOffsetEmissiveNee);
-        const float emi_r2 = rng(pixel_index, sample_index, dim_base + kBounceOffsetEmissiveNee + 1);
-        const float emi_r3 = rng(pixel_index, sample_index, dim_base + kBounceOffsetEmissiveNee + 2);
-        const float emi_r4 = rng(pixel_index, sample_index, dim_base + kBounceOffsetEmissiveNee + 3);
+        const float emi_r1 = sobol_rng(params.sobol_directions, pixel_index,
+                                       sample_index, params.frame_index, dim_base + kBounceOffsetEmissiveNee);
+        const float emi_r2 = sobol_rng(params.sobol_directions, pixel_index,
+                                       sample_index, params.frame_index, dim_base + kBounceOffsetEmissiveNee + 1);
+        const float emi_r3 = sobol_rng(params.sobol_directions, pixel_index,
+                                       sample_index, params.frame_index, dim_base + kBounceOffsetEmissiveNee + 2);
+        const float emi_r4 = sobol_rng(params.sobol_directions, pixel_index,
+                                       sample_index, params.frame_index, dim_base + kBounceOffsetEmissiveNee + 3);
 
         // Select emissive triangle from power-weighted alias table.
         const uint32_t tri_idx = sample_emissive_alias_table(
