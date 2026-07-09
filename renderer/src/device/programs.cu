@@ -124,6 +124,20 @@ __global__ void __raygen__rg() { // NOLINT(*-reserved-identifier)
         uint32_t p15 = 0, p16 = 0, p17 = 0;
 
         while (path.alive && path.bounce < params.max_bounces) {
+            // ---- Russian Roulette (bounce >= 2) ----
+            if (path.bounce >= 2) {
+                const uint32_t rr_dim = bounce_dim_base(path.bounce) + kBounceOffsetRR;
+                const float rr_rand = rng(pixel_index, sample_index, rr_dim);
+                const float rr_prob = fminf(0.95f,
+                    fmaxf(0.05f, fmaxf(path.throughput.x,
+                                       fmaxf(path.throughput.y, path.throughput.z))));
+                if (rr_rand >= rr_prob) {
+                    path.alive = false;
+                    break;
+                }
+                path.throughput = path.throughput / rr_prob;
+            }
+
             p15 = sample_index;
             p17 = path.bounce;
 
