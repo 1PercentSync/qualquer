@@ -121,7 +121,6 @@ MUSTREAD:4
 
 - [ ] 新增 `render_width` / `render_height` 参数（独立于 swapchain extent），UI quality mode 选择控制
 - [ ] 累积 buffer 按渲染分辨率分配（不再跟随 swapchain）
-- [ ] Aux data buffers 按渲染分辨率分配
 - [ ] OptiX launch 维度使用渲染分辨率
 - [ ] Tonemap kernel 输入渲染分辨率、输出显示分辨率（或 DLSS-RR 输出分辨率）
 - [ ] Camera jitter 基于渲染分辨率像素大小
@@ -154,7 +153,6 @@ MUSTREAD:4
 - [ ] 刷新率查询：GLFW `glfwGetVideoMode` 获取当前显示器刷新率
 - [ ] 帧时间测量：CUDA events 测量 raygen kernel 执行时间
 - [ ] Mode 选择逻辑：根据实测帧时间判断 Mode 1 / 2 / 3，计算目标帧率
-- [ ] 呈现模式切换：Mode 1 使用 MAILBOX present mode，Mode 2/3 使用 FIFO
 - [ ] Ping-pong / 串行切换：Mode 1 保持双 stream 并行，Mode 2/3 切换到单 stream 串行
 - [ ] UI：当前 mode 显示、手动/自动切换开关
 - [ ] 请求用户在 CLion 中编译验证（自适应切换正常，各 mode 帧率符合目标）
