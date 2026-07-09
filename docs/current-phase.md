@@ -601,11 +601,11 @@ ngxParams->Set(NVSDK_NGX_Parameter_FreeMemOnReleaseFeature, 1);
 
 渲染分辨率由 UI 滑块直接控制。Quality mode 自动选取：启动时用 `NGX_DLSSD_GET_OPTIMAL_SETTINGS` 查询每个 mode（DLAA / Quality / Balanced / Performance / UltraPerformance）的 optimal / min / max 渲染分辨率，缓存结果。用户调整滑块时，选取 optimal 最接近用户值的 mode；若用户值不在该 mode 的 [min, max] 内，比较相邻两个 mode 的 clamp 距离，选改变量更小的。用户值超出所有 mode 范围时，clamp 到最近端的 min/max；UI 提供 bypass 开关跳过此 clamp（允许超范围渲染分辨率）。render >= target 时选 DLAA。Render Preset 默认 E（Latest transformer model，质量最优）；SDK 推荐 Default（随 OTA 更新），UI 提供 Default/D/E 切换。
 
-**每帧执行**：填充 `NVSDK_NGX_CUDA_DLSSD_Eval_Params`，调用 `NGX_CUDA_EVALUATE_DLSSD_EXT`。Jitter offset = `-(jx - 0.5)`, `-(jy - 0.5)`（取反：投影矩阵 jitter 方向与像素偏移方向相反，两个 NVIDIA 官方参考均取反）。InMVScale = 1.0。MVJittered flag 不设（Flag=0，MV 含 curPixel 端 jitter，DLSS 直接使用，与两个 NVIDIA 官方参考一致）。InIndicatorInvertYAxis = 1（OptiX/CUDA Y-up 坐标系，与 optix-subd 一致）。
+**每帧执行**：填充 `NVSDK_NGX_CUDA_DLSSD_Eval_Params`，调用 `NGX_CUDA_EVALUATE_DLSSD_EXT`。Jitter offset = `-(jx - 0.5)`, `-(jy - 0.5)`（取反：投影矩阵 jitter 方向与像素偏移方向相反，两个 NVIDIA 官方参考均取反）。InMVScale = 1.0。MVJittered flag 不设（Flag=0，MV 两端均用 unjittered VP 投影，只含几何运动，与 vk_gltf_renderer 一致）。InIndicatorInvertYAxis = 1（OptiX/CUDA Y-up 坐标系，与 optix-subd / Blender Cycles 一致）。
 
 **矩阵传递**：pInWorldToViewMatrix / pInViewToClipMatrix 直接传 `glm::value_ptr(mat4)`，不经过 `to_float4x4()` 转换。GLM column-major + right-multiply 与 DLSS 要求的 row-major + left-multiply 两次转置互相抵消（vk_denoise_dlssrr `dlssrr_wrapper.cpp:374-380` 注释确认）。`to_float4x4()` 仅用于 LaunchParams 供 device `mul()` 使用。
 
-**前帧 VP 矩阵**：LaunchParams 传一个预乘的 `prevVP = projection × view`（`float4x4`，row-major 供 device `mul()` 使用），MV 计算只需一次矩阵乘法（vk_denoise_dlssrr 同样用单个 `prevMVP`，`host_device.h:96`）。host 端每帧末缓存当前帧 VP 作为下帧的 prevVP。
+**前帧 VP 矩阵**：LaunchParams 传当前帧和前帧各一个 unjittered `VP = projection × view`（`float4x4`，row-major 供 device `mul()` 使用），MV 计算将 world pos 分别投影到两帧 VP 取差（vk_gltf_renderer `dlss_util.h:87-96` 做法）。host 端每帧末缓存当前帧 VP 作为下帧的 prevVP。
 
 **Stream 分配与管线流程**：
 
@@ -687,7 +687,7 @@ __forceinline__ __device__ float sobol_rng(uint32_t pixel_index, uint32_t sequen
 | normals | closesthit / raygen | shading normal (world space) | (0,0,0,0) |
 | roughness | closesthit / raygen | linear roughness | 0 |
 | specular hit distance | closesthit / raygen | 写 infinity（optix-subd 实测不改善 DLSS-RR 输出） | 0 |
-| motion vectors | raygen | prevPixel - curPixel（符合 DLSS 约定 `cur + MV = prev`）；world hit pos 投影到当前/前帧 VP | ray direction 以 w=0 齐次坐标投影到前帧 VP |
+| motion vectors | raygen | MV 两端均用 unjittered VP 投影（`vk_gltf_renderer` 做法），MV 只含几何运动，jitter 信息由 InJitterOffset 单独提供；hit 像素：world hit pos 以 w=1 齐次坐标投影到当前/前帧 unjittered VP；miss 像素：ray direction 以 w=0 齐次坐标投影 | 同左 |
 | color | raygen | 多 spp 同 jitter 平均后的 noisy HDR | 天空 HDR 辐射度 |
 
 **多 spp 与 aux data 一致性**（D37）：帧内所有 sample 共享同一 subpixel jitter（per-frame），primary ray 相同 → aux data 写一次即可。BRDF/NEE 维度仍 per-sample。跨帧 jitter 变化保留 DLSS-RR 时域超分辨率。
