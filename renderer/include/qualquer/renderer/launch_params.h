@@ -156,8 +156,18 @@ struct LaunchParams {
      */
     uint32_t sample_count;
 
-    /** @brief IBL Y-axis rotation in radians (applied to ray directions for cubemap lookup and NEE). */
-    float env_rotation;
+    /**
+     * @brief Sine of the IBL Y-axis rotation angle.
+     *
+     * The rotation angle is a launch constant, so the host precomputes the
+     * sin/cos pair once per frame. Device code rotates ray directions for
+     * cubemap lookup and NEE without a per-hit sincosf (whose Payne-Hanek
+     * argument reduction drags in double-precision math).
+     */
+    float env_rotation_sin;
+
+    /** @brief Cosine of the IBL Y-axis rotation angle (see env_rotation_sin). */
+    float env_rotation_cos;
 
     // ---- Environment light ----
 

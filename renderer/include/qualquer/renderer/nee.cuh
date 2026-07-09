@@ -30,7 +30,8 @@ namespace qualquer::renderer {
  * @param entry_count   Total entries (width × height).
  * @param width         Equirect source width.
  * @param height        Equirect source height.
- * @param env_rotation  IBL Y-axis rotation in radians.
+ * @param sin_r         Sine of the IBL Y-axis rotation (host-precomputed).
+ * @param cos_r         Cosine of the IBL Y-axis rotation (host-precomputed).
  * @param r1            Uniform random [0,1) — bin selection.
  * @param r2            Uniform random [0,1) — accept/reject.
  * @param r3            Uniform random [0,1) — horizontal sub-pixel jitter.
@@ -41,7 +42,7 @@ __forceinline__ __device__ float3 sample_env_alias_table(
         const EnvAliasEntry *alias_table,
         const uint32_t entry_count,
         const uint32_t width, const uint32_t height,
-        const float env_rotation,
+        const float sin_r, const float cos_r,
         const float r1, const float r2, const float r3, const float r4) {
 
     if (entry_count == 0) {
@@ -69,8 +70,6 @@ __forceinline__ __device__ float3 sample_env_alias_table(
                                        cos_theta * __sinf(phi));
 
     // Inverse IBL rotation: env space → world space.
-    float sin_r, cos_r;
-    sincosf(env_rotation, &sin_r, &cos_r);
     return rotate_y_dir(env_dir, -sin_r, cos_r);
 }
 
@@ -88,7 +87,8 @@ __forceinline__ __device__ float3 sample_env_alias_table(
  * @param width            Equirect source width.
  * @param height           Equirect source height.
  * @param total_luminance  Sum of all pixel weights (luminance × sin_theta).
- * @param env_rotation     IBL Y-axis rotation in radians.
+ * @param sin_r            Sine of the IBL Y-axis rotation (host-precomputed).
+ * @param cos_r            Cosine of the IBL Y-axis rotation (host-precomputed).
  * @param dir              World-space direction (normalized).
  * @return Solid-angle PDF (>= 1e-7).
  */
@@ -96,7 +96,7 @@ __forceinline__ __device__ float env_pdf(
         const EnvAliasEntry *alias_table,
         const uint32_t width, const uint32_t height,
         const float total_luminance,
-        const float env_rotation,
+        const float sin_r, const float cos_r,
         const float3 dir) {
 
     if (total_luminance <= 0.0f) {
@@ -104,8 +104,6 @@ __forceinline__ __device__ float env_pdf(
     }
 
     // Forward IBL rotation: world space → env space.
-    float sin_r, cos_r;
-    sincosf(env_rotation, &sin_r, &cos_r);
     const float3 env_dir = rotate_y_dir(dir, sin_r, cos_r);
 
     // Direction → equirect UV (inverse of the sampling mapping).

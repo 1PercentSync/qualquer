@@ -439,7 +439,10 @@ namespace qualquer::renderer {
             .max_bounces = scene.settings.max_bounces,
             .samples_per_frame = effective_spp,
             .sample_count = chain_count,
-            .env_rotation = scene.settings.env_rotation,
+            // The rotation angle is a launch constant: precompute the sin/cos
+            // pair so device code avoids a per-hit sincosf.
+            .env_rotation_sin = std::sin(scene.settings.env_rotation),
+            .env_rotation_cos = std::cos(scene.settings.env_rotation),
             // Env light resources (from SceneLoader via SceneRenderInput).
             .env_cubemap = scene.env_cubemap,
             .env_alias_table = scene.env_alias_table,
