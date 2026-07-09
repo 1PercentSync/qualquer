@@ -380,7 +380,7 @@
 - Sobol + Blue noise 是静态数据，嵌入更可靠；env map 和 emissive 是场景相关
 
 **决策**：✅
-1. **静态数据（Sobol + Blue Noise）**：CMake 嵌入二进制。数据固定不变，零运行时 I/O，不依赖文件路径。
+1. **静态数据（Sobol）**：`inline constexpr` C 数组嵌入头文件（16 KB，4096 × uint32_t）。数据固定不变，零运行时 I/O，不依赖文件路径，不需要 CMake binary embedding 机制。Blue Noise 已移除（D33）。
 2. **场景数据（Emissive 三角形 + Env Map）**：`load_scene` 扩展逻辑。Emissive 扫描 + alias table 构建；Env HDR 加载 + equirect→cubemap 转换。
 
 ---
