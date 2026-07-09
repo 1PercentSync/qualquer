@@ -675,7 +675,7 @@ MUSTREAD:7
 | 7 | Stochastic Alpha | D11 | blend 材质 hash-based alpha test |
 | 8 | Ray Cone LOD | D13 | 纹理 aliasing 降噪，payload 扩展至 19 registers |
 | 9 | Normal Map Specular AA | D28d | ray cone footprint → roughness 方差叠加 |
-| 10 | DLSS-RR 可选质量提升 | D32 | diffuse hit distance、高分辨率 depth、背景修正 |
+| 10 | DLSS-RR 后处理 | D32 | postProcess 背景修正 |
 
 #### 不纳入
 
@@ -744,7 +744,16 @@ DLSS-RR 同时做时域累积、去噪、放大，OptiX Denoiser 只做去噪。
 
 **多 spp 与 aux data 一致性**：帧内多 sample 共享同一 subpixel jitter（per-frame jitter，不 per-sample jitter），所有 sample 的 primary ray 相同 → aux data（depth、normals、albedo、roughness）在所有 sample 间完全一致，写一次即可。跨帧 jitter 变化保留 DLSS-RR 时域超分辨率能力。Color 为同一亚像素位置 N 个 sample 的辐射度平均（更干净的点采样，非 box filter）。Jitter offset 每帧一个值，无歧义。详见 D37。
 
-**可选输入**：InFrameTimeDeltaInMsec 随初始集成提供（零额外代价）。其余可选输入（pInDiffuseHitDistance、pInDepthHighRes、postProcess 背景修正）推迟到后半部分。
+**可选输入**：InFrameTimeDeltaInMsec 随初始集成提供（零额外代价）。
+
+**保留项**（能做但先不做，出现可见问题时再评估）：
+- pInDepthHighRes：若边缘有可见 bleeding/ghosting，可考虑 OptiX primary ray only launch 生成输出分辨率 depth。optix-subd 参考实现未给 DLSS-RR 喂此值。
+
+**不适用的可选输入**：
+- pInDiffuseHitDistance / pInReflectedAlbedo：PT stochastic lobe 选择下 per-sample 不一致，无单一正确值
+- pInColorBeforeTransparency / pInTransparencyLayer：PT 无分离透明通道
+- pInAnimatedTextureMask：M1 静态场景无动画纹理
+- pInMotionVectors3D：静态场景下 3D MV 全为零，2D MV 信息更完整
 
 ---
 

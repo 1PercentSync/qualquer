@@ -563,7 +563,7 @@ Step 9/10 独立于 DLSS-RR，可先行。Step 11 是 Step 12/13 的前置（DLS
 | 15 | Stochastic Alpha | blend 材质正确半透明 |
 | 16 | Ray Cone LOD | 高频纹理 aliasing 减少 |
 | 17 | Normal Map Specular AA | 法线贴图 specular 闪烁减少 |
-| 18 | DLSS-RR 可选质量提升 | 边缘质量改善，sky 伪影消除 |
+| 18 | DLSS-RR 后处理 | sky 伪影消除 |
 
 ### 设计决策摘要
 

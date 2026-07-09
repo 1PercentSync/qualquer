@@ -180,9 +180,7 @@ MUSTREAD:4
 - [ ] 方差叠加到 roughness²：`roughness² += variance`，clamp 后重算 alpha
 - [ ] 请求用户在 CLion 中编译验证（法线贴图接缝处 specular 闪烁减少）
 
-## Step 18：DLSS-RR 可选质量提升
+## Step 18：DLSS-RR 后处理
 
-- [ ] pInDiffuseHitDistance：bounce 1 diffuse ray 的 hit distance 写入 aux buffer
-- [ ] pInDepthHighRes：输出分辨率 depth buffer
-- [ ] postProcess 背景修正：sky 像素 3×3 膨胀检测（depth == inf）+ 重着色环境光（参考 optix-subd WAR）
-- [ ] 请求用户在 CLion 中编译验证（边缘质量改善，sky 伪影消除）
+- [ ] postProcess 背景修正：sky 像素 3×3 膨胀检测（depth == inf）+ 重着色环境光（参考 optix-subd `postProcessKernel` WAR）
+- [ ] 请求用户在 CLion 中编译验证（sky 伪影消除）
