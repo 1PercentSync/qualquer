@@ -89,6 +89,32 @@ namespace qualquer::renderer {
 
             return *v_rad != original;
         }
+
+        /**
+         * SliderInt that applies only when the interaction ends (drag release or
+         * Ctrl+Click text-input confirm), for parameters whose every change
+         * triggers expensive reallocation. Ctrl+Click text input may exceed the
+         * slider range; the committed value is clamped to [hard_min, hard_max].
+         */
+        bool slider_uint_on_release(const char *label,
+                                    uint32_t *v,
+                                    const int v_min,
+                                    const int v_max,
+                                    const int hard_min,
+                                    const int hard_max) {
+            int display = static_cast<int>(*v);
+            ImGui::SliderInt(label, &display, v_min, v_max);
+
+            if (!ImGui::IsItemDeactivatedAfterEdit()) {
+                return false;
+            }
+            const auto committed = static_cast<uint32_t>(std::clamp(display, hard_min, hard_max));
+            if (committed == *v) {
+                return false;
+            }
+            *v = committed;
+            return true;
+        }
     } // namespace
 
     // ---- FrameStats ----
@@ -275,6 +301,17 @@ namespace qualquer::renderer {
         if (ImGui::SliderInt("Samples/Frame", &spp, 1, 64)) {
             ctx.settings.samples_per_frame = static_cast<uint32_t>(spp);
         }
+
+        // On-release commit: each render-height change reallocates the
+        // accumulation buffers, so live application during a drag would
+        // thrash device memory.
+        slider_uint_on_release("Render Height", &ctx.settings.render_height,
+                               240, 2160, 16, 8192);
+        ImGui::Text("Render Resolution: %u x %u",
+                    compute_render_width(ctx.settings.render_height,
+                                         ctx.swapchain.extent.width,
+                                         ctx.swapchain.extent.height),
+                    ctx.settings.render_height);
 
         slider_float_deferred("Exposure (EV)", &ctx.settings.exposure_ev,
                               -8.0f, 8.0f, "%.1f");

@@ -84,6 +84,10 @@ namespace qualquer::app {
         camera_.update_all();
         camera_controller_.init(window_, &camera_);
 
+        // Render resolution starts at the native swapchain height; the UI
+        // adjusts it thereafter, decoupled from window resizes.
+        render_settings_.render_height = swapchain_.extent.height;
+
         // --- Renderer (pipeline + accumulation buffers) ---
         renderer_.init(cuda_context_,
                        swapchain_.extent.width,
