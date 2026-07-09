@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4.5 — 收敛质量 + DLSS-RR + 自适应
-- **进度**：Phase 4.5 Step 11 完成（渲染分辨率与 swapchain 解耦，编译验证通过）
+- **进度**：Phase 4.5 Step 12 第一小项完成：CudaArrayBuffer + 7 个 aux buffer 分配（init/resize/destroy 联动）
 
 ### 下一个任务
 
-Phase 4.5 Step 12 第一小项：Aux input buffers 分配
+Phase 4.5 Step 12 第二小项：DLSS-RR output buffer 分配
 
 ---
 
