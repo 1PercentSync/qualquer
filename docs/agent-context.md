@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4.5 — 收敛质量 + DLSS-RR + 自适应
-- **进度**：Phase 4.5 Step 11 完成（渲染分辨率与 swapchain 解耦：render_height UI 参数、累积 buffer 按需重分配、渲染分辨率 launch、tonemap 三分支重采样（1:1 / Catmull-Rom / footprint box）、窗口 resize 不再触碰累积，编译验证通过）
+- **进度**：Phase 4.5 Step 11 完成（渲染分辨率与 swapchain 解耦，编译验证通过）
 
 ### 下一个任务
 
-Phase 4.5 Step 12 第一小项：Aux input buffers 分配（CUDA array + cudaTextureObject_t，渲染分辨率，7 种 DLSS-RR guide buffer）
+Phase 4.5 Step 12 第一小项：Aux input buffers 分配
 
 ---
 
