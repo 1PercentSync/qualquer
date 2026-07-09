@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4.5 — 收敛质量 + DLSS-RR + 自适应
-- **进度**：Phase 4.5 Step 10 完成（Sobol + hash 去相关 RNG，env rotation sin/cos 预计算，OptiX IR 部署链修复，编译验证通过）
+- **进度**：Phase 4.5 Step 11 第1小项完成：render_height 参数已实现（RenderSettings 字段 + compute_render_width 宽度推导 + UI 释放时生效滑块与分辨率只读显示）
 
 ### 下一个任务
 
-Phase 4.5 Step 11 第一小项：`render_width` / `render_height` 参数（渲染分辨率与 swapchain 解耦）
+Phase 4.5 Step 11 第2小项：累积 buffer 按渲染分辨率分配（不再跟随 swapchain）
 
 ---
 
