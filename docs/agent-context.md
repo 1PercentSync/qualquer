@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4.5 — 收敛质量 + DLSS-RR + 自适应
-- **进度**：Phase 4.5 Step 11 第1小项完成：render_height 参数已实现（RenderSettings 字段 + compute_render_width 宽度推导 + UI 释放时生效滑块与分辨率只读显示）
+- **进度**：Phase 4.5 Step 11 第2小项完成：累积 buffer 按渲染分辨率按需分配已实现（Renderer 记录已分配渲染分辨率，submit_cuda 比对期望值，变化时排空双 stream 重分配 + counts 归零）
 
 ### 下一个任务
 
-Phase 4.5 Step 11 第2小项：累积 buffer 按渲染分辨率分配（不再跟随 swapchain）
+Phase 4.5 Step 11 第3小项：OptiX launch 维度使用渲染分辨率
 
 ---
 

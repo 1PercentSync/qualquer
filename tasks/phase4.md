@@ -120,7 +120,7 @@ MUSTREAD:4
 ## Step 11：Render Resolution Decoupling
 
 - [x] 新增 `render_width` / `render_height` 参数（独立于 swapchain extent），UI 滑块直接控制渲染高度（如 1080），宽度按输出纵横比自动计算
-- [ ] 累积 buffer 按渲染分辨率分配（不再跟随 swapchain）
+- [x] 累积 buffer 按渲染分辨率分配（不再跟随 swapchain）
 - [ ] OptiX launch 维度使用渲染分辨率
 - [ ] Tonemap kernel 输入渲染分辨率、输出显示分辨率
 - [ ] Camera jitter 基于渲染分辨率像素大小
