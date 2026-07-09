@@ -601,7 +601,7 @@ dlssParams.InRoughnessMode = NVSDK_NGX_DLSS_Roughness_Mode_Unpacked;
 
 渲染分辨率由 UI 滑块直接控制（不使用 DLSS quality mode 档位）。InPerfQualityValue 根据实际 render/target 比率自动选取最接近的档位。
 
-**每帧执行**：填充 `NVSDK_NGX_CUDA_DLSSD_Eval_Params`，输入**指向** `cudaTextureObject_t` 的指针，输出**指向** `cudaSurfaceObject_t` 的指针，调用 `NGX_CUDA_EVALUATE_DLSSD_EXT`。Jitter offset = `(jx - 0.5, jy - 0.5)` 像素空间（与 MV 同方向体系，无需取反）。MV 符号 prevPixel - curPixel 直接符合 DLSS 约定，InMVScale 保持默认 1.0。
+**每帧执行**：填充 `NVSDK_NGX_CUDA_DLSSD_Eval_Params`，输入**指向** `cudaTextureObject_t` 的指针，输出**指向** `cudaSurfaceObject_t` 的指针，调用 `NGX_CUDA_EVALUATE_DLSSD_EXT`。Jitter offset = `-(jx - 0.5)`, `-(jy - 0.5)`（取反：投影矩阵 jitter 方向与像素偏移方向相反，两个 NVIDIA 官方参考均取反）。InMVScale = 1.0。MVJittered flag 不设（Flag=0，MV 含 curPixel 端 jitter，DLSS 直接使用，与两个 NVIDIA 官方参考一致）。InIndicatorInvertYAxis = 1（OptiX/CUDA Y-up 坐标系，与 optix-subd 一致）。
 
 **Stream 分配与管线流程**：
 
@@ -659,16 +659,16 @@ __forceinline__ __device__ float sobol_rng(uint32_t pixel_index, uint32_t sequen
 
 #### DLSS-RR Aux Data 写入时机
 
-| 数据 | 写入位置 | 说明 |
-|------|---------|------|
-| depth | closesthit bounce==0 | view-space Z：`dot(camera_forward, hitPos - camera_origin)` |
-| diffuse albedo | closesthit bounce==0 | `base_color × (1 - metallic)` |
-| specular albedo | closesthit bounce==0 | E_glossy 逐通道 |
-| normals | closesthit bounce==0 | shading normal (world space) |
-| roughness | closesthit bounce==0 | linear roughness |
-| specular hit distance | closesthit bounce==0 | 写 infinity（optix-subd 实测不改善 DLSS-RR 输出） |
-| motion vectors | raygen | prevPixel - curPixel（符合 DLSS 约定 `cur + MV = prev`）；hit 像素：world hit pos 投影到当前/前帧 VP；miss 像素：ray direction 投影到前帧相机屏幕空间 |
-| color | raygen | 多 spp 同 jitter 平均后的 noisy HDR |
+| 数据 | 写入位置 | hit 像素 | miss (sky) 像素 |
+|------|---------|---------|---------------|
+| depth | closesthit / raygen | view-space Z：`dot(camera_forward, hitPos - camera_origin)` | 65504.0（FP16 max） |
+| diffuse albedo | closesthit / raygen | `base_color × (1 - metallic)` | `pbr_neutral_tonemap(sky_color)`（HDR 压到 [0,1] 作去调制引导） |
+| specular albedo | closesthit / raygen | E_glossy 逐通道 | (0,0,0,0)（天空无 specular 层） |
+| normals | closesthit / raygen | shading normal (world space) | (0,0,0,0) |
+| roughness | closesthit / raygen | linear roughness | 0 |
+| specular hit distance | closesthit / raygen | 写 infinity（optix-subd 实测不改善 DLSS-RR 输出） | 0 |
+| motion vectors | raygen | prevPixel - curPixel（符合 DLSS 约定 `cur + MV = prev`）；world hit pos 投影到当前/前帧 VP | ray direction 以 w=0 齐次坐标投影到前帧 VP |
+| color | raygen | 多 spp 同 jitter 平均后的 noisy HDR | 天空 HDR 辐射度 |
 
 **多 spp 与 aux data 一致性**（D37）：帧内所有 sample 共享同一 subpixel jitter（per-frame），primary ray 相同 → aux data 写一次即可。BRDF/NEE 维度仍 per-sample。跨帧 jitter 变化保留 DLSS-RR 时域超分辨率。
 
