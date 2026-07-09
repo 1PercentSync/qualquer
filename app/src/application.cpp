@@ -441,9 +441,9 @@ namespace qualquer::app {
         // resolution-independent and stay.
         cuda_context_.release_display_buffer();
         swapchain_.recreate(context_);
-        renderer_.resize(cuda_context_,
-                         swapchain_.extent.width,
-                         swapchain_.extent.height);
+        // Accumulation buffers are not touched here: they follow the render
+        // resolution, which submit_cuda reallocates on demand when the
+        // aspect-derived render width changes.
         display_buffer_.destroy(context_);
         display_buffer_.init(context_,
                              VK_FORMAT_R8G8B8A8_UNORM,

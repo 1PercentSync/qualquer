@@ -276,38 +276,6 @@ namespace qualquer::renderer {
                      4);
     }
 
-    void Renderer::resize(const optix::Context &cuda_context,
-                          const uint32_t width,
-                          const uint32_t height) {
-        // A size change invalidates prior HDR accumulation. Pipeline, SBT records,
-        // and the params buffer are resolution-independent and stay.
-        const std::size_t pixel_count = static_cast<std::size_t>(width) * height;
-        for (auto &buffer: accum_buffers_) {
-            buffer.resize(pixel_count);
-        }
-        // Keep the allocation tracking consistent so the next submit_cuda's
-        // render-resolution comparison sees what is actually allocated.
-        render_width_ = width;
-        render_height_ = height;
-        accum_index_ = 0;
-        // Counts reset to 0: raygen will overwrite (ignoring uninitialised
-        // buffer content) and tonemap will output black until valid data arrives.
-        accum_counts_ = {0, 0};
-
-        // Re-record events so the next frame's display_stream wait covers the
-        // clears above. Without this, the wait would see the stale event from
-        // the last pre-resize raygen (recorded before the clears) and start
-        // tonemap before the clears finish.
-        for (auto &event: event_raygen_done_) {
-            CUDA_CHECK(cudaEventRecord(event, cuda_context.compute_stream));
-        }
-        for (auto &event: event_tonemap_done_) {
-            CUDA_CHECK(cudaEventRecord(event, cuda_context.compute_stream));
-        }
-
-        spdlog::info("Renderer resized ({}x{})", width, height);
-    }
-
     void Renderer::destroy() {
         // Reverse init creation order: the pipeline references the module and
         // program groups, so it is torn down before the SBT buffers whose device

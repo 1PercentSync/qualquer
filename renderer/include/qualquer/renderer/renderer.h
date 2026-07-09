@@ -191,18 +191,6 @@ namespace qualquer::renderer {
                         std::span<const MeshInstance> instances);
 
         /**
-         * @brief Rebuilds resolution-dependent resources after a swapchain resize.
-         *
-         * Resizes and clears the accumulation buffers on the context's stream so the
-         * clear completes before the next frame's optixLaunch; the pipeline and SBT
-         * records are resolution-independent and stay.
-         * @param cuda_context CUDA context owning the stream the clears run on.
-         * @param width  New output width in pixels.
-         * @param height New output height in pixels.
-         */
-        void resize(const optix::Context &cuda_context, uint32_t width, uint32_t height);
-
-        /**
          * @brief Submits raygen and tonemap on two CUDA streams, then signals the semaphore.
          *
          * compute_stream: waits previous tonemap done → params upload + optixLaunch →
