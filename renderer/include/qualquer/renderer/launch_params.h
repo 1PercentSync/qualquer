@@ -192,6 +192,21 @@ struct LaunchParams {
 
     /** @brief Total radiant power across all emissive triangles. */
     float emissive_total_power;
+
+    // ---- Sobol RNG ----
+
+    /**
+     * @brief 128-dimension Sobol direction numbers in __constant__ memory.
+     *
+     * Embedded in LaunchParams so optixLaunch places them in __constant__ memory,
+     * enabling L1 constant cache broadcast for warp-uniform reads (~8 cycles vs
+     * ~200+ cycles through L2 for global memory pointers).
+     *
+     * Layout: sobol_directions[dim * 32 + bit], dim in [0,127], bit in [0,31].
+     * Left-justified 32-bit values from Joe & Kuo. Initialized once from
+     * kSobolDirectionData; unchanged across frames.
+     */
+    uint32_t sobol_directions[4096];
 };
 
 } // namespace qualquer::renderer

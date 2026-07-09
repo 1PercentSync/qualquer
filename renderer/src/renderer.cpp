@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 #include <vector>
 
 #include <glm/glm.hpp>
@@ -23,6 +24,7 @@
 #include <qualquer/renderer/camera.h>
 #include <qualquer/vulkan/imgui_backend.h>
 #include <qualquer/renderer/launch_params.h>
+#include <qualquer/renderer/sobol_direction_data.h>
 #include <qualquer/renderer/tonemap.h>
 #include <qualquer/vulkan/interop.h>
 #include <qualquer/vulkan/swapchain.h>
@@ -418,7 +420,7 @@ namespace qualquer::renderer {
         prev_samples_per_frame_ = scene.settings.samples_per_frame;
         prev_env_rotation_ = scene.settings.env_rotation;
 
-        const LaunchParams params{
+        LaunchParams params{
             // Separate-Sum: raygen reads the previous total and writes the new
             // total to the opposite ping-pong slot. When chain_count == 0
             // (reset or first frame), raygen overwrites the write buffer
@@ -449,7 +451,10 @@ namespace qualquer::renderer {
             .emissive_alias_table = scene.emissive_alias_table,
             .emissive_count = scene.emissive_count,
             .emissive_total_power = scene.emissive_total_power,
+            // sobol_directions filled below via memcpy (array can't be
+            // initialized from another array in a designated initializer).
         };
+        std::memcpy(params.sobol_directions, kSobolDirectionData, sizeof(params.sobol_directions));
         params_buffer_.upload(&params, 1, cuda_context.compute_stream);
 
         const OptixShaderBindingTable sbt{
