@@ -539,16 +539,19 @@ struct SceneStats {
 #### 依赖关系
 
 ```
-Step 9（IBL 旋转 + RR）──→ Step 10（Sobol RNG）
-                              ↓
-                         Step 11（Render res decoupling）
-                              ↓
-                         Step 12（Aux data）──→ Step 13（DLSS-RR）──→ Step 14（自适应）
-                                                     ↓
-                                                Step 15-18（后半部分）
+Step 9（IBL 旋转 + RR）
+Step 10（Sobol RNG）          ← 9 和 10 互相独立，按顺序实现但无依赖
+Step 11（Render res decoupling）
+     ↓
+Step 12（Aux data）──→ Step 13（DLSS-RR）──→ Step 14（自适应）
+
+Step 15（Stochastic Alpha）
+Step 16（Ray Cone LOD）       ← 15/16/17 互相独立，不依赖 Step 13
+Step 17（Normal Map Spec AA）← 依赖 Step 16
+Step 18（DLSS-RR 后处理）    ← 依赖 Step 13
 ```
 
-Step 9/10 独立于 DLSS-RR，可先行。Step 11 是 Step 12/13 的前置（DLSS-RR 需要分辨率解耦）。Step 14 依赖 Step 13。后半部分依赖 Step 13 完成。
+Step 9/10 互相独立，也独立于 DLSS-RR，按排定顺序先行。Step 11 是 Step 12 的前置（aux data 按渲染分辨率分配）。Step 12 → 13 → 14 是链式依赖。后半部分中 Step 15/16 独立于 DLSS-RR，Step 17 依赖 Step 16（需要 ray cone footprint），Step 18 依赖 Step 13。
 
 #### 总览
 

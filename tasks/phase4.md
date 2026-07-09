@@ -129,7 +129,7 @@ MUSTREAD:4
 
 ## Step 12：Aux Data 写入
 
-- [ ] Aux data buffer 分配：depth（R32F）、motion vectors（RG32F）、diffuse albedo（float4）、specular albedo（float4）、normals（float4）、roughness（R32F）、specular hit distance（R32F），均为渲染分辨率
+- [ ] Aux data buffer 分配：CUDA array + `cudaTextureObject_t`（DLSS-RR 输入要求）——depth（R32F）、motion vectors（RG32F）、diffuse albedo（float4）、specular albedo（float4）、normals（float4）、roughness（R32F）、specular hit distance（R32F），均为渲染分辨率；DLSS-RR 输出为 CUDA array + `cudaSurfaceObject_t`，输出分辨率
 - [ ] LaunchParams 扩展：aux buffer 指针 + 前帧 VP 矩阵
 - [ ] Closesthit bounce==0 写入：linear depth（`optixGetRayTmax()`）、diffuse albedo（base_color × (1-metallic)）、specular albedo（E_glossy 逐通道）、shading normal、linear roughness、specular hit distance = infinity（optix-subd 实测不改善 DLSS-RR 输出）
 - [ ] Motion vectors：raygen 计算 world hit position → 前帧 VP 投影 → 屏幕空间差值写入 MV buffer；miss 像素 MV = 0
