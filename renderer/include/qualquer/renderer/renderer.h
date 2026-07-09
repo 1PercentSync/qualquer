@@ -15,6 +15,7 @@
 #include <glm/glm.hpp>
 
 #include <qualquer/optix/accel_structure.h>
+#include <qualquer/optix/cuda_array_buffer.h>
 #include <qualquer/optix/cuda_buffer.h>
 #include <qualquer/optix/pipeline.h>
 #include <qualquer/renderer/camera.h>
@@ -309,6 +310,29 @@ namespace qualquer::renderer {
 
         /** @brief Actual TLAS instance count after same-node primitive folding. */
         uint32_t tlas_instance_count_ = 0;
+
+        // ---- Aux G-buffer channels (render resolution, for DLSS-RR input) ----
+
+        /** @brief View-space Z depth (R32F). */
+        optix::CudaArrayBuffer<float> aux_depth_;
+
+        /** @brief Screen-space motion vectors (RG32F). */
+        optix::CudaArrayBuffer<float2> aux_motion_vectors_;
+
+        /** @brief Raw base_color diffuse albedo (RGBA32F). */
+        optix::CudaArrayBuffer<float4> aux_diffuse_albedo_;
+
+        /** @brief Specular reflectance albedo (RGBA32F). */
+        optix::CudaArrayBuffer<float4> aux_specular_albedo_;
+
+        /** @brief World-space shading normal (RGBA32F, .w unused). */
+        optix::CudaArrayBuffer<float4> aux_normals_;
+
+        /** @brief Linear roughness (R32F). */
+        optix::CudaArrayBuffer<float> aux_roughness_;
+
+        /** @brief Specular hit distance (R32F). */
+        optix::CudaArrayBuffer<float> aux_specular_hit_dist_;
 
         /**
          * @brief Deferred reset flag set by reset_accumulation().

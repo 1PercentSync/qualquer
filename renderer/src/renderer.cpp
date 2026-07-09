@@ -251,6 +251,17 @@ namespace qualquer::renderer {
         for (auto &buffer: accum_buffers_) {
             buffer.alloc(pixel_count);
         }
+
+        // Aux G-buffer channels for DLSS-RR. Allocated at render resolution;
+        // reallocated alongside accum_buffers_ when render resolution changes.
+        aux_depth_.alloc(width, height);
+        aux_motion_vectors_.alloc(width, height);
+        aux_diffuse_albedo_.alloc(width, height);
+        aux_specular_albedo_.alloc(width, height);
+        aux_normals_.alloc(width, height);
+        aux_roughness_.alloc(width, height);
+        aux_specular_hit_dist_.alloc(width, height);
+
         render_width_ = width;
         render_height_ = height;
 
@@ -293,6 +304,13 @@ namespace qualquer::renderer {
         for (auto &buffer: accum_buffers_) {
             buffer.free();
         }
+        aux_depth_.free();
+        aux_motion_vectors_.free();
+        aux_diffuse_albedo_.free();
+        aux_specular_albedo_.free();
+        aux_normals_.free();
+        aux_roughness_.free();
+        aux_specular_hit_dist_.free();
         params_buffer_.free();
         for (auto &event: event_raygen_done_) {
             if (event != nullptr) {
@@ -365,10 +383,17 @@ namespace qualquer::renderer {
             for (auto &buffer: accum_buffers_) {
                 buffer.resize(pixel_count);
             }
+            aux_depth_.resize(render_width, render_height);
+            aux_motion_vectors_.resize(render_width, render_height);
+            aux_diffuse_albedo_.resize(render_width, render_height);
+            aux_specular_albedo_.resize(render_width, render_height);
+            aux_normals_.resize(render_width, render_height);
+            aux_roughness_.resize(render_width, render_height);
+            aux_specular_hit_dist_.resize(render_width, render_height);
             accum_counts_ = {0, 0};
             render_width_ = render_width;
             render_height_ = render_height;
-            spdlog::info("Accumulation buffers reallocated ({}x{} render resolution)",
+            spdlog::info("Render buffers reallocated ({}x{} render resolution)",
                          render_width, render_height);
         }
 
