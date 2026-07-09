@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4.5 — 收敛质量 + DLSS-RR + 自适应
-- **进度**：Phase 4.5 Step 11 第3小项完成：OptiX launch 维度改用渲染分辨率（optixLaunch + LaunchParams::width/height，raygen 写路径全链对齐渲染分辨率）
+- **进度**：Phase 4.5 Step 11 第4小项完成：tonemap 重采样已实现（显示分辨率 launch，三分支：1:1 直读 / Catmull-Rom 放大 clamp≥0 / footprint box 缩小，线性 HDR mean 空间滤波）
 
 ### 下一个任务
 
-Phase 4.5 Step 11 第4小项：Tonemap kernel 输入渲染分辨率、输出显示分辨率
+Phase 4.5 Step 11 第5小项：Camera jitter 基于渲染分辨率像素大小
 
 ---
 
