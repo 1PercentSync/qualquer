@@ -158,16 +158,20 @@ __global__ void __raygen__rg() { // NOLINT(*-reserved-identifier)
                           p0, p1, p2, p3, p4, p5,
                           p6, p7, p8, p9, p10, p11,
                           p12, p13, p14, p15, p16, p17);
-            // SER: reorder by material for texture cache coherence.
-            // Single hitgroup record; the default hint only separates hit
-            // vs miss. Material-based hint improves texture cache locality.
+            // SER: reorder by material for texture cache coherence. With a
+            // single hitgroup record the default hint only separates hit vs
+            // miss; the masked material hint additionally groups threads by
+            // material. 10 bits cover 1024 materials exactly; beyond that the
+            // mask aliases low index bits (bucket-sharing materials still
+            // group, quality degrades gracefully). Wider hints measurably pay
+            // more sort cost; narrower ones cap the exact-grouping capacity.
             uint32_t reorder_hint = 0;
             if (optixHitObjectIsHit()) {
                 const uint32_t geo_idx = optixHitObjectGetInstanceId()
                                        + optixHitObjectGetSbtGASIndex();
                 reorder_hint = params.geometry_infos[geo_idx].material_buffer_offset;
             }
-            optixReorder(reorder_hint, 16);
+            optixReorder(reorder_hint & 0x3FFu, 10);
             optixInvoke(p0, p1, p2, p3, p4, p5,
                         p6, p7, p8, p9, p10, p11,
                         p12, p13, p14, p15, p16, p17);
