@@ -10,12 +10,12 @@
 
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
-- **Phase**：M1 Phase 4 — 核心 Path Tracer
-- **进度**：Phase 4 Step 8 完成（UI 参数面板、只读统计、功能开关、SER 性能测试、编译验证通过）
+- **Phase**：M1 Phase 4.5 — 收敛质量 + DLSS-RR + 自适应
+- **进度**：Phase 4 完成，Phase 4.5 规划完成（D31-D36 决策，Step 9-18 任务清单）
 
 ### 下一个任务
 
-Phase 4.5 第一小项（待规划）
+Phase 4.5 Step 9 第一小项：IBL 旋转
 
 ---
 
@@ -28,7 +28,7 @@ Phase 4.5 第一小项（待规划）
 | `docs/roadmap.md` | Phase 概览与顺序 |
 | `docs/current-phase.md` | 当前阶段目标、范围、实现指南（Phase 4） |
 | `tasks/phase4.md` | Phase 4 可执行任务清单 |
-| `docs/phase4-discussion.md` | Phase 4 决策记录（D1-D26） |
+| `docs/phase4-discussion.md` | Phase 4/4.5 决策记录（D1-D36） |
 | `docs/architecture.md` | 渲染器架构与设计理念 |
 | `docs/technical-decisions.md` | 技术选型与决策 |
 

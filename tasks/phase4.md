@@ -89,3 +89,100 @@ MUSTREAD:4
 - [x] 参数变化触发累积 reset（chain_count 归零，无需清零 buffer）；滑块使用 deferred 模式（拖拽立即生效，Ctrl+Click 文本输入延迟到确认）
 - [x] SER 性能测试：对比 SER 开/关 以及 hint/无 hint 的帧率差异
 - [x] 请求用户在 CLion 中编译验证（运行时参数可调，Phase 4 完成）
+
+---
+
+## Phase 4.5：收敛质量 + DLSS-RR + 自适应
+
+> 目标：DLSS-RR 集成（时域累积+去噪+放大）、采样质量提升、自适应帧率
+>
+> 决策记录见 `docs/phase4-discussion.md`（D31-D36）。
+> 设计详见 `docs/current-phase.md` Phase 4.5 节。
+>
+> 每完成一个复选框暂停等待审查。一个 Step 结束时应请求用户在 CLion 中编译验证。
+
+### 前半部分
+
+## Step 9：IBL 旋转 + Russian Roulette
+
+- [ ] IBL 旋转：LaunchParams 新增 `env_rotation`（float, radians），`__miss__env` 和 env NEE 采样方向应用 Y 轴旋转（cos/sin），UI 滑块（deferred, 0-360°），参数变化触发累积 reset
+- [ ] Russian Roulette：bounce ≥ 2 时启用，存活概率 = `clamp(max_component(throughput), 0.05, 0.95)`，存活时 `throughput /= survival_prob`，死亡时终止 path，使用 RNG 维度 base + 3（已预留）
+- [ ] 请求用户在 CLion 中编译验证（IBL 旋转可调，RR 减少长路径计算）
+
+## Step 10：Sobol + Hash 去相关 RNG
+
+- [ ] Sobol direction numbers 数据准备：Joe & Kuo 标准文件解析为 C 数组，CMake binary embedding（128 维 × 32 bit direction vectors）
+- [ ] `__constant__` memory 声明 + 主机端初始化上传
+- [ ] `rng.cuh` 重写：`sobol_sample(dimension, sample_index)` 查询 Sobol 序列 + `pcg_hash(pixel_index)` per-pixel Cranley-Patterson rotation + golden-ratio temporal scramble（`frame_index * GOLDEN_RATIO`）；dim ≥ 128 fallback PCG hash
+- [ ] 验证：维度分配不变（dim 0-1 subpixel jitter, per-bounce base = 2 + bounce × 12），现有采样行为正确
+- [ ] 请求用户在 CLion 中编译验证（低 spp 下噪声更均匀，收敛更快）
+
+## Step 11：Render Resolution Decoupling
+
+- [ ] 新增 `render_width` / `render_height` 参数（独立于 swapchain extent），UI quality mode 选择控制
+- [ ] 累积 buffer 按渲染分辨率分配（不再跟随 swapchain）
+- [ ] Aux data buffers 按渲染分辨率分配
+- [ ] OptiX launch 维度使用渲染分辨率
+- [ ] Tonemap kernel 输入渲染分辨率、输出显示分辨率（或 DLSS-RR 输出分辨率）
+- [ ] Camera jitter 基于渲染分辨率像素大小
+- [ ] 窗口 resize 时仅重建显示 buffer，累积/aux buffers 按需（渲染分辨率变化时才重建）
+- [ ] 请求用户在 CLion 中编译验证（可配置渲染分辨率，画面正确缩放显示）
+
+## Step 12：Aux Data 写入
+
+- [ ] Aux data buffer 分配：depth（R32F）、motion vectors（RG32F）、diffuse albedo（float4）、specular albedo（float4）、normals（float4）、roughness（R32F）、specular hit distance（R32F），均为渲染分辨率
+- [ ] LaunchParams 扩展：aux buffer 指针 + 前帧 VP 矩阵
+- [ ] Closesthit bounce==0 写入：linear depth、diffuse albedo（base_color × (1-metallic)）、specular albedo（E_glossy 逐通道）、shading normal、linear roughness
+- [ ] Specular hit distance：raygen 在 bounce 0→1 转换后，若 bounce 0 采样了 specular 方向，记录 bounce 1 的 hit distance 写入 aux buffer
+- [ ] Motion vectors：raygen 计算 world hit position → 前帧 VP 投影 → 屏幕空间差值写入 MV buffer；miss 像素 MV = 0
+- [ ] Debug view：UI enum 切换显示各 aux buffer 内容（depth / diffuse albedo / specular albedo / normals / roughness / specular hit distance / motion vectors）
+- [ ] 请求用户在 CLion 中编译验证（debug view 下各 aux buffer 内容正确）
+
+## Step 13：DLSS-RR 集成
+
+- [ ] DLSS SDK CMake 集成：FetchContent 或 `DLSS_ROOT` 本地路径，链接 `nvsdk_ngx_cuda` 库，DLL 部署到运行目录
+- [ ] DLSS-RR 封装：NGX 初始化（`NVSDK_NGX_CUDA_Init_with_ProjectID`）、capability 查询、feature 创建（`NGX_CUDA_CREATE_DLSSD_EXT`，传入 CUcontext + CUstream）、optimal render resolution 查询（`NGX_DLSSD_GET_OPTIMAL_SETTINGS`）
+- [ ] 每帧执行：`NGX_CUDA_EVALUATE_DLSSD_EXT`，填充 `NVSDK_NGX_CUDA_DLSSD_Eval_Params`（aux data texture objects + 矩阵 + jitter offset + InFrameTimeDeltaInMsec），输出到 denoised surface object
+- [ ] 管线重构：移除 Separate Sum 累积（raygen 不再读旧 buffer 累加），raygen 输出单帧 noisy HDR → DLSS-RR → tonemap
+- [ ] InReset：camera 变化、场景切换、quality mode 变化时触发
+- [ ] Quality mode 切换：UI 选择 DLAA / Quality / Balanced / Performance / Ultra Performance，切换时重建 feature + 更新渲染分辨率
+- [ ] 资源管理：窗口 resize / quality mode 变化时 release + recreate feature
+- [ ] 请求用户在 CLion 中编译验证（DLSS-RR 输出干净放大的画面，各 quality mode 工作正常）
+
+## Step 14：自适应 Sample 数
+
+- [ ] 刷新率查询：GLFW `glfwGetVideoMode` 获取当前显示器刷新率
+- [ ] 帧时间测量：CUDA events 测量 raygen kernel 执行时间
+- [ ] Mode 选择逻辑：根据实测帧时间判断 Mode 1 / 2 / 3，计算目标帧率
+- [ ] 呈现模式切换：Mode 1 使用 MAILBOX present mode，Mode 2/3 使用 FIFO
+- [ ] Ping-pong / 串行切换：Mode 1 保持双 stream 并行，Mode 2/3 切换到单 stream 串行
+- [ ] UI：当前 mode 显示、手动/自动切换开关
+- [ ] 请求用户在 CLion 中编译验证（自适应切换正常，各 mode 帧率符合目标）
+
+### 后半部分
+
+## Step 15：Stochastic Alpha
+
+- [ ] anyhit 扩展：alpha_mode==Blend 时 `hash(pixel_index, sample_index, primitive_id) > texel_alpha → optixIgnoreIntersection()`（hash 而非 Sobol，D11 决策）
+- [ ] 请求用户在 CLion 中编译验证（blend 材质正确半透明）
+
+## Step 16：Ray Cone LOD
+
+- [ ] Payload 扩展至 19 registers：p16 → cone_width（float），p18 → cone_spread（float）
+- [ ] Raygen 初始化：cone_width = 0，cone_spread = 2 × tan(0.5 × fov) / render_height（primary ray pixel footprint）
+- [ ] Closesthit 更新：cone_width += cone_spread × hit_distance，bounce 时 cone_spread 根据 BRDF 散射特性更新
+- [ ] 纹理采样改 `tex2DLod`：LOD = log2(cone_width × texture_resolution / triangle_footprint)
+- [ ] 请求用户在 CLion 中编译验证（高频纹理 aliasing 减少，远处纹理正确模糊）
+
+## Step 17：Normal Map Specular AA
+
+- [ ] 基于 ray cone footprint 估算法线贴图方差（Kaplanyan 2016 方案）
+- [ ] 方差叠加到 roughness²：`roughness² += variance`，clamp 后重算 alpha
+- [ ] 请求用户在 CLion 中编译验证（法线贴图接缝处 specular 闪烁减少）
+
+## Step 18：DLSS-RR 可选质量提升
+
+- [ ] pInDiffuseHitDistance：bounce 1 diffuse ray 的 hit distance 写入 aux buffer
+- [ ] pInDepthHighRes：输出分辨率 depth buffer
+- [ ] postProcess 背景修正：sky 像素 3×3 膨胀检测（depth == inf）+ 重着色环境光（参考 optix-subd WAR）
+- [ ] 请求用户在 CLion 中编译验证（边缘质量改善，sky 伪影消除）

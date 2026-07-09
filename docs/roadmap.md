@@ -75,7 +75,7 @@ MUSTREAD:5
 | 2 | OptiX 基础（Pipeline/SBT，raygen 输出纯色，累积 buffer ping-pong，双 Stream 流水线，替换测试 kernel） |
 | 3 | 场景 + 材质（glTF，BC 纹理，PBR 材质，BLAS/TLAS，交互式相机，ambient 着色） |
 | 4 | 核心 PT（Megakernel + SER，BRDF，多 bounce，IBL cubemap，NEE + MIS，Tonemap，4000 spp 收敛） |
-| 4.5 | 收敛质量 + 降噪（Sobol + Blue Noise，Ray Cone LOD，Russian Roulette，Firefly Clamping，OptiX Denoiser） |
+| 4.5 | 收敛质量 + DLSS-RR + 自适应（Sobol + hash 去相关，Ray Cone LOD，Russian Roulette，DLSS-RR，自适应帧率） |
 
 ---
 
