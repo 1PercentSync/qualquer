@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4.5 — 收敛质量 + DLSS-RR + 自适应
-- **进度**：Phase 4.5 Step 11 第2小项完成：累积 buffer 按渲染分辨率按需分配已实现（Renderer 记录已分配渲染分辨率，submit_cuda 比对期望值，变化时排空双 stream 重分配 + counts 归零）
+- **进度**：Phase 4.5 Step 11 第3小项完成：OptiX launch 维度改用渲染分辨率（optixLaunch + LaunchParams::width/height，raygen 写路径全链对齐渲染分辨率）
 
 ### 下一个任务
 
-Phase 4.5 Step 11 第3小项：OptiX launch 维度使用渲染分辨率
+Phase 4.5 Step 11 第4小项：Tonemap kernel 输入渲染分辨率、输出显示分辨率
 
 ---
 

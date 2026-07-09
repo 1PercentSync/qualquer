@@ -121,7 +121,7 @@ MUSTREAD:4
 
 - [x] 新增 `render_width` / `render_height` 参数（独立于 swapchain extent），UI 滑块直接控制渲染高度（如 1080），宽度按输出纵横比自动计算
 - [x] 累积 buffer 按渲染分辨率分配（不再跟随 swapchain）
-- [ ] OptiX launch 维度使用渲染分辨率
+- [x] OptiX launch 维度使用渲染分辨率
 - [ ] Tonemap kernel 输入渲染分辨率、输出显示分辨率
 - [ ] Camera jitter 基于渲染分辨率像素大小
 - [ ] 窗口 resize 时仅重建显示 buffer，累积/aux buffers 按需（渲染分辨率变化时才重建）
