@@ -543,15 +543,15 @@ Step 9（IBL 旋转 + RR）
 Step 10（Sobol RNG）          ← 9 和 10 互相独立，按顺序实现但无依赖
 Step 11（Render res decoupling）
      ↓
-Step 12（Aux data）──→ Step 13（DLSS-RR）──→ Step 14（自适应）
+Step 12（Aux data）──→ Step 13（DLSS SDK 接入）──→ Step 14（DLSS 管线接入）──→ Step 15（自适应）
 
-Step 15（Stochastic Alpha）
-Step 16（Ray Cone LOD）       ← 15/16/17 互相独立，不依赖 Step 13
-Step 17（Normal Map Spec AA）← 依赖 Step 16
-Step 18（DLSS-RR 后处理）    ← 依赖 Step 13
+Step 16（Stochastic Alpha）
+Step 17（Ray Cone LOD）       ← 16/17 独立于 DLSS-RR
+Step 18（Normal Map Spec AA）← 依赖 Step 17
+Step 19（DLSS-RR 后处理）    ← 依赖 Step 14
 ```
 
-Step 9/10 互相独立，也独立于 DLSS-RR，按排定顺序先行。Step 11 是 Step 12 的前置（aux data 按渲染分辨率分配）。Step 12 → 13 → 14 是链式依赖。后半部分中 Step 15/16 独立于 DLSS-RR，Step 17 依赖 Step 16（需要 ray cone footprint），Step 18 依赖 Step 13。
+Step 9/10 互相独立，也独立于 DLSS-RR，按排定顺序先行。Step 11 是 Step 12 的前置（aux data 按渲染分辨率分配）。Step 12 → 13 → 14 → 15 是链式依赖。后半部分中 Step 16/17 独立于 DLSS-RR，Step 18 依赖 Step 17（需要 ray cone footprint），Step 19 依赖 Step 14。
 
 #### 总览
 
@@ -561,12 +561,13 @@ Step 9/10 互相独立，也独立于 DLSS-RR，按排定顺序先行。Step 11 
 | 10 | Sobol + hash 去相关 RNG | 低 spp 下噪声更均匀，收敛更快 |
 | 11 | Render resolution decoupling | 渲染分辨率可独立配置，画面正确缩放 |
 | 12 | Aux data 写入 | debug view 下各 aux buffer 内容正确 |
-| 13 | DLSS-RR 集成 | DLSS-RR 输出干净放大的画面 |
-| 14 | 自适应 sample 数 | Mode 1/2/3 自动切换，帧率符合目标 |
-| 15 | Stochastic Alpha | blend 材质正确半透明 |
-| 16 | Ray Cone LOD | 高频纹理 aliasing 减少 |
-| 17 | Normal Map Specular AA | 法线贴图 specular 闪烁减少 |
-| 18 | DLSS-RR 后处理 | sky 伪影消除 |
+| 13 | DLSS-RR SDK 接入 | 初始化成功、feature 创建成功，渲染输出不变 |
+| 14 | DLSS-RR 管线接入 | DLSS-RR 输出干净放大的画面 |
+| 15 | 自适应 sample 数 | Mode 1/2/3 自动切换，帧率符合目标 |
+| 16 | Stochastic Alpha | blend 材质正确半透明 |
+| 17 | Ray Cone LOD | 高频纹理 aliasing 减少 |
+| 18 | Normal Map Specular AA | 法线贴图 specular 闪烁减少 |
+| 19 | DLSS-RR 后处理 | sky 伪影消除 |
 
 ### 设计决策摘要
 

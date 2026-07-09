@@ -138,19 +138,23 @@ MUSTREAD:4
 - [ ] Debug view：UI enum 切换显示各 aux buffer 内容（depth / diffuse albedo / specular albedo / normals / roughness / specular hit distance / motion vectors）
 - [ ] 请求用户在 CLion 中编译验证（debug view 下各 aux buffer 内容正确）
 
-## Step 13：DLSS-RR 集成
+## Step 13：DLSS-RR SDK 接入
 
 - [ ] DLSS SDK CMake 集成：FetchContent 或 `DLSS_ROOT` 本地路径，链接 `nvsdk_ngx_cuda` 库，DLL 部署到运行目录
-- [ ] DLSS-RR 封装：NGX 初始化（`NVSDK_NGX_CUDA_Init_with_ProjectID`）、capability 查询、feature 创建（`NGX_CUDA_CREATE_DLSSD_EXT`，传入 CUcontext + CUstream）、optimal render resolution 查询（`NGX_DLSSD_GET_OPTIMAL_SETTINGS`）
-- [ ] 每帧执行：`NGX_CUDA_EVALUATE_DLSSD_EXT` 在 display_stream 上执行，填充 `NVSDK_NGX_CUDA_DLSSD_Eval_Params`（aux data texture objects + 矩阵 + jitter offset + InFrameTimeDeltaInMsec），输出到中间 HDR buffer（新增，输出分辨率，float4）
-- [ ] Raygen 改单帧输出：移除 Separate Sum 累加逻辑（不再读旧 buffer 累加），raygen 每帧输出单帧 noisy HDR 到 write buffer；ping-pong 保留——raygen 写 buffer A 时 DLSS-RR 读上一帧的 buffer B，避免读写 stall
-- [ ] Tonemap 适配：移除 `sum / count` 除法，tonemap kernel 在 display_stream 上读中间 HDR buffer、应用 exposure + PBR Neutral、写 LDR display buffer
-- [ ] UI 适配：移除 "accumulated samples" 显示（Separate Sum 移除后无此概念），新增 DLSS-RR 面板——开/关（不支持时 disable）、render preset 选择（默认 E）、只读显示：渲染分辨率、输出分辨率、VRAM 占用
-- [ ] InReset：场景切换时触发（连续相机运动由 motion vectors 处理，不触发 InReset；quality mode 变化走 feature recreation，不走 InReset）
-- [ ] 资源管理：窗口 resize 或渲染分辨率变化时 release + recreate feature（渲染分辨率由 Step 11 滑块直接控制，不使用 DLSS quality mode 档位；InPerfQualityValue 根据实际放大比率自动选取最接近的档位）
+- [ ] DLSS-RR 封装类：NGX 初始化（`NVSDK_NGX_CUDA_Init_with_ProjectID`）、capability 查询、feature 创建（`NGX_CUDA_CREATE_DLSSD_EXT`，传入 CUcontext + display_stream）、release、shutdown
+- [ ] 资源管理：窗口 resize 或渲染分辨率变化时 release + recreate feature；InPerfQualityValue 根据实际放大比率自动选取
+- [ ] 请求用户在 CLion 中编译验证（DLSS-RR 初始化成功、feature 创建成功，渲染输出不变）
+
+## Step 14：DLSS-RR 管线接入
+
+- [ ] Raygen 改单帧输出：移除 Separate Sum 累加逻辑，raygen 每帧输出单帧 noisy HDR 到 write buffer；ping-pong 保留——raygen 写 buffer A 时 DLSS-RR 读上一帧的 buffer B
+- [ ] 每帧执行：`NGX_CUDA_EVALUATE_DLSSD_EXT` 在 display_stream 上，填充 eval params（aux data texture objects + 矩阵 + jitter offset + InFrameTimeDeltaInMsec），读 noisy buffer → 写中间 HDR buffer
+- [ ] Tonemap 适配：移除 sum/count 除法，tonemap kernel 在 display_stream 上读中间 HDR buffer、应用 exposure + PBR Neutral、写 LDR display buffer
+- [ ] UI 适配：移除 accumulated samples 显示，新增 DLSS-RR 面板——开/关（不支持时 disable）、render preset 选择（默认 E）、只读显示：渲染分辨率、输出分辨率、VRAM 占用
+- [ ] InReset：场景切换时触发（连续相机运动由 motion vectors 处理，不触发 InReset）
 - [ ] 请求用户在 CLion 中编译验证（DLSS-RR 输出干净放大的画面，render preset 可切换）
 
-## Step 14：自适应 Sample 数
+## Step 15：自适应 Sample 数
 
 - [ ] 刷新率查询：GLFW `glfwGetVideoMode` 获取当前显示器刷新率
 - [ ] 帧时间测量：CUDA events 测量 raygen kernel 执行时间
@@ -161,12 +165,12 @@ MUSTREAD:4
 
 ### 后半部分
 
-## Step 15：Stochastic Alpha
+## Step 16：Stochastic Alpha
 
 - [ ] anyhit 扩展：alpha_mode==Blend 时 `hash(pixel_index, sample_index, primitive_id) > texel_alpha → optixIgnoreIntersection()`（hash 而非 Sobol，D11 决策）
 - [ ] 请求用户在 CLion 中编译验证（blend 材质正确半透明）
 
-## Step 16：Ray Cone LOD
+## Step 17：Ray Cone LOD
 
 - [ ] Payload 扩展至 19 registers：p16 → cone_width（float），p18 → cone_spread（float）
 - [ ] Raygen 初始化：cone_width = 0，cone_spread = 2 × tan(0.5 × fov) / render_height（primary ray pixel footprint）
@@ -174,13 +178,13 @@ MUSTREAD:4
 - [ ] 纹理采样改 `tex2DLod`：LOD = log2(cone_width × texture_resolution / triangle_footprint)
 - [ ] 请求用户在 CLion 中编译验证（高频纹理 aliasing 减少，远处纹理正确模糊）
 
-## Step 17：Normal Map Specular AA
+## Step 18：Normal Map Specular AA
 
 - [ ] 基于 ray cone footprint 估算法线贴图方差（Kaplanyan 2016 方案）
 - [ ] 方差叠加到 roughness²：`roughness² += variance`，clamp 后重算 alpha
 - [ ] 请求用户在 CLion 中编译验证（法线贴图接缝处 specular 闪烁减少）
 
-## Step 18：DLSS-RR 后处理
+## Step 19：DLSS-RR 后处理
 
 - [ ] postProcess 背景修正：sky 像素 3×3 膨胀检测（depth == inf）+ 重着色环境光（参考 optix-subd `postProcessKernel` WAR）
 - [ ] 请求用户在 CLion 中编译验证（sky 伪影消除）

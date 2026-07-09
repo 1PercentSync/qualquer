@@ -812,7 +812,7 @@ DLSS-RR Integration Guide §3.5 将 blue noise 归入"to be avoided"列表。推
 
 ### D36. Phase 4.5 特性排序
 
-**前半部分**（按实现顺序）：IBL 旋转 → Russian Roulette → Sobol + hash 去相关 → Render resolution decoupling → DLSS-RR 集成（含 aux data）→ 自适应 sample 数
+**前半部分**（按实现顺序）：IBL 旋转 → Russian Roulette → Sobol + hash 去相关 → Render resolution decoupling → Aux data 写入 → DLSS-RR SDK 接入 → DLSS-RR 管线接入 → 自适应 sample 数
 
 **后半部分**（按实现顺序）：Stochastic Alpha → Ray Cone LOD → Normal Map Specular AA → DLSS-RR 后处理
 
