@@ -713,7 +713,11 @@ DLSS-RR 同时做时域累积、去噪、放大，OptiX Denoiser 只做去噪。
 **参考项目**：
 - optix-subd：`D:\Github\optix-subd`（`denoiserDlss.cu`，CUDA API 集成参考）
 - vk_denoise_dlssrr：`D:\Github\vk_denoise_dlssrr`（NVIDIA 官方 DLSS-RR Vulkan PT 示例，`dlss_rr/src/dlssrr_wrapper.cpp` + `dlss_rr/shaders/primary.rgen`，jitter/MV/aux data 全流程参考）
+- vk_gltf_renderer：`D:\Github\vk_gltf_renderer`（NVIDIA 官方 Vulkan RT glTF 渲染器，DLSS-RR + 完整 PBR metallic-roughness 工作流，diffuse/specular albedo 对照参考）
 - DLSS SDK：`D:\Github\DLSS`（`doc/DLSS-RR Integration Guide.pdf`，`include/nvsdk_ngx_helpers_dlssd_cuda.h`）
+
+**弱参考**（未合并 PR，仅供交叉对照）：
+- Blender Cycles DLSS：`D:\Github\blender-dlss`（分支 `dlss-pr`，PR #153077，`intern/cycles/integrator/denoiser_dlss.cpp`）
 
 ---
 
