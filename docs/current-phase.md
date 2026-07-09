@@ -529,10 +529,10 @@ struct SceneStats {
 
 ## Phase 4.5：收敛质量 + DLSS-RR + 自适应
 
-> 目标：DLSS-RR 集成（时域累积+去噪+放大）、采样质量提升、自适应帧率/呈现模式
+> 目标：DLSS-RR 集成（时域累积+去噪+放大）、采样质量提升、自适应帧率
 >
 > 任务清单见 `tasks/phase4.md` Step 9+。
-> 决策记录见 `docs/phase4-discussion.md`（D31-D36）。
+> 决策记录见 `docs/phase4-discussion.md`（D31-D37）。
 
 ### 实现步骤
 
@@ -592,29 +592,31 @@ dlssParams.InWidth = render_width;
 dlssParams.InHeight = render_height;
 dlssParams.InTargetWidth = display_width;
 dlssParams.InTargetHeight = display_height;
-dlssParams.InPerfQualityValue = quality_mode;
+dlssParams.InPerfQualityValue = auto_quality;  // 根据实际放大比率自动选取最接近的档位
 dlssParams.InFeatureCreateFlags = MVLowRes | IsHDR;
 dlssParams.InUseHWDepth = NVSDK_NGX_DLSS_Depth_Type_Linear;
 dlssParams.InRoughnessMode = NVSDK_NGX_DLSS_Roughness_Mode_Unpacked;
 ```
 
+渲染分辨率由 UI 滑块直接控制（不使用 DLSS quality mode 档位）。InPerfQualityValue 根据实际 render/target 比率自动选取最接近的档位。
+
 **每帧执行**：填充 `NVSDK_NGX_CUDA_DLSSD_Eval_Params`，输入 `cudaTextureObject_t`，输出 `cudaSurfaceObject_t`，调用 `NGX_CUDA_EVALUATE_DLSSD_EXT`。
 
-**分辨率查询**：`NGX_DLSSD_GET_OPTIMAL_SETTINGS` 根据 quality mode 和 target size 返回最优渲染分辨率。
-
-**重建条件**：分辨率变化或 quality mode 切换时 release + recreate feature。
+**重建条件**：渲染分辨率变化时 release + recreate feature。
 
 **参考实现**：`D:\Github\optix-subd\denoiserDlss.cu`
 
 #### Sobol + Hash 去相关
 
 ```cuda
-__forceinline__ __device__ float sobol_rng(uint32_t pixel_index, uint32_t sample_index,
+// dim 0-1 (jitter): sample_index 替换为 frame_index（D37 per-frame jitter）
+// dim 2+  (BRDF/NEE): 仍用 sample_index
+__forceinline__ __device__ float sobol_rng(uint32_t pixel_index, uint32_t sequence_index,
                                            uint32_t frame_index, uint32_t dimension) {
     if (dimension >= 128) {
-        return pcg_hash_rng(pixel_index, sample_index, dimension);  // fallback
+        return pcg_hash_rng(pixel_index, sequence_index, dimension);  // fallback
     }
-    uint32_t sobol_val = sobol_sample(dimension, sample_index);
+    uint32_t sobol_val = sobol_sample(dimension, sequence_index);
     // Cranley-Patterson rotation with per-pixel hash
     uint32_t pixel_scramble = pcg_hash(pixel_index * 0x1f1f1f1fu ^ dimension);
     // Golden-ratio temporal scramble
@@ -622,9 +624,12 @@ __forceinline__ __device__ float sobol_rng(uint32_t pixel_index, uint32_t sample
     sobol_val ^= pixel_scramble ^ temporal;
     return float(sobol_val) / float(0xFFFFFFFFu);
 }
+// 调用方：
+//   jitter:    sobol_rng(pixel, frame_index, frame_index, 0/1)  — per-frame
+//   BRDF/NEE:  sobol_rng(pixel, sample_index, frame_index, dim) — per-sample
 ```
 
-维度分配不变（与 Phase 4 PCG hash 一致）：dim 0-1 subpixel jitter, per-bounce base = 2 + bounce × 12。
+维度分配基本不变：per-bounce base = 2 + bounce × 12。**dim 0-1（subpixel jitter）改为 per-frame**（D37：由 frame_index 驱动，帧内所有 sample 共享同一 jitter，跨帧变化保留 DLSS-RR 时域超分辨率）。dim 2+ 仍 per-sample。
 
 #### 自适应帧率策略
 
@@ -658,7 +663,6 @@ __forceinline__ __device__ float sobol_rng(uint32_t pixel_index, uint32_t sample
 ### 完成标准
 
 - DLSS-RR 输出干净、无明显伪影的放大画面
-- 各 quality mode（DLAA/Quality/Balanced/Performance/Ultra Performance）工作正常
 - 自适应 Mode 1/2/3 正确切换，帧率稳定
 - Sobol 采样质量可见提升（低 spp 收敛更快）
 - IBL 旋转、Russian Roulette、Stochastic Alpha 正确

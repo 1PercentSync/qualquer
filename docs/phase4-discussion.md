@@ -706,7 +706,7 @@ DLSS-RR 同时做时域累积、去噪、放大，OptiX Denoiser 只做去噪。
 - 管线位置：raygen → DLSS-RR → tonemap（官方文档 §3.1："before tone mapping"）
 - Separate Sum 累积被 DLSS-RR 内部时域累积替代
 - Ping-pong 双缓冲保留（避免 raygen 和 DLSS-RR 读写 stall）
-- 质量模式：DLAA / Quality / Balanced / Performance / Ultra Performance
+- 渲染分辨率由 UI 滑块直接控制（不使用 DLSS quality mode 档位），InPerfQualityValue 根据实际放大比率自动选取最接近的档位
 - Dynamic resolution 不支持（§3.3），分辨率变化需重建 feature
 
 **D18 更新**：原"Phase 4 实际写入 aux data + debug view"的 aux data 规格改为 DLSS-RR 所需输入（见 D32），OptiX Denoiser 相关预留移除。
@@ -814,7 +814,7 @@ DLSS-RR Integration Guide §3.5 将 blue noise 归入"to be avoided"列表。推
 
 **前半部分**（按实现顺序）：IBL 旋转 → Russian Roulette → Sobol + hash 去相关 → Render resolution decoupling → DLSS-RR 集成（含 aux data）→ 自适应 sample 数
 
-**后半部分**（按实现顺序）：Stochastic Alpha → Ray Cone LOD → Normal Map Specular AA → DLSS-RR 可选质量提升
+**后半部分**（按实现顺序）：Stochastic Alpha → Ray Cone LOD → Normal Map Specular AA → DLSS-RR 后处理
 
 ---
 

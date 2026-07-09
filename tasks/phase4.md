@@ -96,7 +96,7 @@ MUSTREAD:4
 
 > 目标：DLSS-RR 集成（时域累积+去噪+放大）、采样质量提升、自适应帧率
 >
-> 决策记录见 `docs/phase4-discussion.md`（D31-D36）。
+> 决策记录见 `docs/phase4-discussion.md`（D31-D37）。
 > 设计详见 `docs/current-phase.md` Phase 4.5 节。
 >
 > 每完成一个复选框暂停等待审查。一个 Step 结束时应请求用户在 CLion 中编译验证。
@@ -147,7 +147,7 @@ MUSTREAD:4
 - [ ] UI 适配：移除 "accumulated samples" 显示（Separate Sum 移除后无此概念），新增 DLSS-RR 面板——开/关（不支持时 disable）、render preset 选择（默认 E）、只读显示：渲染分辨率、输出分辨率、VRAM 占用
 - [ ] InReset：场景切换时触发（连续相机运动由 motion vectors 处理，不触发 InReset；quality mode 变化走 feature recreation，不走 InReset）
 - [ ] 资源管理：窗口 resize 或渲染分辨率变化时 release + recreate feature（渲染分辨率由 Step 11 滑块直接控制，不使用 DLSS quality mode 档位；InPerfQualityValue 根据实际放大比率自动选取最接近的档位）
-- [ ] 请求用户在 CLion 中编译验证（DLSS-RR 输出干净放大的画面，各 quality mode 工作正常）
+- [ ] 请求用户在 CLion 中编译验证（DLSS-RR 输出干净放大的画面，render preset 可切换）
 
 ## Step 14：自适应 Sample 数
 
