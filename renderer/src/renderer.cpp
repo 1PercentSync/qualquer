@@ -455,8 +455,8 @@ namespace qualquer::renderer {
             // directly without reading from the read buffer.
             .accumulation_buffer = accum_buffers_[1 - accum_index_].data(),
             .accumulation_buffer_read = accum_buffers_[accum_index_].data(),
-            .width = width,
-            .height = height,
+            .width = render_width,
+            .height = render_height,
             .frame_index = frame_counter_,
             .traversable = accel_.tlas_handle(),
             .geometry_infos = geometry_info_buffer_.data(),
@@ -509,7 +509,7 @@ namespace qualquer::renderer {
             params_buffer_.device_ptr(),
             sizeof(LaunchParams),
             &sbt,
-            width, height, 1));
+            render_width, render_height, 1));
 
         CUDA_CHECK(cudaEventRecord(event_raygen_done_[slot], cuda_context.compute_stream));
 

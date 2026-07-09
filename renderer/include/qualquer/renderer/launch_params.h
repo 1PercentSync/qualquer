@@ -113,10 +113,10 @@ struct LaunchParams {
      */
     const float4 *accumulation_buffer_read;
 
-    /** @brief Framebuffer width in pixels. */
+    /** @brief Render resolution width in pixels (raygen launch X dimension). */
     uint32_t width;
 
-    /** @brief Framebuffer height in pixels. */
+    /** @brief Render resolution height in pixels (raygen launch Y dimension). */
     uint32_t height;
 
     /** @brief Monotonic frame counter; uploaded for device-side temporal variation (e.g. RNG seed). */
