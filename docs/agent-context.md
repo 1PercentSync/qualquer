@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4.5 — 收敛质量 + DLSS-RR + 自适应
-- **进度**：Phase 4.5 Step 9 第1小项完成：IBL 旋转已实现（LaunchParams env_rotation + miss/closesthit/NEE 旋转 + 左键拖拽交互 + 累积 reset）
+- **进度**：Phase 4.5 Step 9 完成（IBL 旋转 + Russian Roulette，编译验证通过）
 
 ### 下一个任务
 
-Phase 4.5 Step 9 第二小项：Russian Roulette
+Phase 4.5 Step 10 第一小项：Sobol direction numbers 数据准备
 
 ---
 
