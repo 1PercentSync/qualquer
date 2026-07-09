@@ -626,7 +626,7 @@ DLSS-RR 在 display_stream 上执行，与 compute_stream 的 raygen 并行。�
 
 ```cuda
 // xxhash32: 96-bit 输入 → 32-bit 输出，多维混合质量优于链式 PCG
-// 移植自 nvpro_core2 nvvkhl/shaders/random.h（Cyan4973/xxHash）
+// 移植自 nvpro_core2 nvshaders/random.h.slang（Cyan4973/xxHash）
 __forceinline__ __device__ uint32_t xxhash32(uint32_t p0, uint32_t p1, uint32_t p2) {
     const uint32_t PRIME32_2 = 2246822519u, PRIME32_3 = 3266489917u;
     const uint32_t PRIME32_4 = 668265263u,  PRIME32_5 = 374761393u;
@@ -649,17 +649,19 @@ __forceinline__ __device__ float sobol_rng(uint32_t pixel_index, uint32_t sequen
         return float(h) / float(0xFFFFFFFFu);
     }
     uint32_t sobol_val = sobol_sample(dimension, sequence_index);
-    // Cranley-Patterson rotation with per-pixel hash
-    uint32_t pixel_scramble = pcg_hash(pixel_index * 0x1f1f1f1fu ^ dimension);
-    // Golden-ratio temporal scramble
-    uint32_t temporal = __float_as_uint(frame_index * 0.6180339887f);
-    sobol_val ^= pixel_scramble ^ temporal;
+    // Cranley-Patterson rotation: additive shift preserves Sobol low-discrepancy
+    uint32_t pixel_offset = pcg_hash(pixel_index * 0x1f1f1f1fu ^ dimension);
+    // Golden-ratio temporal offset (2654435769 ≈ φ × 2^32)
+    uint32_t temporal_offset = frame_index * 2654435769u;
+    sobol_val += pixel_offset + temporal_offset;  // unsigned wraparound = mod 2^32
     return float(sobol_val) / float(0xFFFFFFFFu);
 }
 // 调用方：
 //   jitter:    sobol_rng(pixel, frame_index, frame_index, 0/1)  — per-frame
 //   BRDF/NEE:  sobol_rng(pixel, sample_index, frame_index, dim) — per-sample
 ```
+
+**Cranley-Patterson rotation 使用加法而非 XOR**：加法位移（mod 2³²）保持 Sobol 序列的低差异性（discrepancy bound 不变），XOR 会破坏分层结构。Golden-ratio temporal offset 使用整数乘法 `frame_index * 2654435769u`（2654435769 = round(φ × 2³²)），这是 golden ratio 准随机序列在 [0, 2³²) 上的正确整数等价形式，比 `__float_as_uint(frame_index * φ)` 的 IEEE 754 位模式重解释在数学上更正确、在 GPU 上更高效（一条 `imul` vs float 乘法 + bit cast）。
 
 维度分配基本不变：per-bounce base = 2 + bounce × 12。**dim 0-1（subpixel jitter）改为 per-frame**（D37：由 frame_index 驱动，帧内所有 sample 共享同一 jitter，跨帧变化保留 DLSS-RR 时域超分辨率）。dim 2+ 仍 per-sample。
 

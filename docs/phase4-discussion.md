@@ -772,9 +772,9 @@ DLSS-RR 同时做时域累积、去噪、放大，OptiX Denoiser 只做去噪。
 DLSS-RR Integration Guide §3.5 将 blue noise 归入"to be avoided"列表。推荐白噪声 / 高质量 hash。Blue noise 的唯一优势是低 spp 下裸图的感知质量（噪声推到高频），对降噪后的画面无实际收益。
 
 - Sobol 低差异序列保留（收敛收益）
-- 去相关方式：PCG hash per-pixel Cranley-Patterson rotation（替代 blue noise 纹理查询）
-- golden-ratio temporal scramble 保留
-- dim ≥ 128 fallback PCG hash（不变）
+- 去相关方式：PCG hash per-pixel **加法** Cranley-Patterson rotation（替代 blue noise 纹理查询）。加法位移（mod 2³²）保持 Sobol 低差异性，XOR 会破坏分层结构
+- golden-ratio temporal offset：`frame_index * 2654435769u`（2654435769 = round(φ × 2³²)），golden ratio 准随机序列的整数等价形式
+- dim ≥ 128 fallback xxhash32（替代链式 PCG，96-bit 输入混合质量更优）
 - Blue noise 纹理 + CUDA texture 加载移除
 - `__constant__` memory Sobol table 保留
 
