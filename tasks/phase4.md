@@ -142,8 +142,10 @@ MUSTREAD:4
 - [ ] DLSS SDK CMake 集成：FetchContent 或 `DLSS_ROOT` 本地路径，链接 `nvsdk_ngx_cuda` 库，DLL 部署到运行目录
 - [ ] DLSS-RR 封装：NGX 初始化（`NVSDK_NGX_CUDA_Init_with_ProjectID`）、capability 查询、feature 创建（`NGX_CUDA_CREATE_DLSSD_EXT`，传入 CUcontext + CUstream）、optimal render resolution 查询（`NGX_DLSSD_GET_OPTIMAL_SETTINGS`）
 - [ ] 每帧执行：`NGX_CUDA_EVALUATE_DLSSD_EXT`，填充 `NVSDK_NGX_CUDA_DLSSD_Eval_Params`（aux data texture objects + 矩阵 + jitter offset + InFrameTimeDeltaInMsec），输出到 denoised surface object
-- [ ] 管线重构：移除 Separate Sum 累积（raygen 不再读旧 buffer 累加），raygen 输出单帧 noisy HDR → DLSS-RR → tonemap
-- [ ] InReset：camera 变化、场景切换、quality mode 变化时触发
+- [ ] Raygen 改单帧输出：移除 Separate Sum 累加逻辑（不再读旧 buffer 累加），raygen 每帧输出单帧 noisy HDR 到 write buffer；ping-pong 保留——raygen 写 buffer A 时 DLSS-RR 读上一帧的 buffer B，避免读写 stall
+- [ ] Tonemap 适配：移除 `sum / count` 除法（DLSS-RR 输出已是干净 HDR），直接对 DLSS-RR 输出应用 exposure + PBR Neutral tonemap
+- [ ] UI 适配：移除 "accumulated samples" 显示（Separate Sum 移除后无此概念），新增 DLSS-RR 面板——开/关（不支持时 disable）、quality mode 选择、render preset 选择（默认 E）、只读显示：渲染分辨率、输出分辨率、VRAM 占用
+- [ ] InReset：场景切换时触发（连续相机运动由 motion vectors 处理，不触发 InReset；quality mode 变化走 feature recreation，不走 InReset）
 - [ ] Quality mode 切换：UI 选择 DLAA / Quality / Balanced / Performance / Ultra Performance，切换时重建 feature + 更新渲染分辨率
 - [ ] 资源管理：窗口 resize / quality mode 变化时 release + recreate feature
 - [ ] 请求用户在 CLion 中编译验证（DLSS-RR 输出干净放大的画面，各 quality mode 工作正常）
