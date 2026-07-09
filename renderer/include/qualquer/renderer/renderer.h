@@ -335,6 +335,9 @@ namespace qualquer::renderer {
         /** @brief Previous-frame samples_per_frame (accumulation-reset detection). */
         uint32_t prev_samples_per_frame_ = 1;
 
+        /** @brief Previous-frame env_rotation (accumulation-reset detection). */
+        float prev_env_rotation_ = 0.0f;
+
         /**
          * @brief Recorded after raygen completes on compute_stream.
          *

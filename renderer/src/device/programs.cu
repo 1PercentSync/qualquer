@@ -201,13 +201,18 @@ __global__ void __raygen__rg() { // NOLINT(*-reserved-identifier)
 }
 
 /// Samples the HDR environment cubemap along the missed ray direction.
+/// Applies IBL Y-axis rotation (world → env space) before cubemap lookup.
 /// Falls back to a constant background when no env cubemap is loaded.
 __global__ void __miss__env() { // NOLINT(*-reserved-identifier)
     using namespace qualquer::renderer;
 
     float3 env_color = make_float3(0.0f, 0.0f, 0.0f);
     if (params.env_cubemap != 0) {
-        const float3 dir = optixGetWorldRayDirection();
+        const float3 world_dir = optixGetWorldRayDirection();
+        // Forward IBL rotation: world space → env space.
+        float sin_r, cos_r;
+        sincosf(params.env_rotation, &sin_r, &cos_r);
+        const float3 dir = rotate_y_dir(world_dir, sin_r, cos_r);
         const auto texel = texCubemap<float4>(params.env_cubemap, dir.x, dir.y, dir.z);
         env_color = make_float3(texel.x, texel.y, texel.z);
     }
@@ -370,6 +375,7 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
         const float3 L = sample_env_alias_table(
             params.env_alias_table, params.env_alias_count,
             params.env_alias_width, params.env_alias_height,
+            params.env_rotation,
             env_r1, env_r2, env_r3, env_r4);
         const float NdotL = dot(N_shading, L);
 
@@ -379,8 +385,12 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
 
             if (visible) {
                 // Environment radiance at the sampled direction.
+                // L is in world space; rotate to env space for cubemap lookup.
+                float sin_r, cos_r;
+                sincosf(params.env_rotation, &sin_r, &cos_r);
+                const float3 env_L = rotate_y_dir(L, sin_r, cos_r);
                 const auto env_texel = texCubemap<float4>(
-                    params.env_cubemap, L.x, L.y, L.z);
+                    params.env_cubemap, env_L.x, env_L.y, env_L.z);
                 const float3 env_color = make_float3(
                     env_texel.x, env_texel.y, env_texel.z);
 
@@ -400,7 +410,7 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
                 const float pdf_light = env_pdf(
                     params.env_alias_table,
                     params.env_alias_width, params.env_alias_height,
-                    params.env_total_luminance, L);
+                    params.env_total_luminance, params.env_rotation, L);
                 const float mis_w = mis_power_heuristic(pdf_light, brdf_pdf_e);
 
                 const float st_factor = shadow_terminator_factor(
@@ -504,7 +514,7 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
         const float pdf_env_at_brdf = env_pdf(
             params.env_alias_table,
             params.env_alias_width, params.env_alias_height,
-            params.env_total_luminance, bs.next_dir);
+            params.env_total_luminance, params.env_rotation, bs.next_dir);
         env_mis_w = mis_power_heuristic(bs.pdf_combined, pdf_env_at_brdf);
     }
 

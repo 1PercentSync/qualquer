@@ -156,6 +156,9 @@ struct LaunchParams {
      */
     uint32_t sample_count;
 
+    /** @brief IBL Y-axis rotation in radians (applied to ray directions for cubemap lookup and NEE). */
+    float env_rotation;
+
     // ---- Environment light ----
 
     /** @brief Cubemap texture sampled on miss and for environment NEE. */

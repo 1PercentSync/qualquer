@@ -366,5 +366,9 @@ namespace qualquer::renderer {
                 action.new_env_map_path = std::move(path);
             }
         }
+
+        ImGui::Text("IBL Rotation: %.1f%s",
+                     glm::degrees(ctx.settings.env_rotation), "\xC2\xB0");
+        ImGui::TextDisabled("Left drag to rotate");
     }
 } // namespace qualquer::renderer

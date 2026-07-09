@@ -186,6 +186,23 @@ namespace qualquer::app {
         /** @brief Free-roaming camera controller (WASD + mouse rotation). */
         CameraController camera_controller_{};
 
+        // ---- IBL drag rotation state ----
+
+        /** @brief True while the left mouse button is held for IBL rotation dragging. */
+        bool ibl_drag_active_ = false;
+
+        /** @brief Last cursor X position during IBL drag (for computing deltas). */
+        double ibl_drag_last_x_ = 0.0;
+
+        /**
+         * @brief Updates IBL Y-axis rotation from left-click drag input.
+         *
+         * Left-click drag (when ImGui doesn't want the mouse) rotates the
+         * environment map horizontally. Accumulated into
+         * render_settings_.env_rotation.
+         */
+        void update_ibl_drag();
+
         /** @brief glTF scene loader and resource owner. */
         SceneLoader scene_loader_{};
 

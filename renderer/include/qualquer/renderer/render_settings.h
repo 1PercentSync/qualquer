@@ -34,5 +34,8 @@ namespace qualquer::renderer {
          *        to 0 so raygen preserves the current buffer, display freezes.
          */
         bool accumulation_enabled = true;
+
+        /** @brief IBL Y-axis rotation in radians, accumulated from left-drag input. */
+        float env_rotation = 0.0f;
     };
 } // namespace qualquer::renderer

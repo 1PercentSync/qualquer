@@ -22,22 +22,26 @@ namespace qualquer::renderer {
  *
  * O(1) importance sampling proportional to luminance × sin(theta). Sub-pixel
  * jitter (r3, r4) within the selected pixel eliminates aliasing at pixel
- * boundaries.
+ * boundaries. The alias table is built in env space (unrotated equirect);
+ * the returned direction is transformed to world space by the inverse IBL
+ * rotation.
  *
- * @param alias_table  Device alias table entries (one per equirect pixel).
- * @param entry_count  Total entries (width × height).
- * @param width        Equirect source width.
- * @param height       Equirect source height.
- * @param r1           Uniform random [0,1) — bin selection.
- * @param r2           Uniform random [0,1) — accept/reject.
- * @param r3           Uniform random [0,1) — horizontal sub-pixel jitter.
- * @param r4           Uniform random [0,1) — vertical sub-pixel jitter.
+ * @param alias_table   Device alias table entries (one per equirect pixel).
+ * @param entry_count   Total entries (width × height).
+ * @param width         Equirect source width.
+ * @param height        Equirect source height.
+ * @param env_rotation  IBL Y-axis rotation in radians.
+ * @param r1            Uniform random [0,1) — bin selection.
+ * @param r2            Uniform random [0,1) — accept/reject.
+ * @param r3            Uniform random [0,1) — horizontal sub-pixel jitter.
+ * @param r4            Uniform random [0,1) — vertical sub-pixel jitter.
  * @return Sampled world-space direction (normalized).
  */
 __forceinline__ __device__ float3 sample_env_alias_table(
         const EnvAliasEntry *alias_table,
         const uint32_t entry_count,
         const uint32_t width, const uint32_t height,
+        const float env_rotation,
         const float r1, const float r2, const float r3, const float r4) {
 
     if (entry_count == 0) {
@@ -55,23 +59,28 @@ __forceinline__ __device__ float3 sample_env_alias_table(
     const float u = (static_cast<float>(px) + r3) / static_cast<float>(width);
     const float v = (static_cast<float>(py) + r4) / static_cast<float>(height);
 
-    // Equirect UV → direction (matches equirect_to_cubemap.cu convention).
+    // Equirect UV → direction in env space (matches equirect_to_cubemap.cu convention).
     const float phi   = (u - 0.5f) * kTwoPi;
     const float theta = (0.5f - v) * kPi;
     const float cos_theta = __cosf(theta);
 
-    return make_float3(cos_theta * __cosf(phi),
-                       __sinf(theta),
-                       cos_theta * __sinf(phi));
+    const float3 env_dir = make_float3(cos_theta * __cosf(phi),
+                                       __sinf(theta),
+                                       cos_theta * __sinf(phi));
+
+    // Inverse IBL rotation: env space → world space.
+    float sin_r, cos_r;
+    sincosf(env_rotation, &sin_r, &cos_r);
+    return rotate_y_dir(env_dir, -sin_r, cos_r);
 }
 
 /**
  * @brief Solid-angle PDF of a direction under the environment alias table distribution.
  *
- * Converts the direction to equirect UV, looks up the stored per-pixel luminance,
- * and converts to a solid-angle PDF. Using the stored luminance (same values that
- * built the alias table) ensures exact PDF/sampling consistency, eliminating MIS
- * bias from cubemap compression or resolution differences.
+ * Rotates the world-space direction to env space (forward IBL rotation), converts
+ * to equirect UV, looks up the stored per-pixel luminance, and converts to a
+ * solid-angle PDF. Using the stored luminance (same values that built the alias
+ * table) ensures exact PDF/sampling consistency.
  *
  * pdf = luminance × W × H / (total_luminance × 2π²)
  *
@@ -79,6 +88,7 @@ __forceinline__ __device__ float3 sample_env_alias_table(
  * @param width            Equirect source width.
  * @param height           Equirect source height.
  * @param total_luminance  Sum of all pixel weights (luminance × sin_theta).
+ * @param env_rotation     IBL Y-axis rotation in radians.
  * @param dir              World-space direction (normalized).
  * @return Solid-angle PDF (>= 1e-7).
  */
@@ -86,15 +96,21 @@ __forceinline__ __device__ float env_pdf(
         const EnvAliasEntry *alias_table,
         const uint32_t width, const uint32_t height,
         const float total_luminance,
+        const float env_rotation,
         const float3 dir) {
 
     if (total_luminance <= 0.0f) {
         return 1e-7f;
     }
 
+    // Forward IBL rotation: world space → env space.
+    float sin_r, cos_r;
+    sincosf(env_rotation, &sin_r, &cos_r);
+    const float3 env_dir = rotate_y_dir(dir, sin_r, cos_r);
+
     // Direction → equirect UV (inverse of the sampling mapping).
-    const float phi   = atan2f(dir.z, dir.x);
-    const float theta = asinf(fminf(1.0f, fmaxf(-1.0f, dir.y)));
+    const float phi   = atan2f(env_dir.z, env_dir.x);
+    const float theta = asinf(fminf(1.0f, fmaxf(-1.0f, env_dir.y)));
     const float u = phi / kTwoPi + 0.5f;
     const float v = 0.5f - theta * kInvPi;
 

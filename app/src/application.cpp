@@ -137,6 +137,7 @@ namespace qualquer::app {
             // after begin_frame's NewFrame — the same value DebugUI displays.
             camera_.aspect = static_cast<float>(swapchain_.extent.width) / static_cast<float>(swapchain_.extent.height);
             camera_controller_.update(ImGui::GetIO().DeltaTime);
+            update_ibl_drag();
 
             // CUDA submit before acquire so the CUDA starts computing while the CPU
             // waits on acquire — submission order decides when the engine starts, hence
@@ -537,6 +538,30 @@ namespace qualquer::app {
             .env_map_width = scene_loader_.env_alias_width(),
             .env_map_height = scene_loader_.env_alias_height(),
         };
+    }
+
+    void Application::update_ibl_drag() {
+        const ImGuiIO &io = ImGui::GetIO();
+        const bool left_pressed = !io.WantCaptureMouse &&
+                                  glfwGetMouseButton(window_, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS;
+
+        double cursor_x, cursor_y;
+        glfwGetCursorPos(window_, &cursor_x, &cursor_y);
+
+        if (left_pressed) {
+            if (!ibl_drag_active_) {
+                ibl_drag_active_ = true;
+                ibl_drag_last_x_ = cursor_x;
+            }
+
+            const auto dx = static_cast<float>(cursor_x - ibl_drag_last_x_);
+            ibl_drag_last_x_ = cursor_x;
+
+            constexpr float kSensitivity = 0.003f;
+            render_settings_.env_rotation += dx * kSensitivity;
+        } else {
+            ibl_drag_active_ = false;
+        }
     }
 
     void Application::release_display_buffer_to_external() {

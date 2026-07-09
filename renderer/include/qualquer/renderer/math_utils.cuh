@@ -88,6 +88,14 @@ __forceinline__ __device__ float3 reflect(const float3 I, const float3 N) {
     return I - N * (2.0f * dot(I, N));
 }
 
+/// Rotates a direction around the Y axis by (sin_r, cos_r).
+__forceinline__ __device__ float3 rotate_y_dir(const float3 d,
+                                               const float sin_r, const float cos_r) {
+    return make_float3(cos_r * d.x + sin_r * d.z,
+                       d.y,
+                       -sin_r * d.x + cos_r * d.z);
+}
+
 // ---- Matrix helpers ---------------------------------------------------------
 
 /// Multiply a float4x4 (row-major) by a float4 column vector.
