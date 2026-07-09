@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4.5 — 收敛质量 + DLSS-RR + 自适应
-- **进度**：Phase 4.5 Step 9 完成（IBL 旋转 + Russian Roulette，编译验证通过）
+- **进度**：Phase 4.5 Step 10 第一小项完成：`sobol_direction_data.h` 已创建（128 维 × 32 bit Joe & Kuo direction numbers，inline constexpr）
 
 ### 下一个任务
 
-Phase 4.5 Step 10 第一小项：Sobol direction numbers 数据准备
+Phase 4.5 Step 10 第二小项：`__constant__` memory 声明 + 主机端初始化上传
 
 ---
 

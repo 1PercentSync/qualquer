@@ -111,7 +111,7 @@ MUSTREAD:4
 
 ## Step 10：Sobol + Hash 去相关 RNG
 
-- [ ] Sobol direction numbers 数据准备：Joe & Kuo direction numbers `inline constexpr` C 数组（128 维 × 32 bit，4096 entries，16 KB）
+- [x] Sobol direction numbers 数据准备：Joe & Kuo direction numbers `inline constexpr` C 数组（128 维 × 32 bit，4096 entries，16 KB）
 - [ ] `__constant__` memory 声明 + 主机端初始化上传
 - [ ] `rng.cuh` 重写：新增 xxhash32 device 函数（96-bit 多维混合）；`sobol_sample(dimension, sample_index)` 查询 Sobol 序列 + `pcg_hash(pixel_index)` per-pixel 加法 Cranley-Patterson rotation + golden-ratio temporal offset（`frame_index * 2654435769u`）；dim ≥ 128 fallback xxhash32
 - [ ] 验证：维度分配不变（dim 0-1 subpixel jitter, per-bounce base = 2 + bounce × 12），现有采样行为正确
