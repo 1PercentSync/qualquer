@@ -125,7 +125,7 @@ MUSTREAD:4
 - [x] Tonemap kernel 输入渲染分辨率、输出显示分辨率
 - [x] Camera jitter 基于渲染分辨率像素大小
 - [x] 窗口 resize 时仅重建显示 buffer，累积/aux buffers 按需（渲染分辨率变化时才重建）
-- [ ] 请求用户在 CLion 中编译验证（可配置渲染分辨率，画面正确缩放显示）
+- [x] 请求用户在 CLion 中编译验证（可配置渲染分辨率，画面正确缩放显示）
 
 ## Step 12：Aux Data 写入
 
