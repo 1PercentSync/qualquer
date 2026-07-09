@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4.5 — 收敛质量 + DLSS-RR + 自适应
-- **进度**：Phase 4.5 Step 11 第5小项完成：jitter 核对通过，零代码变更（raygen u/v 用 params.width/height，小项 3 后自动为渲染分辨率像素尺度；.cuh 无分辨率引用，host 无投影 jitter）
+- **进度**：Phase 4.5 Step 11 第6小项完成：Renderer::resize 已移除，窗口 resize 仅重建显示 buffer（纵横比不变时累积不重置；纵横比变化经按需重分配 + camera reset 收敛）
 
 ### 下一个任务
 
-Phase 4.5 Step 11 第6小项：窗口 resize 时仅重建显示 buffer（移除 Renderer::resize）
+Phase 4.5 Step 11 第7小项：请求用户在 CLion 中编译验证（可配置渲染分辨率，画面正确缩放显示）
 
 ---
 
