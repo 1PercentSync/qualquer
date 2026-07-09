@@ -262,6 +262,13 @@ namespace qualquer::renderer {
         aux_roughness_.alloc(width, height);
         aux_specular_hit_dist_.alloc(width, height);
 
+        // DLSS-RR output at display resolution. Initially display == render
+        // (before any user-driven render-height change); resized in submit_cuda
+        // when the display dimensions change.
+        dlss_output_.alloc(width, height);
+        dlss_output_width_ = width;
+        dlss_output_height_ = height;
+
         render_width_ = width;
         render_height_ = height;
 
@@ -311,6 +318,7 @@ namespace qualquer::renderer {
         aux_normals_.free();
         aux_roughness_.free();
         aux_specular_hit_dist_.free();
+        dlss_output_.free();
         params_buffer_.free();
         for (auto &event: event_raygen_done_) {
             if (event != nullptr) {
@@ -395,6 +403,19 @@ namespace qualquer::renderer {
             render_height_ = render_height;
             spdlog::info("Render buffers reallocated ({}x{} render resolution)",
                          render_width, render_height);
+        }
+
+        // DLSS output buffer tracks display resolution (window resize), not
+        // render resolution. Drain both streams before reallocating — the
+        // previous frame's tonemap may still be reading the old buffer.
+        if (width != dlss_output_width_ || height != dlss_output_height_) {
+            CUDA_CHECK(cudaStreamSynchronize(cuda_context.compute_stream));
+            CUDA_CHECK(cudaStreamSynchronize(cuda_context.display_stream));
+            dlss_output_.resize(width, height);
+            dlss_output_width_ = width;
+            dlss_output_height_ = height;
+            spdlog::info("DLSS output buffer reallocated ({}x{} display resolution)",
+                         width, height);
         }
 
         // Dual-stream overlap: compute_stream runs raygen while display_stream

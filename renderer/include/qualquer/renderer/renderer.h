@@ -334,6 +334,24 @@ namespace qualquer::renderer {
         /** @brief Specular hit distance (R32F). */
         optix::CudaArrayBuffer<float> aux_specular_hit_dist_;
 
+        // ---- DLSS-RR output (display resolution) ----
+
+        /**
+         * @brief Intermediate HDR buffer at output resolution (RGBA32F).
+         *
+         * DLSS-RR writes its denoised+upscaled result here (via surfaceObject);
+         * tonemap reads from here (via textureObject) instead of the accumulation
+         * buffer when DLSS-RR is active. Allocated at display resolution, resized
+         * on window resize (not on render resolution change).
+         */
+        optix::CudaArrayBuffer<float4> dlss_output_;
+
+        /** @brief Display width the DLSS output buffer is allocated for. */
+        uint32_t dlss_output_width_ = 0;
+
+        /** @brief Display height the DLSS output buffer is allocated for. */
+        uint32_t dlss_output_height_ = 0;
+
         /**
          * @brief Deferred reset flag set by reset_accumulation().
          *
