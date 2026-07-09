@@ -184,7 +184,3 @@ MUSTREAD:4
 - [ ] 方差叠加到 roughness²：`roughness² += variance`，clamp 后重算 alpha
 - [ ] 请求用户在 CLion 中编译验证（法线贴图接缝处 specular 闪烁减少）
 
-## Step 19：DLSS-RR 后处理
-
-- [ ] postProcess 背景修正：sky 像素 3×3 膨胀检测（depth == inf）+ 重着色环境光（参考 optix-subd `postProcessKernel` WAR）
-- [ ] 请求用户在 CLion 中编译验证（sky 伪影消除）

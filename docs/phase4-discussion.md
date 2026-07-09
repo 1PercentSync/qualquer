@@ -675,7 +675,6 @@ MUSTREAD:7
 | 7 | Stochastic Alpha | D11 | blend 材质 hash-based alpha test |
 | 8 | Ray Cone LOD | D13 | 纹理 aliasing 降噪，payload 扩展至 19 registers |
 | 9 | Normal Map Specular AA | D28d | ray cone footprint → roughness 方差叠加 |
-| 10 | DLSS-RR 后处理 | D32 | postProcess 背景修正 |
 
 #### 不纳入
 
@@ -748,7 +747,8 @@ DLSS-RR 同时做时域累积、去噪、放大，OptiX Denoiser 只做去噪。
 **可选输入**：InFrameTimeDeltaInMsec 随初始集成提供（零额外代价）。
 
 **保留项**（能做但先不做，出现可见问题时再评估）：
-- pInDepthHighRes：若边缘有可见 bleeding/ghosting，可考虑 OptiX primary ray only launch 生成输出分辨率 depth。optix-subd 参考实现未给 DLSS-RR 喂此值。
+- pInDepthHighRes：若边缘有可见 bleeding/ghosting，可考虑 OptiX primary ray only launch 生成输出分辨率 depth。optix-subd 参考实现未给 DLSS-RR 喂此值。vk_denoise_dlssrr 亦未使用。
+- postProcess 背景修正：若 DLSS-RR 输出出现 sky 伪影，在输出分辨率上用 depth 分类 sky 像素并重着色环境光（参考 optix-subd `postProcessKernel` WAR）。与 pInDepthHighRes 共享输出分辨率 depth 资源。vk_denoise_dlssrr 未做此处理。
 
 **不适用的可选输入**：
 - pInDiffuseHitDistance / pInReflectedAlbedo：PT stochastic lobe 选择下 per-sample 不一致，无单一正确值
@@ -815,7 +815,7 @@ DLSS-RR Integration Guide §3.5 将 blue noise 归入"to be avoided"列表。推
 
 **前半部分**（按实现顺序）：IBL 旋转 → Russian Roulette → Sobol + hash 去相关 → Render resolution decoupling → Aux data 写入 → DLSS-RR SDK 接入 → DLSS-RR 管线接入 → 自适应 sample 数
 
-**后半部分**（按实现顺序）：Stochastic Alpha → Ray Cone LOD → Normal Map Specular AA → DLSS-RR 后处理
+**后半部分**（按实现顺序）：Stochastic Alpha → Ray Cone LOD → Normal Map Specular AA
 
 ---
 
