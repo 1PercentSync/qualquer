@@ -132,8 +132,8 @@ MUSTREAD:4
 - [ ] Aux input buffers 分配（CUDA array + `cudaTextureObject_t`，渲染分辨率）：depth（R32F）、motion vectors（RG32F）、diffuse albedo（float4）、specular albedo（float4）、normals（float4）、roughness（R32F）、specular hit distance（R32F）
 - [ ] DLSS-RR output buffer 分配（CUDA array + `cudaSurfaceObject_t`，输出分辨率，float4）：中间 HDR buffer，DLSS-RR 写入、tonemap 读取
 - [ ] LaunchParams 扩展：aux buffer 指针 + 前帧 VP 矩阵
-- [ ] Closesthit bounce==0 写入：linear depth（`optixGetRayTmax()`）、diffuse albedo（base_color × (1-metallic)）、specular albedo（E_glossy 逐通道）、shading normal、linear roughness、specular hit distance = infinity（optix-subd 实测不改善 DLSS-RR 输出）
-- [ ] Motion vectors：raygen 计算 world hit position → 前帧 VP 投影 → 屏幕空间差值写入 MV buffer；miss 像素 MV = 0
+- [ ] Closesthit bounce==0 写入：view-space Z depth、diffuse albedo、specular albedo、shading normal、linear roughness、specular hit distance
+- [ ] Motion vectors：raygen 计算屏幕空间 MV，hit 像素和 miss 像素均需写入
 - [ ] 多 spp jitter 策略（D37）：raygen sample loop 内所有 sample 共享同一 subpixel jitter（per-frame），aux data 写一次即可；BRDF/NEE 维度仍 per-sample
 - [ ] Debug view：UI enum 切换显示各 aux buffer 内容（depth / diffuse albedo / specular albedo / normals / roughness / specular hit distance / motion vectors）
 - [ ] 请求用户在 CLion 中编译验证（debug view 下各 aux buffer 内容正确）
@@ -148,7 +148,7 @@ MUSTREAD:4
 ## Step 14：DLSS-RR 管线接入
 
 - [ ] Raygen 改单帧输出：移除 Separate Sum 累加逻辑，raygen 每帧输出单帧 noisy HDR 到 write buffer；ping-pong 保留——raygen 写 buffer A 时 DLSS-RR 读上一帧的 buffer B
-- [ ] 每帧执行：`NGX_CUDA_EVALUATE_DLSSD_EXT` 在 display_stream 上，填充 eval params（aux data texture objects + 矩阵 + jitter offset + InFrameTimeDeltaInMsec），读 noisy buffer → 写中间 HDR buffer
+- [ ] 每帧执行：`NGX_CUDA_EVALUATE_DLSSD_EXT` 在 display_stream 上，填充 eval params，读 noisy buffer → 写中间 HDR buffer
 - [ ] Tonemap 适配：移除 sum/count 除法，tonemap kernel 在 display_stream 上读中间 HDR buffer、应用 exposure + PBR Neutral、写 LDR display buffer
 - [ ] UI 适配：移除 accumulated samples 显示，新增 DLSS-RR 面板——开/关（不支持时 disable）、render preset 选择（默认 E）、只读显示：渲染分辨率、输出分辨率、VRAM 占用
 - [ ] InReset：场景切换时触发（连续相机运动由 motion vectors 处理，不触发 InReset）
