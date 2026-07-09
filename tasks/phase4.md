@@ -105,7 +105,7 @@ MUSTREAD:4
 
 ## Step 9：IBL 旋转 + Russian Roulette
 
-- [ ] IBL 旋转：LaunchParams 新增 `env_rotation`（float, radians），`__miss__env` 和 env NEE 采样方向应用 Y 轴旋转（cos/sin），UI 滑块（deferred, 0-360°），参数变化触发累积 reset
+- [ ] IBL 旋转：LaunchParams 新增 `env_rotation`（float, radians），`__miss__env` 和 env NEE 采样方向应用 Y 轴旋转（cos/sin），左键拖拽旋转 IBL（Himalaya UX：灵敏度 ~0.003 rad/px，面板只读显示角度），参数变化触发累积 reset
 - [ ] Russian Roulette：bounce ≥ 2 时启用，存活概率 = `clamp(max_component(throughput), 0.05, 0.95)`，存活时 `throughput /= survival_prob`，死亡时终止 path，使用 RNG 维度 base + 3（已预留）
 - [ ] 请求用户在 CLion 中编译验证（IBL 旋转可调，RR 减少长路径计算）
 
