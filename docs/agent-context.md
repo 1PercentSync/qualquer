@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4.5 — 收敛质量 + DLSS-RR + 自适应
-- **进度**：Phase 4.5 Step 11 第4小项完成：tonemap 重采样已实现（显示分辨率 launch，三分支：1:1 直读 / Catmull-Rom 放大 clamp≥0 / footprint box 缩小，线性 HDR mean 空间滤波）
+- **进度**：Phase 4.5 Step 11 第5小项完成：jitter 核对通过，零代码变更（raygen u/v 用 params.width/height，小项 3 后自动为渲染分辨率像素尺度；.cuh 无分辨率引用，host 无投影 jitter）
 
 ### 下一个任务
 
-Phase 4.5 Step 11 第5小项：Camera jitter 基于渲染分辨率像素大小
+Phase 4.5 Step 11 第6小项：窗口 resize 时仅重建显示 buffer（移除 Renderer::resize）
 
 ---
 
