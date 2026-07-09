@@ -602,6 +602,17 @@ dlssParams.InRoughnessMode = NVSDK_NGX_DLSS_Roughness_Mode_Unpacked;
 
 **每帧执行**：填充 `NVSDK_NGX_CUDA_DLSSD_Eval_Params`，输入 `cudaTextureObject_t`，输出 `cudaSurfaceObject_t`，调用 `NGX_CUDA_EVALUATE_DLSSD_EXT`。
 
+**Stream 分配与管线流程**：
+
+| Stream | 工作 |
+|--------|------|
+| compute_stream | raygen（写 noisy HDR 到 ping-pong buffer） |
+| display_stream | DLSS-RR（读 noisy buffer → 写中间 HDR buffer，输出分辨率）→ tonemap（读中间 HDR → 写 LDR display buffer）→ signal interop semaphore |
+
+DLSS-RR 在 display_stream 上执行，与 compute_stream 的 raygen 并行。读的是上一帧的 noisy buffer（ping-pong），不 stall raygen。DLSS-RR feature 创建时传入 display_stream（`InCUStream`）。
+
+**中间 HDR buffer**：新增资源，输出分辨率，float4。DLSS-RR 输出目标，tonemap 输入源。同一 stream 上顺序执行无竞争。
+
 **重建条件**：渲染分辨率变化时 release + recreate feature。
 
 **参考实现**：`D:\Github\optix-subd\denoiserDlss.cu`

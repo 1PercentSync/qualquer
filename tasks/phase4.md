@@ -122,14 +122,15 @@ MUSTREAD:4
 - [ ] 新增 `render_width` / `render_height` 参数（独立于 swapchain extent），UI 滑块直接控制渲染高度（如 1080），宽度按输出纵横比自动计算
 - [ ] 累积 buffer 按渲染分辨率分配（不再跟随 swapchain）
 - [ ] OptiX launch 维度使用渲染分辨率
-- [ ] Tonemap kernel 输入渲染分辨率、输出显示分辨率（或 DLSS-RR 输出分辨率）
+- [ ] Tonemap kernel 输入渲染分辨率、输出显示分辨率
 - [ ] Camera jitter 基于渲染分辨率像素大小
 - [ ] 窗口 resize 时仅重建显示 buffer，累积/aux buffers 按需（渲染分辨率变化时才重建）
 - [ ] 请求用户在 CLion 中编译验证（可配置渲染分辨率，画面正确缩放显示）
 
 ## Step 12：Aux Data 写入
 
-- [ ] Aux data buffer 分配：CUDA array + `cudaTextureObject_t`（DLSS-RR 输入要求）——depth（R32F）、motion vectors（RG32F）、diffuse albedo（float4）、specular albedo（float4）、normals（float4）、roughness（R32F）、specular hit distance（R32F），均为渲染分辨率；DLSS-RR 输出为 CUDA array + `cudaSurfaceObject_t`，输出分辨率
+- [ ] Aux input buffers 分配（CUDA array + `cudaTextureObject_t`，渲染分辨率）：depth（R32F）、motion vectors（RG32F）、diffuse albedo（float4）、specular albedo（float4）、normals（float4）、roughness（R32F）、specular hit distance（R32F）
+- [ ] DLSS-RR output buffer 分配（CUDA array + `cudaSurfaceObject_t`，输出分辨率，float4）：中间 HDR buffer，DLSS-RR 写入、tonemap 读取
 - [ ] LaunchParams 扩展：aux buffer 指针 + 前帧 VP 矩阵
 - [ ] Closesthit bounce==0 写入：linear depth（`optixGetRayTmax()`）、diffuse albedo（base_color × (1-metallic)）、specular albedo（E_glossy 逐通道）、shading normal、linear roughness、specular hit distance = infinity（optix-subd 实测不改善 DLSS-RR 输出）
 - [ ] Motion vectors：raygen 计算 world hit position → 前帧 VP 投影 → 屏幕空间差值写入 MV buffer；miss 像素 MV = 0
@@ -141,9 +142,9 @@ MUSTREAD:4
 
 - [ ] DLSS SDK CMake 集成：FetchContent 或 `DLSS_ROOT` 本地路径，链接 `nvsdk_ngx_cuda` 库，DLL 部署到运行目录
 - [ ] DLSS-RR 封装：NGX 初始化（`NVSDK_NGX_CUDA_Init_with_ProjectID`）、capability 查询、feature 创建（`NGX_CUDA_CREATE_DLSSD_EXT`，传入 CUcontext + CUstream）、optimal render resolution 查询（`NGX_DLSSD_GET_OPTIMAL_SETTINGS`）
-- [ ] 每帧执行：`NGX_CUDA_EVALUATE_DLSSD_EXT`，填充 `NVSDK_NGX_CUDA_DLSSD_Eval_Params`（aux data texture objects + 矩阵 + jitter offset + InFrameTimeDeltaInMsec），输出到 denoised surface object
+- [ ] 每帧执行：`NGX_CUDA_EVALUATE_DLSSD_EXT` 在 display_stream 上执行，填充 `NVSDK_NGX_CUDA_DLSSD_Eval_Params`（aux data texture objects + 矩阵 + jitter offset + InFrameTimeDeltaInMsec），输出到中间 HDR buffer（新增，输出分辨率，float4）
 - [ ] Raygen 改单帧输出：移除 Separate Sum 累加逻辑（不再读旧 buffer 累加），raygen 每帧输出单帧 noisy HDR 到 write buffer；ping-pong 保留——raygen 写 buffer A 时 DLSS-RR 读上一帧的 buffer B，避免读写 stall
-- [ ] Tonemap 适配：移除 `sum / count` 除法（DLSS-RR 输出已是干净 HDR），直接对 DLSS-RR 输出应用 exposure + PBR Neutral tonemap
+- [ ] Tonemap 适配：移除 `sum / count` 除法，tonemap kernel 在 display_stream 上读中间 HDR buffer、应用 exposure + PBR Neutral、写 LDR display buffer
 - [ ] UI 适配：移除 "accumulated samples" 显示（Separate Sum 移除后无此概念），新增 DLSS-RR 面板——开/关（不支持时 disable）、render preset 选择（默认 E）、只读显示：渲染分辨率、输出分辨率、VRAM 占用
 - [ ] InReset：场景切换时触发（连续相机运动由 motion vectors 处理，不触发 InReset；quality mode 变化走 feature recreation，不走 InReset）
 - [ ] 资源管理：窗口 resize 或渲染分辨率变化时 release + recreate feature（渲染分辨率由 Step 11 滑块直接控制，不使用 DLSS quality mode 档位；InPerfQualityValue 根据实际放大比率自动选取最接近的档位）
