@@ -28,7 +28,7 @@ Phase 4.5 Step 9 第一小项：IBL 旋转
 | `docs/roadmap.md` | Phase 概览与顺序 |
 | `docs/current-phase.md` | 当前阶段目标、范围、实现指南（Phase 4） |
 | `tasks/phase4.md` | Phase 4 可执行任务清单 |
-| `docs/phase4-discussion.md` | Phase 4/4.5 决策记录（D1-D36） |
+| `docs/phase4-discussion.md` | Phase 4/4.5 决策记录（D1-D37） |
 | `docs/architecture.md` | 渲染器架构与设计理念 |
 | `docs/technical-decisions.md` | 技术选型与决策 |
 

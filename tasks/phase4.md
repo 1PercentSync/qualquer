@@ -132,9 +132,9 @@ MUSTREAD:4
 
 - [ ] Aux data buffer 分配：depth（R32F）、motion vectors（RG32F）、diffuse albedo（float4）、specular albedo（float4）、normals（float4）、roughness（R32F）、specular hit distance（R32F），均为渲染分辨率
 - [ ] LaunchParams 扩展：aux buffer 指针 + 前帧 VP 矩阵
-- [ ] Closesthit bounce==0 写入：linear depth、diffuse albedo（base_color × (1-metallic)）、specular albedo（E_glossy 逐通道）、shading normal、linear roughness
-- [ ] Specular hit distance：raygen 在 bounce 0→1 转换后，若 bounce 0 采样了 specular 方向，记录 bounce 1 的 hit distance 写入 aux buffer
+- [ ] Closesthit bounce==0 写入：linear depth（`optixGetRayTmax()`）、diffuse albedo（base_color × (1-metallic)）、specular albedo（E_glossy 逐通道）、shading normal、linear roughness、specular hit distance = infinity（optix-subd 实测不改善 DLSS-RR 输出）
 - [ ] Motion vectors：raygen 计算 world hit position → 前帧 VP 投影 → 屏幕空间差值写入 MV buffer；miss 像素 MV = 0
+- [ ] 多 spp jitter 策略（D37）：raygen sample loop 内所有 sample 共享同一 subpixel jitter（per-frame），aux data 写一次即可；BRDF/NEE 维度仍 per-sample
 - [ ] Debug view：UI enum 切换显示各 aux buffer 内容（depth / diffuse albedo / specular albedo / normals / roughness / specular hit distance / motion vectors）
 - [ ] 请求用户在 CLion 中编译验证（debug view 下各 aux buffer 内容正确）
 

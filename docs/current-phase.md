@@ -646,9 +646,11 @@ __forceinline__ __device__ float sobol_rng(uint32_t pixel_index, uint32_t sample
 | specular albedo | closesthit bounce==0 | E_glossy 逐通道 |
 | normals | closesthit bounce==0 | shading normal (world space) |
 | roughness | closesthit bounce==0 | linear roughness |
-| specular hit distance | raygen bounce 0→1 后 | bounce 1 的 `hit_distance`（仅 specular 分支） |
+| specular hit distance | closesthit bounce==0 | 写 infinity（optix-subd 实测不改善 DLSS-RR 输出） |
 | motion vectors | raygen | world hit pos → 前帧 VP 投影差 |
-| color | raygen | 单帧 noisy HDR（不累加旧帧） |
+| color | raygen | 多 spp 同 jitter 平均后的 noisy HDR |
+
+**多 spp 与 aux data 一致性**（D37）：帧内所有 sample 共享同一 subpixel jitter（per-frame），primary ray 相同 → aux data 写一次即可。BRDF/NEE 维度仍 per-sample。跨帧 jitter 变化保留 DLSS-RR 时域超分辨率。
 
 ### 完成标准
 
