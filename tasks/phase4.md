@@ -113,7 +113,7 @@ MUSTREAD:4
 
 - [ ] Sobol direction numbers 数据准备：Joe & Kuo 标准文件解析为 C 数组，CMake binary embedding（128 维 × 32 bit direction vectors）
 - [ ] `__constant__` memory 声明 + 主机端初始化上传
-- [ ] `rng.cuh` 重写：`sobol_sample(dimension, sample_index)` 查询 Sobol 序列 + `pcg_hash(pixel_index)` per-pixel Cranley-Patterson rotation + golden-ratio temporal scramble（`frame_index * GOLDEN_RATIO`）；dim ≥ 128 fallback PCG hash
+- [ ] `rng.cuh` 重写：新增 xxhash32 device 函数（96-bit 多维混合）；`sobol_sample(dimension, sample_index)` 查询 Sobol 序列 + `pcg_hash(pixel_index)` per-pixel Cranley-Patterson rotation + golden-ratio temporal scramble（`frame_index * GOLDEN_RATIO`）；dim ≥ 128 fallback xxhash32
 - [ ] 验证：维度分配不变（dim 0-1 subpixel jitter, per-bounce base = 2 + bounce × 12），现有采样行为正确
 - [ ] 请求用户在 CLion 中编译验证（低 spp 下噪声更均匀，收敛更快）
 
@@ -151,7 +151,7 @@ MUSTREAD:4
 - [ ] 每帧执行：`NGX_CUDA_EVALUATE_DLSSD_EXT` 在 display_stream 上，填充 eval params，读 noisy buffer → 写中间 HDR buffer
 - [ ] Tonemap 适配：移除 sum/count 除法，tonemap kernel 在 display_stream 上读中间 HDR buffer、应用 exposure + PBR Neutral、写 LDR display buffer
 - [ ] UI 适配：移除 accumulated samples 显示，新增 DLSS-RR 面板——开/关（不支持时 disable）、render preset 选择（默认 E）、只读显示：渲染分辨率、输出分辨率、VRAM 占用
-- [ ] InReset：场景切换时触发（连续相机运动由 motion vectors 处理，不触发 InReset）
+- [ ] InReset：场景切换或相机瞬移（F 键聚焦）时触发
 - [ ] 请求用户在 CLion 中编译验证（DLSS-RR 输出干净放大的画面，render preset 可切换）
 
 ## Step 15：自适应 Sample 数

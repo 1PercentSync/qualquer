@@ -728,7 +728,7 @@ DLSS-RR 同时做时域累积、去噪、放大，OptiX Denoiser 只做去噪。
 | pInColor | float4 HDR | raygen 单帧 noisy 输出 |
 | pInDepth | R32F | `optixGetRayTmax()`（linear depth，`InUseHWDepth = Linear`） |
 | pInMotionVectors | RG32F | 前帧 VP 投影差（静态场景仅 camera motion） |
-| pInDiffuseAlbedo | float4 | `base_color × (1 - metallic)` |
+| pInDiffuseAlbedo | float4 | raw `base_color`（跟随 vk_denoise_dlssrr，存疑见 current-phase.md） |
 | pInSpecularAlbedo | float4 | E_glossy 逐通道（见下） |
 | pInNormals | float4 | shading normal（world space） |
 | pInRoughness | R32F | linear roughness |
@@ -749,6 +749,7 @@ DLSS-RR 同时做时域累积、去噪、放大，OptiX Denoiser 只做去噪。
 **保留项**（能做但先不做，出现可见问题时再评估）：
 - pInDepthHighRes：若边缘有可见 bleeding/ghosting，可考虑 OptiX primary ray only launch 生成输出分辨率 depth。optix-subd 参考实现未给 DLSS-RR 喂此值。vk_denoise_dlssrr 亦未使用。
 - postProcess 背景修正：若 DLSS-RR 输出出现 sky 伪影，在输出分辨率上用 depth 分类 sky 像素并重着色环境光（参考 optix-subd `postProcessKernel` WAR）。与 pInDepthHighRes 共享输出分辨率 depth 资源。vk_denoise_dlssrr 未做此处理。
+- infinity 值替换为 65504.0（FP16 max）：sky depth 和 specular hit distance 当前用 IEEE float infinity。若 DLSS-RR 对 infinity 有可见问题，改用 65504.0（vk_denoise_dlssrr 的做法）。
 
 **不适用的可选输入**：
 - pInDiffuseHitDistance / pInReflectedAlbedo：PT stochastic lobe 选择下 per-sample 不一致，无单一正确值
