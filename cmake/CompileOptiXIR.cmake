@@ -7,8 +7,8 @@
 #
 # Compiles each .cu source with nvcc --optix-ir into ${QUALQUER_OPTIX_IR_DIR}.
 # Deployment to a runtime directory is the consumer's responsibility: the app
-# target POST_BUILD-copies the whole directory to its executable's shaders/ so
-# Pipeline::init can load the .optixir via a CWD-relative path.
+# target attaches dependency-tracked copy rules over QUALQUER_OPTIX_IR_FILES
+# so Pipeline::init can load the .optixir via a CWD-relative path.
 #
 # Prerequisites at the call site:
 #   - CUDA language enabled (defines CMAKE_CUDA_COMPILER)
@@ -104,4 +104,8 @@ function(compile_optix_ir target)
     # has no rule to compile .optixir, so this only drives the custom command
     # ordering without producing an object file.
     target_sources(${target} PRIVATE ${_optixir_files})
+
+    # Export the artifact list for the deploying consumer (the app target's
+    # dependency-tracked copy rules reference these paths as DEPENDS).
+    set(QUALQUER_OPTIX_IR_FILES "${_optixir_files}" CACHE INTERNAL "Compiled OptiX IR artifact paths")
 endfunction()
