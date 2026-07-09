@@ -532,9 +532,12 @@ namespace qualquer::renderer {
 
         // Tonemap divides by the count that matches the buffer it reads.
         // accum_counts_[accum_index_] is the true sample count in that buffer;
-        // it was set at the END of the frame that last wrote it.
+        // it was set at the END of the frame that last wrote it. After a
+        // render-resolution change that count is 0, so the kernel writes black
+        // without sampling the freshly reallocated (uninitialised) buffer.
         launch_tonemap(accum_buffers_[accum_index_].data(),
                        cuda_context.display_surface,
+                       render_width, render_height,
                        width, height,
                        accum_counts_[accum_index_],
                        exposure_linear,

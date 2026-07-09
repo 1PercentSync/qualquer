@@ -20,27 +20,113 @@ namespace qualquer::renderer {
             return fminf(1.0f, fmaxf(0.0f, v));
         }
 
+        // 1D Catmull-Rom weights for the four taps at integer offsets -1..2
+        // around the sample position, evaluated at fractional offset t in [0,1).
+        // The weights sum to 1 exactly, so no normalization is needed.
+        __device__ __forceinline__ void catmull_rom_weights(const float t, float w[4]) {
+            const float t2 = t * t;
+            const float t3 = t2 * t;
+            w[0] = 0.5f * (-t3 + 2.0f * t2 - t);
+            w[1] = 0.5f * (3.0f * t3 - 5.0f * t2 + 2.0f);
+            w[2] = 0.5f * (-3.0f * t3 + 4.0f * t2 + t);
+            w[3] = 0.5f * (t3 - t2);
+        }
+
+        // Catmull-Rom bicubic sample at source coordinate (sx, sy), operating in
+        // the accumulation (Separate-Sum) domain — the caller divides by the
+        // sample count afterwards (filtering is linear, so the order is
+        // equivalent). The 4x4 tap window is clamped to the buffer edges
+        // (border texel duplication).
+        __device__ float3 sample_catmull_rom(const float4 *buffer,
+                                             const uint32_t render_width,
+                                             const uint32_t render_height,
+                                             const float sx,
+                                             const float sy) {
+            const float bx = floorf(sx);
+            const float by = floorf(sy);
+            const int ix = static_cast<int>(bx);
+            const int iy = static_cast<int>(by);
+
+            float wx[4];
+            float wy[4];
+            catmull_rom_weights(sx - bx, wx);
+            catmull_rom_weights(sy - by, wy);
+
+            const int max_x = static_cast<int>(render_width) - 1;
+            const int max_y = static_cast<int>(render_height) - 1;
+
+            float3 sum = make_float3(0.0f, 0.0f, 0.0f);
+            for (int j = 0; j < 4; ++j) {
+                const int src_y = min(max(iy - 1 + j, 0), max_y);
+                for (int i = 0; i < 4; ++i) {
+                    const int src_x = min(max(ix - 1 + i, 0), max_x);
+                    const float4 texel = buffer[src_y * static_cast<int>(render_width) + src_x];
+                    sum = sum + make_float3(texel.x, texel.y, texel.z) * (wx[i] * wy[j]);
+                }
+            }
+            return sum;
+        }
+
+        // Footprint box average over the source interval [x0,x1) x [y0,y1),
+        // operating in the accumulation (Separate-Sum) domain. Each covered
+        // texel contributes its overlap area with the footprint (fractional at
+        // the edges) — the SSAA resolve: no ringing and no undersampling at any
+        // ratio. Dividing by the accumulated weight (instead of the analytic
+        // footprint area) keeps border pixels exact under float rounding of the
+        // interval endpoints.
+        __device__ float3 sample_box(const float4 *buffer,
+                                     const uint32_t render_width,
+                                     const uint32_t render_height,
+                                     const float x0,
+                                     const float x1,
+                                     const float y0,
+                                     const float y1) {
+            const int ix0 = max(static_cast<int>(floorf(x0)), 0);
+            const int iy0 = max(static_cast<int>(floorf(y0)), 0);
+            const int ix1 = min(static_cast<int>(ceilf(x1)), static_cast<int>(render_width));
+            const int iy1 = min(static_cast<int>(ceilf(y1)), static_cast<int>(render_height));
+
+            float3 sum = make_float3(0.0f, 0.0f, 0.0f);
+            float weight_sum = 0.0f;
+            for (int sy = iy0; sy < iy1; ++sy) {
+                const float wy = fminf(y1, static_cast<float>(sy) + 1.0f) -
+                                 fmaxf(y0, static_cast<float>(sy));
+                for (int sx = ix0; sx < ix1; ++sx) {
+                    const float wx = fminf(x1, static_cast<float>(sx) + 1.0f) -
+                                     fmaxf(x0, static_cast<float>(sx));
+                    const float w = wx * wy;
+                    const float4 texel = buffer[sy * static_cast<int>(render_width) + sx];
+                    sum = sum + make_float3(texel.x, texel.y, texel.z) * w;
+                    weight_sum += w;
+                }
+            }
+            return sum / weight_sum;
+        }
+
         // __float2uint_rn performs round-to-nearest-even and saturates out-of-range
         // inputs, avoiding the floating-point +0.5-then-truncate bias that a plain
         // integral cast would introduce on .5 boundaries.
         __global__ void tonemap_kernel(const float4 *accumulation_buffer,
                                         const cudaSurfaceObject_t display_surface,
-                                        const uint32_t width,
-                                        const uint32_t height,
+                                        const uint32_t render_width,
+                                        const uint32_t render_height,
+                                        const uint32_t display_width,
+                                        const uint32_t display_height,
                                         const uint32_t sample_count,
                                         const float exposure) {
             const uint32_t x = blockIdx.x * blockDim.x + threadIdx.x;
             const uint32_t y = blockIdx.y * blockDim.y + threadIdx.y;
-            if (x >= width || y >= height) {
+            if (x >= display_width || y >= display_height) {
                 return;
             }
 
             // sample_count == 0: the buffer holds uninitialised or stale data
-            // (init/resize/first-ever frame). Write black and return; raygen is
-            // concurrently filling the OTHER buffer with the first valid sample,
-            // which tonemap will read next frame.
+            // (init/first-ever frame/just-reallocated after a render-resolution
+            // change). Write black and return without touching the buffer;
+            // raygen is concurrently filling the OTHER buffer with the first
+            // valid sample, which tonemap will read next frame.
             if (sample_count == 0) {
-                const uchar4 black{0, 0, 0, 255};
+                constexpr uchar4 black{0, 0, 0, 255};
                 surf2Dwrite(black,
                             display_surface,
                             static_cast<int>(x * sizeof(uchar4)),
@@ -49,10 +135,42 @@ namespace qualquer::renderer {
                 return;
             }
 
-            const float4 hdr = accumulation_buffer[y * width + x];
-
             const float inv_count = 1.0f / static_cast<float>(sample_count);
-            const float3 mean = make_float3(hdr.x, hdr.y, hdr.z) * inv_count;
+
+            // Resampling runs in linear HDR (mean) space, before exposure and
+            // tonemap. The branch is uniform across the launch (resolutions are
+            // launch constants), so there is no warp divergence. Alpha is a
+            // constant 1.0 written by raygen, so the resampling paths skip it.
+            float3 mean;
+            float alpha = 1.0f;
+            if (render_width == display_width && render_height == display_height) {
+                const float4 hdr = accumulation_buffer[y * render_width + x];
+                mean = make_float3(hdr.x, hdr.y, hdr.z) * inv_count;
+                alpha = hdr.w;
+            } else if (render_width > display_width || render_height > display_height) {
+                // Downscale: box average over the display pixel's source
+                // footprint. Also covers the near-parity corner where width
+                // rounding leaves one axis at or slightly below 1:1 — the
+                // footprint then spans 1-2 texels and degrades to a tent filter.
+                const float scale_x = static_cast<float>(render_width) / static_cast<float>(display_width);
+                const float scale_y = static_cast<float>(render_height) / static_cast<float>(display_height);
+                const float x0 = static_cast<float>(x) * scale_x;
+                const float y0 = static_cast<float>(y) * scale_y;
+                mean = sample_box(accumulation_buffer, render_width, render_height,
+                                  x0, x0 + scale_x, y0, y0 + scale_y) * inv_count;
+            } else {
+                // Upscale: Catmull-Rom around the display pixel center mapped
+                // into source texel space (pixel-center convention: the -0.5
+                // shift aligns texel centers). Negative lobes can undershoot on
+                // HDR contrast edges, so the mean is clamped to >= 0.
+                const float scale_x = static_cast<float>(render_width) / static_cast<float>(display_width);
+                const float scale_y = static_cast<float>(render_height) / static_cast<float>(display_height);
+                const float sx = (static_cast<float>(x) + 0.5f) * scale_x - 0.5f;
+                const float sy = (static_cast<float>(y) + 0.5f) * scale_y - 0.5f;
+                mean = sample_catmull_rom(accumulation_buffer, render_width, render_height,
+                                          sx, sy) * inv_count;
+                mean = make_float3(fmaxf(mean.x, 0.0f), fmaxf(mean.y, 0.0f), fmaxf(mean.z, 0.0f));
+            }
 
             const float3 ldr = apply_tonemap(mean, exposure);
 
@@ -60,7 +178,7 @@ namespace qualquer::renderer {
                 static_cast<uint8_t>(__float2uint_rn(clamp01(ldr.x) * 255.0f)),
                 static_cast<uint8_t>(__float2uint_rn(clamp01(ldr.y) * 255.0f)),
                 static_cast<uint8_t>(__float2uint_rn(clamp01(ldr.z) * 255.0f)),
-                static_cast<uint8_t>(__float2uint_rn(clamp01(hdr.w) * 255.0f)),
+                static_cast<uint8_t>(__float2uint_rn(clamp01(alpha) * 255.0f)),
             };
 
             surf2Dwrite(pixel,
@@ -73,16 +191,22 @@ namespace qualquer::renderer {
 
     void launch_tonemap(const float4 *accumulation_buffer,
                         const cudaSurfaceObject_t display_surface,
-                        const uint32_t width,
-                        const uint32_t height,
+                        const uint32_t render_width,
+                        const uint32_t render_height,
+                        const uint32_t display_width,
+                        const uint32_t display_height,
                         const uint32_t sample_count,
                         const float exposure,
                         cudaStream_t stream) {
         constexpr uint32_t kBlockDim = 16;
         constexpr dim3 block(kBlockDim, kBlockDim);
-        const dim3 grid((width + kBlockDim - 1) / kBlockDim, (height + kBlockDim - 1) / kBlockDim);
+        const dim3 grid((display_width + kBlockDim - 1) / kBlockDim,
+                        (display_height + kBlockDim - 1) / kBlockDim);
 
-        tonemap_kernel<<<grid, block, 0, stream>>>(accumulation_buffer, display_surface, width, height, sample_count, exposure);
+        tonemap_kernel<<<grid, block, 0, stream>>>(accumulation_buffer, display_surface,
+                                                   render_width, render_height,
+                                                   display_width, display_height,
+                                                   sample_count, exposure);
 
         CUDA_CHECK_KERNEL(cudaGetLastError());
     }
