@@ -114,8 +114,8 @@ MUSTREAD:4
 - [x] Sobol direction numbers 数据准备：Joe & Kuo direction numbers `inline constexpr` C 数组（128 维 × 32 bit，4096 entries，16 KB）
 - [x] LaunchParams 内嵌 Sobol 数组（`uint32_t sobol_directions[4096]`）+ Renderer 初始化填充
 - [x] `rng.cuh` 重写：新增 xxhash32 device 函数（96-bit 多维混合）；`sobol_sample(dimension, sample_index)` 查询 Sobol 序列 + `pcg_hash(pixel_index)` per-pixel 加法 Cranley-Patterson rotation + golden-ratio temporal offset（`frame_index * 2654435769u`）；dim ≥ 128 fallback xxhash32
-- [ ] 验证：维度分配不变（dim 0-1 subpixel jitter, per-bounce base = 2 + bounce × 12），现有采样行为正确
-- [ ] 请求用户在 CLion 中编译验证（低 spp 下噪声更均匀，收敛更快）
+- [x] 验证：维度分配不变（dim 0-1 subpixel jitter, per-bounce base = 2 + bounce × 12），现有采样行为正确
+- [x] 请求用户在 CLion 中编译验证（低 spp 下噪声更均匀，收敛更快）
 
 ## Step 11：Render Resolution Decoupling
 

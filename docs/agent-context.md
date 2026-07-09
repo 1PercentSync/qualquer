@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4.5 — 收敛质量 + DLSS-RR + 自适应
-- **进度**：Phase 4.5 Step 10 第三小项完成：`rng.cuh` 重写（xxhash32 + sobol_sample + sobol_rng，旧 `rng()` 移除）
+- **进度**：Phase 4.5 Step 10 完成（Sobol + hash 去相关 RNG，env rotation sin/cos 预计算，OptiX IR 部署链修复，编译验证通过）
 
 ### 下一个任务
 
-Phase 4.5 Step 10 第四小项：验证（调用点迁移到 sobol_rng，维度分配不变）
+Phase 4.5 Step 11 第一小项：`render_width` / `render_height` 参数（渲染分辨率与 swapchain 解耦）
 
 ---
 
