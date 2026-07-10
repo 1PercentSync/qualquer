@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4.5 — 收敛质量 + DLSS-RR + 自适应
-- **进度**：Phase 4.5 Step 13 第二小项完成：DlssRR 封装类（init/destroy/create_feature/release_feature + cache_optimal_settings + resolve_render_height）
+- **进度**：Phase 4.5 Step 13 第三小项完成：资源管理（Renderer resize 路径接入 DlssRR create_feature + Application 持有 DlssRR 生命周期）。NGX init 返回 InvalidParameter，待排查
 
 ### 下一个任务
 
-Phase 4.5 Step 13 第三小项：资源管理（resize/分辨率变化时 release + recreate）
+Phase 4.5 Step 13 第四小项：请求用户在 CLion 中编译验证（DLSS-RR 初始化成功、feature 创建成功，渲染输出不变）
 
 ---
 
