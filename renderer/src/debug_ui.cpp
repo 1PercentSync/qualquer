@@ -5,6 +5,8 @@
 
 #include <qualquer/renderer/debug_ui.h>
 
+#include <qualquer/optix/dlss_rr.h>
+
 #include <algorithm>
 #include <filesystem>
 #include <ranges>
@@ -187,6 +189,9 @@ namespace qualquer::renderer {
         draw_path_tracing(ctx, actions, frame_stats_);
 
         ImGui::Separator();
+        draw_dlss(ctx, actions);
+
+        ImGui::Separator();
         draw_scene_info(ctx);
 
         ImGui::Separator();
@@ -290,7 +295,11 @@ namespace qualquer::renderer {
     void DebugUI::draw_path_tracing(const DebugUIContext &ctx, DebugUIActions &action,
                                     const FrameStats &stats) {
         const float sps = stats.avg_fps * static_cast<float>(ctx.settings.samples_per_frame);
-        ImGui::Text("Samples: %u  (%.0f sps)", ctx.accumulated_samples, sps);
+        if (!ctx.settings.dlss_enabled) {
+            ImGui::Text("Samples: %u  (%.0f sps)", ctx.accumulated_samples, sps);
+        } else {
+            ImGui::Text("%.0f sps", sps);
+        }
 
         auto bounces = static_cast<int>(ctx.settings.max_bounces);
         if (ImGui::SliderInt("Max Bounces", &bounces, 1, 32)) {
@@ -407,5 +416,73 @@ namespace qualquer::renderer {
         ImGui::Text("IBL Rotation: %.1f%s",
                      glm::degrees(ctx.settings.env_rotation), "\xC2\xB0");
         ImGui::TextDisabled("Left drag to rotate");
+    }
+
+    void DebugUI::draw_dlss(const DebugUIContext &ctx, DebugUIActions &action) {
+        const auto &dlss = ctx.dlss_rr;
+        const bool available = dlss.available();
+
+        // Enable checkbox — grayed out when hardware/driver doesn't support DLSS-RR.
+        if (!available) {
+            ImGui::BeginDisabled();
+        }
+        ImGui::Checkbox("DLSS Ray Reconstruction", &ctx.settings.dlss_enabled);
+        if (!available) {
+            ImGui::EndDisabled();
+            ImGui::SameLine();
+            ImGui::TextDisabled("(not supported)");
+            return;
+        }
+
+        if (!ctx.settings.dlss_enabled) {
+            return;
+        }
+
+        // Render Preset combo (Default / D / E). Change triggers feature recreate.
+        {
+            constexpr const char *labels[] = {"Default", "D", "E"};
+            constexpr optix::DlssRenderPreset values[] = {
+                optix::DlssRenderPreset::Default,
+                optix::DlssRenderPreset::D,
+                optix::DlssRenderPreset::E,
+            };
+
+            int current = 0;
+            for (int i = 0; i < 3; ++i) {
+                if (values[i] == ctx.dlss_preset) {
+                    current = i;
+                }
+            }
+
+            if (ImGui::Combo("Render Preset", &current, labels, 3)) {
+                ctx.dlss_preset = values[current];
+                action.dlss_preset_changed = true;
+            }
+        }
+
+        // Read-only info when feature is active.
+        if (dlss.feature_active()) {
+            const auto resolved = dlss.resolve_render_height(
+                ctx.settings.render_height,
+                ctx.swapchain.extent.height);
+
+            constexpr const char *mode_names[] = {
+                "Max Performance", "Balanced", "Max Quality",
+                "Ultra Performance", "Ultra Quality", "DLAA",
+            };
+            const auto mode_idx = static_cast<uint32_t>(resolved.mode);
+            ImGui::Text("Quality: %s", mode_idx < 6 ? mode_names[mode_idx] : "?");
+
+            const uint32_t rw = compute_render_width(
+                ctx.settings.render_height,
+                ctx.swapchain.extent.width,
+                ctx.swapchain.extent.height);
+            const float ratio = static_cast<float>(ctx.swapchain.extent.height)
+                              / static_cast<float>(ctx.settings.render_height);
+            ImGui::Text("Render: %ux%u -> %ux%u (%.2fx)",
+                        rw, ctx.settings.render_height,
+                        ctx.swapchain.extent.width, ctx.swapchain.extent.height,
+                        ratio);
+        }
     }
 } // namespace qualquer::renderer

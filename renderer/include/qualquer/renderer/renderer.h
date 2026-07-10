@@ -17,6 +17,7 @@
 #include <qualquer/optix/accel_structure.h>
 #include <qualquer/optix/cuda_array_buffer.h>
 #include <qualquer/optix/cuda_buffer.h>
+#include <qualquer/optix/dlss_rr.h>
 #include <qualquer/optix/pipeline.h>
 #include <qualquer/renderer/camera.h>
 #include <qualquer/renderer/launch_params.h>
@@ -26,7 +27,6 @@
 
 namespace qualquer::optix {
     class Context;
-    class DlssRR;
 }
 
 namespace qualquer::vulkan {
@@ -134,6 +134,9 @@ namespace qualquer::renderer {
 
         /** @brief Frame delta time in milliseconds (for DLSS InFrameTimeDeltaInMsec). */
         float frame_time_ms = 0.0f;
+
+        /** @brief DLSS render preset for feature recreation on resolution change. */
+        optix::DlssRenderPreset dlss_preset = optix::DlssRenderPreset::E;
     };
 
     /**

@@ -219,13 +219,16 @@ namespace qualquer::optix {
         /** @brief NGX parameter interface. Null before init. */
         [[nodiscard]] NVSDK_NGX_Parameter *ngx_params() const { return ngx_params_; }
 
-    private:
         /**
-         * @brief Releases the current DLSS-RR feature.
+         * @brief Releases the current DLSS-RR feature, freeing its VRAM.
          *
-         * Called internally by create_feature (before recreating) and destroy.
+         * Called internally by create_feature (before recreating), destroy,
+         * and externally when the user disables DLSS (immediate VRAM release).
+         * Idempotent: no-op when no feature is active.
          */
         void release_feature();
+
+    private:
 
         bool available_ = false;
         bool initialized_ = false;

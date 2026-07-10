@@ -172,6 +172,9 @@ namespace qualquer::app {
         /** @brief DLSS Ray Reconstruction lifecycle (NGX init/feature management). */
         optix::DlssRR dlss_rr_;
 
+        /** @brief Active DLSS render preset (UI-driven, recreates feature on change). */
+        optix::DlssRenderPreset dlss_preset_ = optix::DlssRenderPreset::E;
+
         /** @brief Single-frame render content (CUDA submit + Vulkan recording). */
         renderer::Renderer renderer_;
 

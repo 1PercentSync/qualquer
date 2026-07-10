@@ -14,6 +14,11 @@
 #include <qualquer/vulkan/context.h>
 #include <qualquer/vulkan/swapchain.h>
 
+namespace qualquer::optix {
+    class DlssRR;
+    enum class DlssRenderPreset : uint32_t;
+}
+
 namespace qualquer::renderer {
     /**
      * @brief Data passed into DebugUI::draw each frame.
@@ -67,7 +72,7 @@ namespace qualquer::renderer {
          */
         const std::string &env_map_path;
 
-        // ---- Step 8: PT parameters ----
+        // ---- Path tracing parameters ----
 
         /**
          * @brief Runtime render settings (mutable for slider write-back).
@@ -85,6 +90,14 @@ namespace qualquer::renderer {
 
         /** @brief Scene asset statistics (read-only snapshot). */
         const SceneStats &scene_stats;
+
+        // ---- DLSS-RR ----
+
+        /** @brief DLSS-RR wrapper (read-only for availability/feature queries). */
+        const optix::DlssRR &dlss_rr;
+
+        /** @brief Current DLSS render preset (mutable for combo write-back). */
+        optix::DlssRenderPreset &dlss_preset;
     };
 
     /**
@@ -127,6 +140,9 @@ namespace qualquer::renderer {
 
         /** @brief True if the user clicked the manual accumulation reset button. */
         bool accum_reset_requested = false;
+
+        /** @brief True if the DLSS render preset was changed (needs feature recreate). */
+        bool dlss_preset_changed = false;
     };
 
     /**
@@ -296,5 +312,18 @@ namespace qualquer::renderer {
          * @param action Receives the load request and the picked path.
          */
         static void draw_env_map(const DebugUIContext &ctx, DebugUIActions &action);
+
+        /**
+         * @brief Renders the DLSS-RR section: enable toggle, preset combo,
+         *        quality mode, resolution, and VRAM.
+         *
+         * The enable checkbox writes settings.dlss_enabled directly; grayed
+         * out when DLSS-RR is unavailable. Preset combo sets dlss_preset and
+         * raises dlss_preset_changed so Application recreates the feature.
+         *
+         * @param ctx    Provides DlssRR (availability/quality mode) and settings.
+         * @param action Receives dlss_preset_changed on preset combo change.
+         */
+        static void draw_dlss(const DebugUIContext &ctx, DebugUIActions &action);
     };
 } // namespace qualquer::renderer

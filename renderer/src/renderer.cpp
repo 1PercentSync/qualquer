@@ -458,15 +458,29 @@ namespace qualquer::renderer {
                          width, height);
         }
 
-        // Recreate DLSS-RR feature when either resolution changed. Both resize
-        // blocks above drain the streams, so it is safe to release + recreate
-        // the NGX feature handle here.
-        if (render_res_changed || display_res_changed) {
-            if (display_res_changed) {
+        // Recreate DLSS-RR feature when resolution changed, or create it for
+        // the first time when the user enables DLSS. Both resize blocks above
+        // drain the streams; the enable case drains here before creating.
+        const bool dlss_needs_feature = scene.settings.dlss_enabled && dlss_rr.available()
+                                        && !dlss_rr.feature_active();
+        if (render_res_changed || display_res_changed || dlss_needs_feature) {
+            if (!dlss_rr.feature_active()) {
+                // First creation or re-enable: drain streams since no resize
+                // block did it, and ensure optimal settings are cached.
+                CUDA_CHECK(cudaStreamSynchronize(cuda_context.compute_stream));
+                CUDA_CHECK(cudaStreamSynchronize(cuda_context.display_stream));
+                dlss_rr.cache_optimal_settings(width, height);
+            } else if (display_res_changed) {
                 dlss_rr.cache_optimal_settings(width, height);
             }
             dlss_rr.create_feature(render_width, render_height, width, height,
-                                   optix::DlssRenderPreset::E, cuda_context.display_stream);
+                                   scene.dlss_preset, cuda_context.display_stream);
+        }
+        // Release feature when user disables DLSS (free VRAM immediately).
+        if (!scene.settings.dlss_enabled && dlss_rr.feature_active()) {
+            CUDA_CHECK(cudaStreamSynchronize(cuda_context.compute_stream));
+            CUDA_CHECK(cudaStreamSynchronize(cuda_context.display_stream));
+            dlss_rr.release_feature();
         }
 
         // Dual-stream overlap: compute_stream runs raygen while display_stream
