@@ -654,6 +654,7 @@ struct BrdfParams {
     float3 F0;             ///< lerp(0.04, base_color, metallic); RGB.
     float3 base_color;     ///< Linear RGB base color (EON single-scatter albedo input).
     float3 turquin_comp;   ///< Per-channel specular compensation multiplier (RGB).
+    float3 E_glossy_rgb;   ///< Per-channel specular directional reflectance (DLSS-RR specular albedo).
     float3 diffuse_weight; ///< (1-metallic) * (1 - E_glossy_per_channel); RGB.
     float  alpha;          ///< roughness^2 (specular primitives); caller clamps >= 1e-4.
     float  r;              ///< Linear roughness in [0,1] (EON / E_ss / E_glossy).
@@ -717,13 +718,14 @@ __forceinline__ __device__ BrdfParams init_brdf_params(
         turquin_compensation(p.F0.y, E_ss_val),
         turquin_compensation(p.F0.z, E_ss_val));
 
+    p.E_glossy_rgb = make_float3(
+        E_glossy(p.F0.x, roughness, p.NdotV),
+        E_glossy(p.F0.y, roughness, p.NdotV),
+        E_glossy(p.F0.z, roughness, p.NdotV));
+
     if (metallic < 1.0f) {
         const float3 one = make_float3(1.0f, 1.0f, 1.0f);
-        const float3 E_glossy_rgb = make_float3(
-            E_glossy(p.F0.x, roughness, p.NdotV),
-            E_glossy(p.F0.y, roughness, p.NdotV),
-            E_glossy(p.F0.z, roughness, p.NdotV));
-        p.diffuse_weight = (1.0f - metallic) * (one - E_glossy_rgb);
+        p.diffuse_weight = (1.0f - metallic) * (one - p.E_glossy_rgb);
     } else {
         p.diffuse_weight = make_float3(0.0f, 0.0f, 0.0f);
     }

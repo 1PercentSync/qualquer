@@ -374,6 +374,49 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
 
     const uint3 launch_idx = optixGetLaunchIndex();
     const uint32_t pixel_index = launch_idx.y * params.width + launch_idx.x;
+
+    // ---- Aux G-buffer writes (bounce 0 only, hit pixels) ----
+    if (bounce == 0) {
+        const int sx = static_cast<int>(launch_idx.x);
+        const int sy = static_cast<int>(launch_idx.y);
+
+        // View-space Z depth: dot(camera_forward, hitPos - camera_origin).
+        // Camera forward = inv_view * (0,0,-1,0); camera origin = inv_view * (0,0,0,1).
+        // inv_view is an orthonormal rotation + translation, so the extracted
+        // forward direction is already unit length (no normalize needed).
+        const float3 cam_forward = make_float3(
+            -params.inv_view.rows[0].z,
+            -params.inv_view.rows[1].z,
+            -params.inv_view.rows[2].z);
+        const float3 cam_origin = make_float3(
+            params.inv_view.rows[0].w,
+            params.inv_view.rows[1].w,
+            params.inv_view.rows[2].w);
+        const float view_z = dot(cam_forward, world_pos - cam_origin);
+        surf2Dwrite(view_z, params.aux_depth,
+                    sx * static_cast<int>(sizeof(float)), sy);
+
+        // Diffuse albedo: raw base_color (not pre-multiplied by (1-metallic)).
+        surf2Dwrite(make_float4(base_color.x, base_color.y, base_color.z, 1.0f),
+                    params.aux_diffuse_albedo,
+                    sx * static_cast<int>(sizeof(float4)), sy);
+
+        // Specular albedo: E_glossy per channel (Turquin-compensated specular
+        // directional reflectance, self-consistent with our energy compensation).
+        surf2Dwrite(make_float4(bp.E_glossy_rgb.x, bp.E_glossy_rgb.y, bp.E_glossy_rgb.z, 1.0f),
+                    params.aux_specular_albedo,
+                    sx * static_cast<int>(sizeof(float4)), sy);
+
+        // World-space shading normal.
+        surf2Dwrite(make_float4(N_shading.x, N_shading.y, N_shading.z, 0.0f),
+                    params.aux_normals,
+                    sx * static_cast<int>(sizeof(float4)), sy);
+
+        // Linear roughness.
+        surf2Dwrite(roughness, params.aux_roughness,
+                    sx * static_cast<int>(sizeof(float)), sy);
+    }
+
     const uint32_t sample_index = payload_get_sample_index();
     const uint32_t dim_base = bounce_dim_base(bounce);
 
