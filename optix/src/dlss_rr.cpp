@@ -206,6 +206,83 @@ namespace qualquer::optix {
                      render_width, render_height, display_width, display_height);
     }
 
+    void DlssRR::evaluate(const EvalInput &input) {
+        if (!ngx_handle_ || !ngx_params_) {
+            spdlog::error("DLSS-RR: evaluate called without active feature");
+            return;
+        }
+
+        NVSDK_NGX_CUDA_DLSSD_Eval_Params eval{};
+
+        // ---- Color I/O ----
+        // CUDA API: void* fields point to the address of a CUtexObject (input)
+        // or CUsurfObject (output). The SDK reads the object handle through
+        // the pointer; the pointed-to value must survive the evaluate call.
+        eval.pInColor = const_cast<cudaTextureObject_t *>(&input.color_tex);
+        eval.pInOutput = const_cast<cudaSurfaceObject_t *>(&input.output_surf);
+
+        // ---- Aux G-buffer ----
+        eval.pInDepth = const_cast<cudaTextureObject_t *>(&input.depth_tex);
+        eval.pInMotionVectors = const_cast<cudaTextureObject_t *>(&input.motion_vectors_tex);
+        eval.pInDiffuseAlbedo = const_cast<cudaTextureObject_t *>(&input.diffuse_albedo_tex);
+        eval.pInSpecularAlbedo = const_cast<cudaTextureObject_t *>(&input.specular_albedo_tex);
+        eval.pInNormals = const_cast<cudaTextureObject_t *>(&input.normals_tex);
+        eval.pInRoughness = const_cast<cudaTextureObject_t *>(&input.roughness_tex);
+
+        // Specular hit distance: not provided (D32). nullptr tells the SDK
+        // this signal is absent, which is more correct than feeding all-infinity.
+        eval.pInSpecularHitDistance = nullptr;
+
+        // ---- Jitter ----
+        // Input is raw [0,1) Sobol pixel offset. NGX wants the de-jitter offset
+        // (negated, centered at pixel center). All three NVIDIA reference
+        // projects (optix-subd, vk_denoise_dlssrr, vk_gltf_renderer) negate.
+        eval.InJitterOffsetX = -(input.jitter_x - 0.5f);
+        eval.InJitterOffsetY = -(input.jitter_y - 0.5f);
+
+        // ---- Motion vector scale ----
+        // Our MVs are already in pixel space (current-prev VP projection diff
+        // scaled by resolution). No additional scaling needed.
+        eval.InMVScaleX = 1.0f;
+        eval.InMVScaleY = 1.0f;
+
+        // ---- Render subrect (full frame, no subrect offset) ----
+        eval.InRenderSubrectDimensions = {input.render_width, input.render_height};
+
+        // ---- Matrices ----
+        // NGX expects row-major float[16]. GLM stores column-major; transpose
+        // converts to row-major memory layout (vk_gltf_renderer approach,
+        // equivalent to optix-subd's native row-major otk::Matrix4x4).
+        // Temporary storage must outlive the evaluate call.
+        float view_row_major[16];
+        float proj_row_major[16];
+        for (int r = 0; r < 4; ++r) {
+            for (int c = 0; c < 4; ++c) {
+                // GLM column-major: input[col*4 + row] → row-major: out[row*4 + col]
+                view_row_major[r * 4 + c] = input.view_matrix[c * 4 + r];
+                proj_row_major[r * 4 + c] = input.projection_matrix[c * 4 + r];
+            }
+        }
+        eval.pInWorldToViewMatrix = view_row_major;
+        eval.pInViewToClipMatrix = proj_row_major;
+
+        // ---- Coordinate system ----
+        // OptiX/CUDA Y-up. Both optix-subd and Blender Cycles set this to 1.
+        eval.InIndicatorInvertYAxis = 1;
+
+        // ---- Reset ----
+        eval.InReset = input.reset ? 1 : 0;
+
+        // ---- Frame time (optional, helps DLSS estimate motion blur) ----
+        eval.InFrameTimeDeltaInMsec = input.frame_time_ms;
+
+        // ---- Pre-exposure ----
+        // Color is not pre-multiplied by exposure. SDK defaults 0→1.0.
+        eval.InPreExposure = 1.0f;
+
+        NGX_CHECK(NGX_CUDA_EVALUATE_DLSSD_EXT(ngx_handle_, ngx_params_, &eval));
+    }
+
     void DlssRR::release_feature() {
         if (ngx_handle_) {
             NGX_CHECK(NVSDK_NGX_CUDA_ReleaseFeature(ngx_handle_));

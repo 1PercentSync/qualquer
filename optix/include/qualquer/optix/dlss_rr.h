@@ -157,6 +157,56 @@ namespace qualquer::optix {
         [[nodiscard]] ResolvedRenderHeight resolve_render_height(uint32_t requested_height,
                                                                  uint32_t display_height) const;
 
+        /**
+         * @brief Per-frame inputs for DLSS-RR evaluation.
+         *
+         * All texture objects point to render-resolution CUDA arrays (read via
+         * CUtexObject* by NGX). The output surface is display-resolution.
+         * Jitter is the raw [0,1) pixel offset from Sobol; evaluate() negates
+         * and centers it to produce the de-jitter offset NGX expects.
+         */
+        struct EvalInput {
+            // ---- Color I/O ----
+            cudaTextureObject_t color_tex;        ///< Noisy HDR input (read slot).
+            cudaSurfaceObject_t output_surf;      ///< Denoised+upscaled HDR output.
+
+            // ---- Aux G-buffer (render resolution) ----
+            cudaTextureObject_t depth_tex;
+            cudaTextureObject_t motion_vectors_tex;
+            cudaTextureObject_t diffuse_albedo_tex;
+            cudaTextureObject_t specular_albedo_tex;
+            cudaTextureObject_t normals_tex;
+            cudaTextureObject_t roughness_tex;
+
+            // ---- Resolution ----
+            uint32_t render_width;
+            uint32_t render_height;
+
+            // ---- Jitter (raw Sobol [0,1) pixel offset, NOT de-jitter) ----
+            float jitter_x;
+            float jitter_y;
+
+            // ---- Matrices (GLM column-major, evaluate() transposes to row-major) ----
+            const float *view_matrix;         ///< glm::value_ptr(view), 16 floats.
+            const float *projection_matrix;   ///< glm::value_ptr(projection), 16 floats.
+
+            // ---- Per-frame state ----
+            bool reset;                       ///< Scene change / camera teleport.
+            float frame_time_ms;              ///< Delta time in milliseconds.
+        };
+
+        /**
+         * @brief Evaluates DLSS-RR for one frame on the feature's stream.
+         *
+         * Fills NVSDK_NGX_CUDA_DLSSD_Eval_Params and calls
+         * NGX_CUDA_EVALUATE_DLSSD_EXT. The feature must be active
+         * (feature_active() == true). The call is enqueued on the stream
+         * passed at create_feature time (display_stream).
+         *
+         * @param input Per-frame evaluation inputs.
+         */
+        void evaluate(const EvalInput &input);
+
         /** @brief Whether DLSS-RR is available on this system (valid after init). */
         [[nodiscard]] bool available() const { return available_; }
 
