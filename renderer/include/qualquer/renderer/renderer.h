@@ -26,6 +26,7 @@
 
 namespace qualquer::optix {
     class Context;
+    class DlssRR;
 }
 
 namespace qualquer::vulkan {
@@ -212,6 +213,7 @@ namespace qualquer::renderer {
          * @param frame_index  Current frame-in-flight slot, indexing external_semaphores.
          */
         void submit_cuda(const optix::Context &cuda_context,
+                         optix::DlssRR &dlss_rr,
                          const SceneRenderInput &scene,
                          uint32_t width,
                          uint32_t height,

@@ -153,6 +153,9 @@ namespace qualquer::optix {
          */
         cudaStream_t display_stream = nullptr;
 
+        /** @brief Selected CUDA device index, for DLSS-RR and other device-level queries. */
+        [[nodiscard]] int device_id() const { return device_id_; }
+
     private:
         /** @brief Index of the selected CUDA device, for subsequent runtime calls. */
         int device_id_ = -1;

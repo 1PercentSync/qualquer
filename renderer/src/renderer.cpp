@@ -18,6 +18,7 @@
 #include <vulkan/vulkan.h>
 
 #include <qualquer/optix/context.h>
+#include <qualquer/optix/dlss_rr.h>
 #include <qualquer/optix/cuda_check.h>
 #include <qualquer/optix/optix_check.h>
 #include <qualquer/optix/pipeline.h>
@@ -370,6 +371,7 @@ namespace qualquer::renderer {
     }
 
     void Renderer::submit_cuda(const optix::Context &cuda_context,
+                               optix::DlssRR &dlss_rr,
                                const SceneRenderInput &scene,
                                const uint32_t width,
                                const uint32_t height,
@@ -382,6 +384,7 @@ namespace qualquer::renderer {
         // arrives, so the uninitialised contents are never consumed.
         const uint32_t render_height = scene.settings.render_height;
         const uint32_t render_width = compute_render_width(render_height, width, height);
+        bool render_res_changed = false;
         if (render_width != render_width_ || render_height != render_height_) {
             CUDA_CHECK(cudaStreamSynchronize(cuda_context.compute_stream));
             CUDA_CHECK(cudaStreamSynchronize(cuda_context.display_stream));
@@ -398,6 +401,7 @@ namespace qualquer::renderer {
             accum_counts_ = {0, 0};
             render_width_ = render_width;
             render_height_ = render_height;
+            render_res_changed = true;
             spdlog::info("Render buffers reallocated ({}x{} render resolution)",
                          render_width, render_height);
         }
@@ -405,14 +409,27 @@ namespace qualquer::renderer {
         // DLSS output buffer tracks display resolution (window resize), not
         // render resolution. Drain both streams before reallocating — the
         // previous frame's tonemap may still be reading the old buffer.
+        bool display_res_changed = false;
         if (width != dlss_output_width_ || height != dlss_output_height_) {
             CUDA_CHECK(cudaStreamSynchronize(cuda_context.compute_stream));
             CUDA_CHECK(cudaStreamSynchronize(cuda_context.display_stream));
             dlss_output_.resize(width, height);
             dlss_output_width_ = width;
             dlss_output_height_ = height;
+            display_res_changed = true;
             spdlog::info("DLSS output buffer reallocated ({}x{} display resolution)",
                          width, height);
+        }
+
+        // Recreate DLSS-RR feature when either resolution changed. Both resize
+        // blocks above drain the streams, so it is safe to release + recreate
+        // the NGX feature handle here.
+        if (render_res_changed || display_res_changed) {
+            if (display_res_changed) {
+                dlss_rr.cache_optimal_settings(width, height);
+            }
+            dlss_rr.create_feature(render_width, render_height, width, height,
+                                   optix::DlssRenderPreset::E, cuda_context.display_stream);
         }
 
         // Dual-stream overlap: compute_stream runs raygen while display_stream
