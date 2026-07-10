@@ -148,8 +148,8 @@ MUSTREAD:4
 
 ## Step 14：DLSS-RR 管线接入
 
-- [ ] Ping-pong buffer 迁移：`CudaBuffer<float4>` → `CudaArrayBuffer<float4>`；LaunchParams 累积 buffer 字段改为 `color_output`（surf）/ `color_input`（tex）+ 新增 `dlss_enabled`；Renderer `accum_buffers_` 类型与 init/destroy/resize 适配
-- [ ] Raygen 适配：写入改 surf2Dwrite、Separate Sum 读改 tex2D；`dlss_enabled` 为 1 时单帧输出（不读 read buffer、不累加），为 0 时保留 Separate Sum
+- [x] Ping-pong buffer 迁移：`CudaBuffer<float4>` → `CudaArrayBuffer<float4>`；LaunchParams 累积 buffer 字段改为 `color_output`（surf）/ `color_input`（tex）+ 新增 `dlss_enabled`；Renderer `accum_buffers_` 类型与 init/destroy/resize 适配
+- [x] Raygen 适配：写入改 surf2Dwrite、Separate Sum 读改 tex2D；`dlss_enabled` 为 1 时单帧输出（不读 read buffer、不累加），为 0 时保留 Separate Sum
 - [ ] DlssRR evaluate：新增 `evaluate()` 方法，填充 `NVSDK_NGX_CUDA_DLSSD_Eval_Params`（aux inputs 传 `CUtexObject*`、output 传 `CUsurfObject*`），调用 `NGX_CUDA_EVALUATE_DLSSD_EXT`
 - [ ] Tonemap 适配：读取源改为 `cudaTextureObject_t`；DLSS ON 读 `dlss_output` tex（1:1 显示分辨率，无除法），OFF 读 accum slot tex（resampling + 除 count）；Renderer `submit_cuda` 双路径分支
 - [ ] UI 适配：新增 DLSS-RR 面板（开/关、render preset 选择、只读显示：当前 quality mode 名称、渲染/输出分辨率、VRAM 占用）；accumulated samples 改为 DLSS OFF 时显示
