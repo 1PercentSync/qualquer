@@ -85,25 +85,12 @@ namespace qualquer::optix {
 
         const std::wstring app_path = get_executable_directory();
 
-        // Provide the executable directory as a DLL search path and enable
-        // verbose NGX logging for init diagnostics.
-        const wchar_t *search_paths[] = {app_path.c_str()};
-        NVSDK_NGX_PathListInfo path_info{search_paths, 1};
-        NVSDK_NGX_LoggingInfo log_info{
-            [](const char *msg, NVSDK_NGX_Logging_Level level, NVSDK_NGX_Feature) {
-                spdlog::info("[NGX] {}", msg);
-            },
-            NVSDK_NGX_LOGGING_LEVEL_VERBOSE,
-            false};
-        NVSDK_NGX_FeatureCommonInfo feature_info{path_info, nullptr, log_info};
-
         // Init NGX with project ID (no NVIDIA-issued app ID required).
         NVSDK_NGX_Result result = NVSDK_NGX_CUDA_Init_with_ProjectID(
             "d8b2224f-2576-4814-92ec-53596756923e",
             NVSDK_NGX_ENGINE_TYPE_CUSTOM,
             "1.0.0",
-            app_path.c_str(),
-            &feature_info
+            app_path.c_str()
         );
 
         if (NVSDK_NGX_FAILED(result)) {
