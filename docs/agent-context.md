@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4.5 — 收敛质量 + DLSS-RR + 自适应
-- **进度**：Phase 4.5 Step 12 第五小项完成：raygen MV（齐次 w=1/0 投影）+ sky 像素 aux 默认值
+- **进度**：Phase 4.5 Step 12 第六小项完成：D37 jitter 提出 loop 外 + closesthit aux 写入限首 sample
 
 ### 下一个任务
 
-Phase 4.5 Step 12 第六小项：多 spp jitter 策略（D37）
+Phase 4.5 Step 12 第七小项：Debug view 验证各 aux buffer 内容正确
 
 ---
 
