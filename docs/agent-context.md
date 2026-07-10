@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4.5 — 收敛质量 + DLSS-RR + 自适应
-- **进度**：Phase 4.5 Step 13 第一小项完成：`third_party/dlss` 预编译二进制集成（STATIC IMPORTED 目标 + optix 层链接 + DLL 部署）
+- **进度**：Phase 4.5 Step 13 第二小项完成：DlssRR 封装类（init/destroy/create_feature/release_feature + cache_optimal_settings + resolve_render_height）
 
 ### 下一个任务
 
-Phase 4.5 Step 13 第二小项：DLSS-RR 封装类
+Phase 4.5 Step 13 第三小项：资源管理（resize/分辨率变化时 release + recreate）
 
 ---
 
