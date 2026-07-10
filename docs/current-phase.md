@@ -626,20 +626,41 @@ ngxParams->Set(NVSDK_NGX_Parameter_FreeMemOnReleaseFeature, 1);
 
 **前帧 VP 矩阵**：LaunchParams 传当前帧和前帧各一个 unjittered `VP = projection × view`（`float4x4`，row-major 供 device `mul()` 使用），MV 计算将 world pos 分别投影到两帧 VP 取差（vk_gltf_renderer `dlss_util.h:87-96` 做法）。host 端每帧末缓存当前帧 VP 作为下帧的 prevVP。
 
-**Stream 分配与管线流程**：
+**Stream 分配与管线流程**（DLSS ON / OFF 双路径）：
 
-| Stream | 工作 |
-|--------|------|
-| compute_stream | raygen（写 noisy HDR 到 ping-pong buffer） |
-| display_stream | DLSS-RR（读 noisy buffer → 写中间 HDR buffer，输出分辨率）→ tonemap（读中间 HDR → 写 LDR display buffer）→ signal interop semaphore |
+| Stream | DLSS ON | DLSS OFF（fallback） |
+|--------|---------|---------------------|
+| compute_stream | raygen（单帧 noisy HDR → surf2Dwrite 到 write slot） | raygen（Separate Sum 累加 → surf2Dwrite 到 write slot） |
+| display_stream | DLSS-RR eval（读 read slot tex → 写 dlss_output surf）→ tonemap（读 dlss_output tex, 1:1, 无除法 → 写 display surf）→ signal | tonemap（读 read slot tex, resampling + 除 count → 写 display surf）→ signal |
 
-DLSS-RR 在 display_stream 上执行，与 compute_stream 的 raygen 并行。读的是上一帧的 noisy buffer（ping-pong），不 stall raygen。DLSS-RR feature 创建时传入 display_stream（`InCUStream`）。
+DLSS-RR 在 display_stream 上执行，与 compute_stream 的 raygen 并行。读的是上一帧的 noisy buffer（ping-pong），不 stall raygen。DLSS-RR feature 创建时传入 display_stream（`InCUStream`）。DLSS OFF 时 display_stream 不执行 DLSS-RR eval，tonemap 直接读 ping-pong 累积 buffer（与 Phase 4 行为一致，仅读写方式从线性指针改为 tex/surf）。
 
-**中间 HDR buffer**：新增资源，输出分辨率，float4。DLSS-RR 输出目标，tonemap 输入源。同一 stream 上顺序执行无竞争。
+**中间 HDR buffer**：新增资源，输出分辨率，float4。DLSS-RR 输出目标，tonemap 输入源。同一 stream 上顺序执行无竞争。仅 DLSS ON 时使用。
 
 **重建条件**：渲染分辨率或输出分辨率（窗口 resize）变化时 release + recreate feature。
 
 **参考实现**：`D:\Github\optix-subd\denoiserDlss.cu`
+
+#### Ping-pong Buffer 类型迁移
+
+DLSS-RR CUDA API 的 `pInColor` 要求 `CUtexObject*`（指向 `cudaTextureObject_t` 的指针），`pInOutput` 要求 `CUsurfObject*`（指向 `cudaSurfaceObject_t` 的指针）。所有 aux input 同理。这是 DLSS CUDA API 的硬性要求（参考 optix-subd `denoiserDlss.cu`、Blender Cycles `denoiser_dlss.cpp`，均使用 `CUarray` + tex/surf objects）。
+
+当前 ping-pong 累积 buffer 是 `CudaBuffer<float4>`（线性 CUDA 内存），没有 texture object，无法直接传给 DLSS。
+
+**迁移**：`std::array<CudaBuffer<float4>, 2>` → `std::array<CudaArrayBuffer<float4>, 2>`。
+
+- raygen 写：`accumulation_buffer[pixel]` → `surf2Dwrite(color, color_output, x * sizeof(float4), y)`
+- raygen 读（Separate Sum，DLSS OFF）：`accumulation_buffer_read[pixel]` → `tex2D<float4>(color_input, x + 0.5f, y + 0.5f)`
+- tonemap 读（DLSS OFF fallback）：线性指针 → `tex2D<float4>(color_input, ...)`
+- DLSS 读：`CudaArrayBuffer::tex_object()` 传入 eval params 的 `pInColor`
+
+**LaunchParams 变更**：
+
+- `float4* accumulation_buffer` → `cudaSurfaceObject_t color_output`（raygen surf2Dwrite 写入）
+- `const float4* accumulation_buffer_read` → `cudaTextureObject_t color_input`（DLSS OFF 时 Separate Sum 读旧值；DLSS ON 时不使用）
+- 新增 `uint32_t dlss_enabled`：raygen 判断单帧输出（1）还是 Separate Sum 累加（0）
+
+`sample_count` 保留：DLSS OFF 时 raygen 和 tonemap 仍依赖此字段。DLSS ON 时 raygen 忽略它。
 
 #### Sobol + Hash 去相关
 

@@ -148,12 +148,13 @@ MUSTREAD:4
 
 ## Step 14：DLSS-RR 管线接入
 
-- [ ] Raygen 改单帧输出：移除 Separate Sum 累加逻辑，raygen 每帧输出单帧 noisy HDR 到 write buffer；ping-pong 保留——raygen 写 buffer A 时 DLSS-RR 读上一帧的 buffer B
-- [ ] 每帧执行：`NGX_CUDA_EVALUATE_DLSSD_EXT` 在 display_stream 上，填充 eval params，读 noisy buffer → 写中间 HDR buffer
-- [ ] Tonemap 适配：移除 sum/count 除法，tonemap kernel 在 display_stream 上读中间 HDR buffer、应用 exposure + PBR Neutral、写 LDR display buffer
-- [ ] UI 适配：移除 accumulated samples 显示，新增 DLSS-RR 面板——开/关（不支持时 disable）、render preset 选择（默认 E）、只读显示：渲染分辨率、输出分辨率、VRAM 占用
-- [ ] InReset：场景切换或相机瞬移（F 键聚焦）时触发
-- [ ] 请求用户在 CLion 中编译验证（DLSS-RR 输出干净放大的画面，render preset 可切换）
+- [ ] Ping-pong buffer 迁移：`CudaBuffer<float4>` → `CudaArrayBuffer<float4>`；LaunchParams 累积 buffer 字段改为 `color_output`（surf）/ `color_input`（tex）+ 新增 `dlss_enabled`；Renderer `accum_buffers_` 类型与 init/destroy/resize 适配
+- [ ] Raygen 适配：写入改 surf2Dwrite、Separate Sum 读改 tex2D；`dlss_enabled` 为 1 时单帧输出（不读 read buffer、不累加），为 0 时保留 Separate Sum
+- [ ] DlssRR evaluate：新增 `evaluate()` 方法，填充 `NVSDK_NGX_CUDA_DLSSD_Eval_Params`（aux inputs 传 `CUtexObject*`、output 传 `CUsurfObject*`），调用 `NGX_CUDA_EVALUATE_DLSSD_EXT`
+- [ ] Tonemap 适配：读取源改为 `cudaTextureObject_t`；DLSS ON 读 `dlss_output` tex（1:1 显示分辨率，无除法），OFF 读 accum slot tex（resampling + 除 count）；Renderer `submit_cuda` 双路径分支
+- [ ] UI 适配：新增 DLSS-RR 面板（开/关、render preset、分辨率/VRAM 只读显示）；accumulated samples 改为 DLSS OFF 时显示
+- [ ] InReset：场景切换或相机瞬移（F 键聚焦）时设置 eval params `InReset=1`
+- [ ] 请求用户在 CLion 中编译验证（ON 输出干净放大画面，OFF 保持原有累积行为，preset 可切换）
 
 ## Step 15：自适应 Sample 数
 
