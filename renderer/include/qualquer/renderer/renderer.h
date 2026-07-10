@@ -331,9 +331,6 @@ namespace qualquer::renderer {
         /** @brief Linear roughness (R32F). */
         optix::CudaArrayBuffer<float> aux_roughness_;
 
-        /** @brief Specular hit distance (R32F). */
-        optix::CudaArrayBuffer<float> aux_specular_hit_dist_;
-
         // ---- DLSS-RR output (display resolution) ----
 
         /**
@@ -385,6 +382,21 @@ namespace qualquer::renderer {
 
         /** @brief Previous-frame env_rotation (accumulation-reset detection). */
         float prev_env_rotation_ = 0.0f;
+
+        /**
+         * @brief Previous-frame unjittered view-projection matrix (row-major).
+         *
+         * Cached at frame end; uploaded as LaunchParams::prev_view_projection
+         * for the next frame's motion vector computation.
+         */
+        float4x4 prev_view_projection_{
+            .rows = {
+                make_float4(1, 0, 0, 0),
+                make_float4(0, 1, 0, 0),
+                make_float4(0, 0, 1, 0),
+                make_float4(0, 0, 0, 1),
+            },
+        };
 
         /**
          * @brief Recorded after raygen completes on compute_stream.

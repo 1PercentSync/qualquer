@@ -260,7 +260,6 @@ namespace qualquer::renderer {
         aux_specular_albedo_.alloc(width, height);
         aux_normals_.alloc(width, height);
         aux_roughness_.alloc(width, height);
-        aux_specular_hit_dist_.alloc(width, height);
 
         // DLSS-RR output at display resolution. Initially display == render
         // (before any user-driven render-height change); resized in submit_cuda
@@ -317,7 +316,6 @@ namespace qualquer::renderer {
         aux_specular_albedo_.free();
         aux_normals_.free();
         aux_roughness_.free();
-        aux_specular_hit_dist_.free();
         dlss_output_.free();
         params_buffer_.free();
         for (auto &event: event_raygen_done_) {
@@ -397,7 +395,6 @@ namespace qualquer::renderer {
             aux_specular_albedo_.resize(render_width, render_height);
             aux_normals_.resize(render_width, render_height);
             aux_roughness_.resize(render_width, render_height);
-            aux_specular_hit_dist_.resize(render_width, render_height);
             accum_counts_ = {0, 0};
             render_width_ = render_width;
             render_height_ = render_height;
@@ -462,6 +459,9 @@ namespace qualquer::renderer {
         prev_samples_per_frame_ = scene.settings.samples_per_frame;
         prev_env_rotation_ = scene.settings.env_rotation;
 
+        // Unjittered VP for motion vector computation (row-major for device mul()).
+        const float4x4 current_vp = to_float4x4(scene.camera.projection * scene.camera.view);
+
         LaunchParams params{
             // Separate-Sum: raygen reads the previous total and writes the new
             // total to the opposite ping-pong slot. When chain_count == 0
@@ -496,6 +496,16 @@ namespace qualquer::renderer {
             .emissive_alias_table = scene.emissive_alias_table,
             .emissive_count = scene.emissive_count,
             .emissive_total_power = scene.emissive_total_power,
+            // Aux G-buffer surfaces for closesthit/raygen writes.
+            .aux_depth = aux_depth_.surf_object(),
+            .aux_motion_vectors = aux_motion_vectors_.surf_object(),
+            .aux_diffuse_albedo = aux_diffuse_albedo_.surf_object(),
+            .aux_specular_albedo = aux_specular_albedo_.surf_object(),
+            .aux_normals = aux_normals_.surf_object(),
+            .aux_roughness = aux_roughness_.surf_object(),
+            // Unjittered VP matrices for motion vector computation.
+            .view_projection = current_vp,
+            .prev_view_projection = prev_view_projection_,
             // sobol_directions filled below via memcpy (array can't be
             // initialized from another array in a designated initializer).
         };
@@ -574,6 +584,7 @@ namespace qualquer::renderer {
                                               ? 0
                                               : chain_count + params.samples_per_frame;
         accum_index_ = 1 - accum_index_;
+        prev_view_projection_ = current_vp;
         ++frame_counter_;
     }
 

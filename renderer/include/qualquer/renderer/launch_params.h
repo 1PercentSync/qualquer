@@ -203,6 +203,44 @@ struct LaunchParams {
     /** @brief Total radiant power across all emissive triangles. */
     float emissive_total_power;
 
+    // ---- Aux G-buffer surfaces (closesthit/raygen write via surf2Dwrite) ----
+
+    /** @brief View-space Z depth (R32F surface). */
+    cudaSurfaceObject_t aux_depth;
+
+    /** @brief Screen-space motion vectors (RG32F surface). */
+    cudaSurfaceObject_t aux_motion_vectors;
+
+    /** @brief Raw base_color diffuse albedo (RGBA32F surface). */
+    cudaSurfaceObject_t aux_diffuse_albedo;
+
+    /** @brief Specular reflectance albedo (RGBA32F surface). */
+    cudaSurfaceObject_t aux_specular_albedo;
+
+    /** @brief World-space shading normal (RGBA32F surface, .w unused). */
+    cudaSurfaceObject_t aux_normals;
+
+    /** @brief Linear roughness (R32F surface). */
+    cudaSurfaceObject_t aux_roughness;
+
+    // ---- Motion vector matrices ----
+
+    /**
+     * @brief Current-frame unjittered view-projection matrix (row-major).
+     *
+     * Used by raygen to project world-space hit positions into current screen
+     * space for motion vector computation.
+     */
+    float4x4 view_projection;
+
+    /**
+     * @brief Previous-frame unjittered view-projection matrix (row-major).
+     *
+     * Used by raygen to project world-space hit positions into previous screen
+     * space. The difference yields the per-pixel motion vector.
+     */
+    float4x4 prev_view_projection;
+
     // ---- Sobol RNG ----
 
     /**
