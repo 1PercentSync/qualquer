@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4.5 — 收敛质量 + DLSS-RR + 自适应
-- **进度**：Phase 4.5 Step 12 第三小项完成：LaunchParams 扩展（6 个 aux surfaceObject + VP / prevVP 矩阵）
+- **进度**：Phase 4.5 Step 12 第四小项完成：closesthit bounce==0 写入 5 个 aux buffer（depth / diffuse albedo / specular albedo / normals / roughness）
 
 ### 下一个任务
 
-Phase 4.5 Step 12 第四小项：Closesthit bounce==0 写入 aux data
+Phase 4.5 Step 12 第五小项：Motion vectors（raygen 计算屏幕空间 MV，hit + miss 像素均写入）
 
 ---
 
