@@ -135,7 +135,7 @@ MUSTREAD:4
 - [x] Closesthit bounce==0 写入：view-space Z depth、diffuse albedo、specular albedo、shading normal、linear roughness
 - [x] Motion vectors：raygen 计算屏幕空间 MV，hit 像素和 miss 像素均需写入
 - [x] 多 spp jitter 策略（D37）：raygen sample loop 内所有 sample 共享同一 subpixel jitter（per-frame），aux data 写一次即可；BRDF/NEE 维度仍 per-sample
-- [ ] Debug view：UI enum 切换显示各 aux buffer 内容（depth / diffuse albedo / specular albedo / normals / roughness / motion vectors）
+- [ ] Debug view 验证：临时修改 tonemap 输出各 aux buffer 内容，确认数据正确后丢弃改动
 - [ ] 请求用户在 CLion 中编译验证（debug view 下各 aux buffer 内容正确）
 
 ## Step 13：DLSS-RR SDK 接入
