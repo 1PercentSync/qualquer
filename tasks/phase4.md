@@ -156,6 +156,11 @@ MUSTREAD:4
 - [ ] InReset：场景切换或相机瞬移（F 键聚焦）时设置 eval params `InReset=1`
 - [ ] 请求用户在 CLion 中编译验证（ON 输出干净放大画面，OFF 保持原有累积行为，preset 可切换）
 
+## Step 14.5：Step 11–14 正确性修复
+
+- [ ] `slider_uint_on_release` / `slider_float_deferred` 弹回修复：widget active 期间将拖拽值存入 ImGui StateStorage，释放帧从 StateStorage 取回最后的拖拽值用于提交（两个函数使用同一模式，一起修复）
+- [ ] 请求用户在 CLion 中编译验证（render height / exposure / FOV 滑块拖拽释放后值正常提交）
+
 ## Step 15：自适应 Sample 数
 
 - [ ] 刷新率查询：GLFW `glfwGetVideoMode` 获取当前显示器刷新率
