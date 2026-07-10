@@ -264,12 +264,15 @@ namespace qualquer::renderer {
         optix::CudaBuffer<GPUGeometryInfo> geometry_info_buffer_;
 
         /**
-         * @brief Ping-pong HDR accumulation buffers (RGBA32F, CUDA-owned).
+         * @brief Ping-pong HDR color buffers (RGBA32F, CUDA array + tex/surf).
          *
-         * Frame N reads buffer [accum_index_] and writes [1 - accum_index_], then
-         * flips the index for the next frame; see technical-decisions.md.
+         * Frame N reads buffer [accum_index_] via texture object and writes
+         * [1 - accum_index_] via surface object, then flips the index for the
+         * next frame. DLSS-RR reads the read slot via CUtexObject*; raygen
+         * writes via surf2Dwrite. CUDA arrays are required for DLSS CUDA API
+         * resource consumption (see current-phase.md "Ping-pong Buffer 类型迁移").
          */
-        std::array<optix::CudaBuffer<float4>, 2> accum_buffers_;
+        std::array<optix::CudaArrayBuffer<float4>, 2> accum_buffers_;
 
         /** @brief Device-side launch-params buffer (one LaunchParams). */
         optix::CudaBuffer<LaunchParams> params_buffer_;

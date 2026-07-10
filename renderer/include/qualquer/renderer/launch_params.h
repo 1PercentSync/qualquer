@@ -102,16 +102,23 @@ static_assert(sizeof(EmissiveTriangle) == 96);
  * definition is included on both sides and must stay layout-compatible.
  */
 struct LaunchParams {
-    /** @brief Device pointer to the accumulation buffer written by raygen (new Separate-Sum total). */
-    float4 *accumulation_buffer;
+    /**
+     * @brief Surface object for raygen color output (write via surf2Dwrite).
+     *
+     * Points to the write slot of the ping-pong CudaArrayBuffer pair.
+     * DLSS ON: raygen writes single-frame noisy HDR.
+     * DLSS OFF: raygen writes Separate-Sum total (old + new).
+     */
+    cudaSurfaceObject_t color_output;
 
     /**
-     * @brief Device pointer to the previous accumulation total (Separate-Sum read side).
+     * @brief Texture object for reading the previous accumulation total.
      *
-     * raygen reads this, adds the current frame's contribution, and writes the
-     * new total to accumulation_buffer. Points to the opposite ping-pong slot.
+     * Points to the read slot of the ping-pong CudaArrayBuffer pair.
+     * DLSS OFF: raygen reads via tex2D for Separate-Sum accumulation.
+     * DLSS ON: not used (raygen writes single-frame output without reading).
      */
-    const float4 *accumulation_buffer_read;
+    cudaTextureObject_t color_input;
 
     /** @brief Render resolution width in pixels (raygen launch X dimension). */
     uint32_t width;
@@ -153,8 +160,18 @@ struct LaunchParams {
      *
      * 0 signals raygen to overwrite the write buffer directly (first sample
      * after reset/init) instead of accumulating from the read buffer.
+     * Only used when dlss_enabled == 0 (Separate Sum fallback).
      */
     uint32_t sample_count;
+
+    /**
+     * @brief DLSS-RR pipeline mode selector.
+     *
+     * 1: raygen writes single-frame noisy HDR (no accumulation, no read).
+     * 0: raygen performs Separate Sum accumulation (reads color_input,
+     *    writes accumulated total to color_output).
+     */
+    uint32_t dlss_enabled;
 
     /**
      * @brief Sine of the IBL Y-axis rotation angle.

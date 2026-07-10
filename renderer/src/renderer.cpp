@@ -244,13 +244,13 @@ namespace qualquer::renderer {
         sbt_hit_.alloc(1);
         sbt_hit_.upload(&record, 1, cuda_context.compute_stream);
 
-        // Two accumulation buffers for ping-pong HDR accumulation. No explicit
-        // clear: accum_counts_ = {0,0} makes raygen overwrite on the first frame
-        // and tonemap output black (count == 0 guard), so uninitialised content
-        // is never read.
-        const std::size_t pixel_count = static_cast<std::size_t>(width) * height;
+        // Two ping-pong color buffers as CUDA arrays (CudaArrayBuffer) for
+        // DLSS-RR texture-object consumption and surf2Dwrite by raygen. No
+        // explicit clear: accum_counts_ = {0,0} makes raygen overwrite on the
+        // first frame and tonemap output black (count == 0 guard), so
+        // uninitialised content is never read.
         for (auto &buffer: accum_buffers_) {
-            buffer.alloc(pixel_count);
+            buffer.alloc(width, height);
         }
 
         // Aux G-buffer channels for DLSS-RR. Allocated at render resolution;
@@ -388,9 +388,8 @@ namespace qualquer::renderer {
         if (render_width != render_width_ || render_height != render_height_) {
             CUDA_CHECK(cudaStreamSynchronize(cuda_context.compute_stream));
             CUDA_CHECK(cudaStreamSynchronize(cuda_context.display_stream));
-            const std::size_t pixel_count = static_cast<std::size_t>(render_width) * render_height;
             for (auto &buffer: accum_buffers_) {
-                buffer.resize(pixel_count);
+                buffer.resize(render_width, render_height);
             }
             aux_depth_.resize(render_width, render_height);
             aux_motion_vectors_.resize(render_width, render_height);
@@ -480,12 +479,11 @@ namespace qualquer::renderer {
         const float4x4 current_vp = to_float4x4(scene.camera.projection * scene.camera.view);
 
         LaunchParams params{
-            // Separate-Sum: raygen reads the previous total and writes the new
-            // total to the opposite ping-pong slot. When chain_count == 0
-            // (reset or first frame), raygen overwrites the write buffer
-            // directly without reading from the read buffer.
-            .accumulation_buffer = accum_buffers_[1 - accum_index_].data(),
-            .accumulation_buffer_read = accum_buffers_[accum_index_].data(),
+            // Ping-pong color buffers as CUDA arrays: raygen writes via
+            // surf2Dwrite to the write slot, reads (DLSS OFF only) via tex2D
+            // from the read slot.
+            .color_output = accum_buffers_[1 - accum_index_].surf_object(),
+            .color_input = accum_buffers_[accum_index_].tex_object(),
             .width = render_width,
             .height = render_height,
             .frame_index = frame_counter_,
@@ -498,6 +496,7 @@ namespace qualquer::renderer {
             .max_bounces = scene.settings.max_bounces,
             .samples_per_frame = effective_spp,
             .sample_count = chain_count,
+            .dlss_enabled = dlss_rr.feature_active() ? 1u : 0u,
             // The rotation angle is a launch constant: precompute the sin/cos
             // pair so device code avoids a per-hit sincosf.
             .env_rotation_sin = std::sin(scene.settings.env_rotation),
@@ -571,12 +570,10 @@ namespace qualquer::renderer {
         // that this frame's tonemap is about to read.
         CUDA_CHECK(cudaStreamWaitEvent(cuda_context.display_stream, event_raygen_done_[prev_slot]));
 
-        // Tonemap divides by the count that matches the buffer it reads.
-        // accum_counts_[accum_index_] is the true sample count in that buffer;
-        // it was set at the END of the frame that last wrote it. After a
-        // render-resolution change that count is 0, so the kernel writes black
-        // without sampling the freshly reallocated (uninitialised) buffer.
-        launch_tonemap(accum_buffers_[accum_index_].data(),
+        // Tonemap reads the ping-pong read slot via texture object. In DLSS
+        // OFF mode it divides by the sample count (Separate Sum); in DLSS ON
+        // mode the tonemap source will change in a later sub-item (Step 14.4).
+        launch_tonemap(accum_buffers_[accum_index_].tex_object(),
                        cuda_context.display_surface,
                        render_width, render_height,
                        width, height,

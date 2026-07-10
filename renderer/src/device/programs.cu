@@ -69,8 +69,10 @@ __global__ void __raygen__rg() { // NOLINT(*-reserved-identifier)
     // the read buffer would access uninitialized memory on the first frame
     // after allocation. Host sets the write-slot count to 0 to match.
     if (params.traversable == 0) {
-        params.accumulation_buffer[pixel_index] =
-                make_float4(0.0f, 0.0f, 0.0f, 1.0f);
+        surf2Dwrite(make_float4(0.0f, 0.0f, 0.0f, 1.0f),
+                    params.color_output,
+                    static_cast<int>(idx.x * sizeof(float4)),
+                    static_cast<int>(idx.y));
         return;
     }
 
@@ -231,16 +233,27 @@ __global__ void __raygen__rg() { // NOLINT(*-reserved-identifier)
         frame_radiance = frame_radiance + path.radiance;
     }
 
-    // ---- Separate Sum accumulation (all samples written at once) ----
-    if (params.sample_count == 0) {
-        params.accumulation_buffer[pixel_index] =
-                make_float4(frame_radiance.x, frame_radiance.y, frame_radiance.z, 1.0f);
-    } else {
-        const float4 old = params.accumulation_buffer_read[pixel_index];
-        params.accumulation_buffer[pixel_index] =
-                make_float4(old.x + frame_radiance.x,
-                            old.y + frame_radiance.y,
-                            old.z + frame_radiance.z, 1.0f);
+    // ---- Color output ----
+    // DLSS ON: single-frame noisy HDR (no accumulation).
+    // DLSS OFF: Separate Sum — read old total via tex2D, add new, write total.
+    {
+        const int sx = static_cast<int>(idx.x);
+        const int sy = static_cast<int>(idx.y);
+        float4 out_color;
+        if (params.dlss_enabled) {
+            out_color = make_float4(frame_radiance.x, frame_radiance.y, frame_radiance.z, 1.0f);
+        } else if (params.sample_count == 0) {
+            out_color = make_float4(frame_radiance.x, frame_radiance.y, frame_radiance.z, 1.0f);
+        } else {
+            const float4 old = tex2D<float4>(params.color_input,
+                                              static_cast<float>(idx.x) + 0.5f,
+                                              static_cast<float>(idx.y) + 0.5f);
+            out_color = make_float4(old.x + frame_radiance.x,
+                                    old.y + frame_radiance.y,
+                                    old.z + frame_radiance.z, 1.0f);
+        }
+        surf2Dwrite(out_color, params.color_output,
+                    sx * static_cast<int>(sizeof(float4)), sy);
     }
 
     // ---- Aux G-buffer: motion vectors + sky defaults ----
