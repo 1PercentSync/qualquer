@@ -136,6 +136,7 @@ MUSTREAD:4
 - [x] Motion vectors：raygen 计算屏幕空间 MV，hit 像素和 miss 像素均需写入
 - [x] 多 spp jitter 策略（D37）：raygen sample loop 内所有 sample 共享同一 subpixel jitter（per-frame），aux data 写一次即可；BRDF/NEE 维度仍 per-sample
 - [ ] Debug view 验证：临时修改 tonemap 输出各 aux buffer 内容，确认数据正确后丢弃改动
+- [ ] hit_distance 语义修复（debug view 验证中发现）：closesthit 无效 BRDF 采样分支的 `payload_set_hit_distance(-1.0f)` 改为写真实 `optixGetRayTmax()`，路径终止由 throughput_update=0 承担（raygen throughput < 1e-6 检查 break，本跳 emissive/NEE 贡献保留）；`hit_distance < 0` 从此只表示几何 miss。原混用导致无效采样像素被 raygen 首跳捕获误判为 sky，aux data 被 sky 默认值覆盖成随机噪点
 - [ ] 请求用户在 CLion 中编译验证（debug view 下各 aux buffer 内容正确）
 
 ## Step 13：DLSS-RR SDK 接入
