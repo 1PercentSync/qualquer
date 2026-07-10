@@ -707,7 +707,7 @@ MUSTREAD:7
 
 DLSS-RR 同时做时域累积、去噪、放大，OptiX Denoiser 只做去噪。DLSS-RR 直接到达实时 PT 管线终态，跳过 OptiX Denoiser 中间站。
 
-- 集成方式：CUDA API（DLSS SDK 310.5.3+，`NVSDK_NGX_CUDA_*`），不依赖 Vulkan
+- 集成方式：CUDA API（DLSS SDK v310.7.0，`NVSDK_NGX_CUDA_*`），`third_party/dlss` 预编译二进制集成，不依赖 Vulkan
 - 管线位置：raygen → DLSS-RR → tonemap（官方文档 §3.1："before tone mapping"）
 - Separate Sum 累积被 DLSS-RR 内部时域累积替代
 - Ping-pong 双缓冲保留（避免 raygen 和 DLSS-RR 读写 stall）

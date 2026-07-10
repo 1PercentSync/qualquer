@@ -141,7 +141,7 @@ MUSTREAD:4
 
 ## Step 13：DLSS-RR SDK 接入
 
-- [ ] DLSS SDK CMake 集成：FetchContent 或 `DLSS_ROOT` 本地路径，链接 `nvsdk_ngx_cuda` 库，DLL 部署到运行目录
+- [ ] DLSS SDK CMake 集成：`third_party/dlss` 预编译二进制（`include/` + `lib/` + `bin/`），链接 `nvsdk_ngx` 静态 loader，DLL 部署到运行目录
 - [ ] DLSS-RR 封装类：NGX 初始化（`NVSDK_NGX_CUDA_Init_with_ProjectID`）、capability 查询、feature 创建（`NGX_CUDA_CREATE_DLSSD_EXT`，传入 CUcontext + display_stream）、release、shutdown
 - [ ] 资源管理：窗口 resize 或渲染分辨率变化时 release + recreate feature；InPerfQualityValue 根据实际放大比率自动选取
 - [ ] 请求用户在 CLion 中编译验证（DLSS-RR 初始化成功、feature 创建成功，渲染输出不变）
