@@ -578,7 +578,7 @@ Step 9/10 互相独立，也独立于 DLSS-RR，按排定顺序先行。Step 11 
 | 9 | IBL 旋转 + Russian Roulette | IBL 旋转可调，RR 减少 bounce 数 |
 | 10 | Sobol + hash 去相关 RNG | 低 spp 下噪声更均匀，收敛更快 |
 | 11 | Render resolution decoupling | 渲染分辨率可独立配置，画面正确缩放 |
-| 12 | Aux data 写入 | debug view 下各 aux buffer 内容正确 |
+| 12 | Aux data 写入 | 临时 tonemap 可视化验证各 aux buffer 内容正确 |
 | 13 | DLSS-RR SDK 接入 | 初始化成功、feature 创建成功，渲染输出不变 |
 | 14 | DLSS-RR 管线接入 | DLSS-RR 输出干净放大的画面 |
 | 15 | 自适应 sample 数 | Mode 1/2/3 自动切换，帧率符合目标 |

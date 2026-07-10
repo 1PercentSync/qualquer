@@ -369,7 +369,7 @@
 1. LaunchParams 增加 aux buffer 指针（albedo + normal + depth），motion vectors 指针预留位置不分配
 2. 分配 aux buffers（跟随 render_width × render_height）
 3. closesthit bounce==0 时写入 albedo、world normal、linear depth（view-space Z）
-4. UI 提供 debug view 切换（显示 aux buffer 内容），提前验证数据正确性
+4. 临时修改 tonemap 输出验证 aux buffer 内容正确性（不做持久 UI，验证后丢弃改动）
 
 ---
 
@@ -447,7 +447,7 @@
 - exposure（float）
 - ibl_rotation（float, 0~2π）
 - target_sample_count（int, 0=无限）
-- debug view 切换（enum: final / albedo / normal / depth）
+- ~~debug view 切换~~（改为临时代码验证，不做持久 UI 参数）
 
 **决策**：✅ **上述清单即最终参数集**。无 indirect_intensity（D24）、无 tonemap 切换（D17 仅 PBR Neutral）、无自适应参数（D16）。
 
