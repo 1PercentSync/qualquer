@@ -1,0 +1,300 @@
+/**
+ * @file dlss_rr.cpp
+ * @brief DLSS Ray Reconstruction wrapper implementation.
+ */
+
+#include <qualquer/optix/dlss_rr.h>
+
+#include <cuda.h>
+
+#include <nvsdk_ngx.h>
+#include <nvsdk_ngx_helpers_dlssd_cuda.h>
+
+#include <spdlog/spdlog.h>
+
+#include <filesystem>
+#include <windows.h>
+
+namespace qualquer::optix {
+
+    // NGX result string for logging. Covers the common error codes;
+    // unknown codes fall back to the raw integer.
+    static std::string ngx_result_string(NVSDK_NGX_Result result) {
+        switch (result) {
+            case NVSDK_NGX_Result_Success:                       return "Success";
+            case NVSDK_NGX_Result_FAIL_FeatureNotSupported:      return "FeatureNotSupported";
+            case NVSDK_NGX_Result_FAIL_PlatformError:            return "PlatformError";
+            case NVSDK_NGX_Result_FAIL_FeatureAlreadyExists:     return "FeatureAlreadyExists";
+            case NVSDK_NGX_Result_FAIL_FeatureNotFound:          return "FeatureNotFound";
+            case NVSDK_NGX_Result_FAIL_InvalidParameter:         return "InvalidParameter";
+            case NVSDK_NGX_Result_FAIL_ScratchBufferTooSmall:    return "ScratchBufferTooSmall";
+            case NVSDK_NGX_Result_FAIL_NotInitialized:           return "NotInitialized";
+            case NVSDK_NGX_Result_FAIL_UnsupportedInputFormat:   return "UnsupportedInputFormat";
+            case NVSDK_NGX_Result_FAIL_RWFlagMissing:            return "RWFlagMissing";
+            case NVSDK_NGX_Result_FAIL_MissingInput:             return "MissingInput";
+            case NVSDK_NGX_Result_FAIL_UnableToInitializeFeature:return "UnableToInitializeFeature";
+            case NVSDK_NGX_Result_FAIL_OutOfDate:                return "OutOfDate";
+            case NVSDK_NGX_Result_FAIL_OutOfGPUMemory:           return "OutOfGPUMemory";
+            case NVSDK_NGX_Result_FAIL_UnsupportedFormat:        return "UnsupportedFormat";
+            case NVSDK_NGX_Result_FAIL_UnableToWriteToAppDataPath: return "UnableToWriteToAppDataPath";
+            case NVSDK_NGX_Result_FAIL_UnsupportedParameter:     return "UnsupportedParameter";
+            case NVSDK_NGX_Result_FAIL_Denied:                   return "Denied";
+            case NVSDK_NGX_Result_FAIL_NotImplemented:           return "NotImplemented";
+            default: return "Unknown(" + std::to_string(result) + ")";
+        }
+    }
+
+    // NGX check macro: logs and returns false on failure (non-fatal path).
+    #define NGX_CHECK_WARN(call)                                                    \
+        do {                                                                        \
+            NVSDK_NGX_Result ngx_result_ = (call);                                  \
+            if (NVSDK_NGX_FAILED(ngx_result_)) {                                    \
+                spdlog::warn("NGX call failed: {} returned {} at {}:{}",            \
+                             #call, ngx_result_string(ngx_result_),                 \
+                             __FILE__, __LINE__);                                    \
+                return false;                                                       \
+            }                                                                       \
+        } while (0)
+
+    // NGX check macro: logs and aborts on failure (fatal path).
+    #define NGX_CHECK(call)                                                         \
+        do {                                                                        \
+            NVSDK_NGX_Result ngx_result_ = (call);                                  \
+            if (NVSDK_NGX_FAILED(ngx_result_)) {                                    \
+                spdlog::critical("NGX call failed: {} returned {} at {}:{}",        \
+                                 #call, ngx_result_string(ngx_result_),             \
+                                 __FILE__, __LINE__);                               \
+                std::abort();                                                       \
+            }                                                                       \
+        } while (0)
+
+    // Executable directory for NGX data path (logs, temp files).
+    // NGX also searches for nvngx_dlssd.dll relative to this path.
+    static std::wstring get_executable_directory() {
+        char path[2048] = {};
+        if (GetModuleFileNameA(nullptr, path, sizeof(path)) == 0) {
+            return L".";
+        }
+        return std::filesystem::path(path).parent_path().wstring();
+    }
+
+    void DlssRR::init(int cuda_device) {
+        if (initialized_) {
+            return;
+        }
+
+        const std::wstring app_path = get_executable_directory();
+
+        // Init NGX with project ID (no NVIDIA-issued app ID required).
+        NVSDK_NGX_Result result = NVSDK_NGX_CUDA_Init_with_ProjectID(
+            "qualquer",
+            NVSDK_NGX_ENGINE_TYPE_CUSTOM,
+            "1.0.0",
+            app_path.c_str()
+        );
+
+        if (NVSDK_NGX_FAILED(result)) {
+            spdlog::warn("DLSS-RR: NGX init failed: {}", ngx_result_string(result));
+            available_ = false;
+            return;
+        }
+
+        initialized_ = true;
+
+        // Check RayReconstruction hardware/driver support.
+        constexpr NVSDK_NGX_ProjectIdDescription project_desc{"qualquer",
+                                                           NVSDK_NGX_ENGINE_TYPE_CUSTOM, "1.0.0"};
+        constexpr NVSDK_NGX_Application_Identifier app_id{
+            NVSDK_NGX_Application_Identifier_Type_Project_Id, {.ProjectDesc = project_desc}};
+        const NVSDK_NGX_FeatureDiscoveryInfo discovery_info{
+            NVSDK_NGX_Version_API,
+            NVSDK_NGX_Feature_RayReconstruction,
+            app_id,
+            app_path.c_str(),
+            nullptr};
+        NVSDK_NGX_FeatureRequirement requirement{};
+        result = NVSDK_NGX_CUDA_GetFeatureRequirements(cuda_device, &discovery_info, &requirement);
+
+        if (NVSDK_NGX_FAILED(result)
+            || requirement.FeatureSupported != NVSDK_NGX_FeatureSupportResult_Supported) {
+            spdlog::warn("DLSS-RR: RayReconstruction not supported on this system");
+            available_ = false;
+            return;
+        }
+
+        // Obtain capability parameters (shared across feature create / evaluate / optimal settings).
+        result = NVSDK_NGX_CUDA_GetCapabilityParameters(&ngx_params_);
+        if (NVSDK_NGX_FAILED(result)) {
+            spdlog::warn("DLSS-RR: GetCapabilityParameters failed: {}", ngx_result_string(result));
+            available_ = false;
+            return;
+        }
+
+        available_ = true;
+        spdlog::info("DLSS-RR: initialized successfully");
+    }
+
+    void DlssRR::destroy() {
+        release_feature();
+
+        if (ngx_params_) {
+            NVSDK_NGX_CUDA_DestroyParameters(ngx_params_);
+            ngx_params_ = nullptr;
+        }
+
+        if (initialized_) {
+            NVSDK_NGX_CUDA_Shutdown();
+            initialized_ = false;
+        }
+
+        available_ = false;
+    }
+
+    void DlssRR::create_feature(uint32_t render_width, uint32_t render_height,
+                                uint32_t display_width, uint32_t display_height,
+                                // ReSharper disable once CppParameterMayBeConst
+                                DlssRenderPreset preset, cudaStream_t display_stream) {
+        release_feature();
+
+        if (!available_ || !ngx_params_) {
+            spdlog::error("DLSS-RR: cannot create feature, not available");
+            return;
+        }
+
+        const auto resolved = resolve_render_height(render_height, display_height);
+        const DlssQualityMode quality = resolved.mode;
+
+        // Feature creation flags.
+        constexpr int create_flags = NVSDK_NGX_DLSS_Feature_Flags_MVLowRes
+                                     | NVSDK_NGX_DLSS_Feature_Flags_IsHDR;
+
+        NVSDK_NGX_DLSSD_Create_Params dlss_params{};
+        dlss_params.InDenoiseMode = NVSDK_NGX_DLSS_Denoise_Mode_DLUnified;
+        dlss_params.InWidth = render_width;
+        dlss_params.InHeight = render_height;
+        dlss_params.InTargetWidth = display_width;
+        dlss_params.InTargetHeight = display_height;
+        dlss_params.InPerfQualityValue = static_cast<NVSDK_NGX_PerfQuality_Value>(quality);
+        dlss_params.InFeatureCreateFlags = create_flags;
+        dlss_params.InUseHWDepth = NVSDK_NGX_DLSS_Depth_Type_Linear;
+        dlss_params.InRoughnessMode = NVSDK_NGX_DLSS_Roughness_Mode_Unpacked;
+
+        // Render preset for all quality modes.
+        const auto ngx_preset = static_cast<NVSDK_NGX_RayReconstruction_Hint_Render_Preset>(
+            static_cast<uint32_t>(preset));
+        ngx_params_->Set(NVSDK_NGX_Parameter_RayReconstruction_Hint_Render_Preset_DLAA, ngx_preset);
+        ngx_params_->Set(NVSDK_NGX_Parameter_RayReconstruction_Hint_Render_Preset_Quality, ngx_preset);
+        ngx_params_->Set(NVSDK_NGX_Parameter_RayReconstruction_Hint_Render_Preset_Balanced, ngx_preset);
+        ngx_params_->Set(NVSDK_NGX_Parameter_RayReconstruction_Hint_Render_Preset_Performance, ngx_preset);
+        ngx_params_->Set(NVSDK_NGX_Parameter_RayReconstruction_Hint_Render_Preset_UltraPerformance, ngx_preset);
+
+        // Release VRAM immediately on feature release (no lazy deallocation).
+        ngx_params_->Set(NVSDK_NGX_Parameter_FreeMemOnReleaseFeature, 1);
+
+        // CUDA context and stream for NGX execution.
+        CUcontext cu_context = nullptr;
+        cuCtxGetCurrent(&cu_context);
+
+        NVSDK_NGX_CUDA_DLSSD_Create_Params cuda_params{};
+        cuda_params.Feature = dlss_params;
+        cuda_params.InCUContext = static_cast<void *>(cu_context);
+        cuda_params.InCUStream = static_cast<void *>(display_stream);
+
+        NGX_CHECK(NGX_CUDA_CREATE_DLSSD_EXT(&ngx_handle_, ngx_params_, &cuda_params));
+
+        spdlog::info("DLSS-RR: feature created (render {}x{} -> display {}x{})",
+                     render_width, render_height, display_width, display_height);
+    }
+
+    void DlssRR::release_feature() {
+        if (ngx_handle_) {
+            NGX_CHECK(NVSDK_NGX_CUDA_ReleaseFeature(ngx_handle_));
+            ngx_handle_ = nullptr;
+        }
+    }
+
+    bool DlssRR::cache_optimal_settings(uint32_t display_width, uint32_t display_height) {
+        if (!ngx_params_) {
+            return false;
+        }
+
+        for (uint32_t i = 0; i < kDlssQualityModeCount; ++i) {
+            auto &s = optimal_settings_[i];
+            float sharpness = 0.0f;
+            NGX_CHECK_WARN(NGX_DLSSD_GET_OPTIMAL_SETTINGS(
+                ngx_params_,
+                display_width, display_height,
+                static_cast<NVSDK_NGX_PerfQuality_Value>(i),
+                &s.optimal_width, &s.optimal_height,
+                &s.max_width, &s.max_height,
+                &s.min_width, &s.min_height,
+                &sharpness
+            ));
+        }
+
+        return true;
+    }
+
+    DlssRR::ResolvedRenderHeight DlssRR::resolve_render_height(uint32_t requested_height,
+                                                                uint32_t display_height) const {
+        // render >= display → DLAA (no upscaling).
+        if (requested_height >= display_height) {
+            return {display_height, DlssQualityMode::Dlaa};
+        }
+
+        // Find the mode whose optimal height is closest.
+        DlssQualityMode best_mode = DlssQualityMode::Dlaa;
+        uint32_t best_distance = UINT32_MAX;
+
+        for (uint32_t i = 0; i < kDlssQualityModeCount; ++i) {
+            const auto &s = optimal_settings_[i];
+            if (s.optimal_height == 0) {
+                continue;
+            }
+            const auto mode = static_cast<DlssQualityMode>(i);
+            uint32_t d = requested_height > s.optimal_height
+                             ? requested_height - s.optimal_height
+                             : s.optimal_height - requested_height;
+            if (d < best_distance) {
+                best_distance = d;
+                best_mode = mode;
+            }
+        }
+
+        const auto &best = optimal_settings_[static_cast<uint32_t>(best_mode)];
+
+        // If within [min, max], use as-is.
+        if (requested_height >= best.min_height && requested_height <= best.max_height) {
+            return {requested_height, best_mode};
+        }
+
+        // Out of range: check if an adjacent mode gives a smaller clamp distance.
+        uint32_t best_clamped = std::clamp(requested_height, best.min_height, best.max_height);
+        uint32_t best_clamp_dist = best_clamped > requested_height
+                                       ? best_clamped - requested_height
+                                       : requested_height - best_clamped;
+
+        for (uint32_t i = 0; i < kDlssQualityModeCount; ++i) {
+            const auto mode = static_cast<DlssQualityMode>(i);
+            if (mode == best_mode) {
+                continue;
+            }
+            const auto &s = optimal_settings_[i];
+            if (s.min_height == 0 && s.max_height == 0) {
+                continue;
+            }
+            uint32_t clamped = std::clamp(requested_height, s.min_height, s.max_height);
+            uint32_t d = clamped > requested_height
+                             ? clamped - requested_height
+                             : requested_height - clamped;
+            if (d < best_clamp_dist) {
+                best_clamp_dist = d;
+                best_clamped = clamped;
+                best_mode = mode;
+            }
+        }
+
+        return {best_clamped, best_mode};
+    }
+
+} // namespace qualquer::optix

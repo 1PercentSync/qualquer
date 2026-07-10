@@ -3,6 +3,7 @@ add_library(qualquer_optix STATIC)
 target_sources(qualquer_optix PRIVATE
     src/accel_structure.cpp
     src/context.cpp
+    src/dlss_rr.cpp
     src/optix_stubs_impl.cpp
     src/pipeline.cpp
     src/cuda_texture_upload.cpp
@@ -23,5 +24,6 @@ target_include_directories(qualquer_optix
 target_link_libraries(qualquer_optix
     PUBLIC spdlog::spdlog
     PUBLIC CUDA::cudart
+    PUBLIC CUDA::cuda_driver
     PUBLIC dlss
 )
