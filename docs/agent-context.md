@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4.5 — 收敛质量 + DLSS-RR + 自适应
-- **进度**：Phase 4.5 Step 12 第四小项完成：closesthit bounce==0 写入 5 个 aux buffer（depth / diffuse albedo / specular albedo / normals / roughness）
+- **进度**：Phase 4.5 Step 12 第五小项完成：raygen MV（齐次 w=1/0 投影）+ sky 像素 aux 默认值
 
 ### 下一个任务
 
-Phase 4.5 Step 12 第五小项：Motion vectors（raygen 计算屏幕空间 MV，hit + miss 像素均写入）
+Phase 4.5 Step 12 第六小项：多 spp jitter 策略（D37）
 
 ---
 
