@@ -67,3 +67,12 @@ foreach(_ir IN LISTS QUALQUER_OPTIX_IR_FILES)
     list(APPEND _deployed_optixir "${_dst}")
 endforeach()
 target_sources(qualquer_app PRIVATE ${_deployed_optixir})
+
+# Deploy DLSS-RR runtime DLL beside the executable. The NGX static loader
+# (nvsdk_ngx_d.lib) loads this DLL at runtime via NVSDK_NGX_CUDA_Init.
+add_custom_command(TARGET qualquer_app POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "$<IF:$<CONFIG:Release>,${DLSS_RUNTIME_DLL_REL},${DLSS_RUNTIME_DLL_DEV}>"
+        "$<TARGET_FILE_DIR:qualquer_app>/nvngx_dlssd.dll"
+    COMMENT "Deploying DLSS-RR runtime: nvngx_dlssd.dll"
+)

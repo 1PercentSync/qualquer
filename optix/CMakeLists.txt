@@ -23,4 +23,5 @@ target_include_directories(qualquer_optix
 target_link_libraries(qualquer_optix
     PUBLIC spdlog::spdlog
     PUBLIC CUDA::cudart
+    PUBLIC dlss
 )
