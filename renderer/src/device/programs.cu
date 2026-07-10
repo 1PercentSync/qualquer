@@ -670,10 +670,15 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
     payload_set_bounce(bounce);
 
     if (bs.pdf_combined == 0.0f) {
-        // Invalid BRDF sample (specular reflected below surface): terminate.
+        // Invalid BRDF sample (specular reflected below surface): terminate
+        // via zero throughput — raygen's throughput check breaks the loop
+        // while this bounce's emissive/NEE contribution is kept. The hit
+        // distance stays the real hit t: a negative value means "geometric
+        // miss" to raygen (sky classification for aux data), which this
+        // surface hit is not.
         payload_set_next_direction(make_float3(0.0f, 0.0f, 0.0f));
         payload_set_throughput_update(make_float3(0.0f, 0.0f, 0.0f));
-        payload_set_hit_distance(-1.0f);
+        payload_set_hit_distance(optixGetRayTmax());
         payload_set_env_mis_weight(1.0f);
         payload_set_last_brdf_pdf(0.0f);
         return;

@@ -98,9 +98,10 @@ namespace qualquer::optix {
                 return;
             }
 
-            // Allocate 2D array
+            // Allocate 2D array. cudaArraySurfaceLoadStore is required for
+            // surface object creation and surf2Dwrite addressing correctness.
             const cudaChannelFormatDesc desc = cudaCreateChannelDesc<T>();
-            CUDA_CHECK(cudaMallocArray(&array_, &desc, width, height, 0));
+            CUDA_CHECK(cudaMallocArray(&array_, &desc, width, height, cudaArraySurfaceLoadStore));
 
             // Texture object: point sample, clamp, unnormalized pixel coords
             cudaResourceDesc res_desc{};
