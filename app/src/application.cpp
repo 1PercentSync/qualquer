@@ -166,6 +166,7 @@ namespace qualquer::app {
                                       .emissive_alias_table = scene_loader_.emissive_alias_table_buffer().data(),
                                       .emissive_count = scene_loader_.emissive_count(),
                                       .emissive_total_power = scene_loader_.emissive_total_power(),
+                                      .frame_time_ms = ImGui::GetIO().DeltaTime * 1000.0f,
                                   },
                                   swapchain_.extent.width,
                                   swapchain_.extent.height,

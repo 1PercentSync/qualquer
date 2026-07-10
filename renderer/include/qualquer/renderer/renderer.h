@@ -131,6 +131,9 @@ namespace qualquer::renderer {
 
         /** @brief Total radiant power across all emissive triangles. */
         float emissive_total_power;
+
+        /** @brief Frame delta time in milliseconds (for DLSS InFrameTimeDeltaInMsec). */
+        float frame_time_ms = 0.0f;
     };
 
     /**
@@ -387,6 +390,9 @@ namespace qualquer::renderer {
 
         /** @brief Previous-frame env_rotation (accumulation-reset detection). */
         float prev_env_rotation_ = 0.0f;
+
+        /** @brief Previous-frame dlss_enabled (accumulation-reset detection). */
+        bool prev_dlss_enabled_ = false;
 
         /**
          * @brief Previous-frame unjittered view-projection matrix (row-major).

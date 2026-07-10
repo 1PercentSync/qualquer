@@ -80,44 +80,52 @@ __global__ void __raygen__rg() { // NOLINT(*-reserved-identifier)
     const float4 origin_w = mul(params.inv_view, make_float4(0.0f, 0.0f, 0.0f, 1.0f));
     const float3 cam_origin = make_float3(origin_w.x, origin_w.y, origin_w.z);
 
-    // ---- Primary ray with subpixel jitter (per-frame, D37) ----
-    // All samples share the same jitter (frame_index drives dim 0-1, not
-    // sample_index), so the primary ray is identical across samples.
-    // Computed once outside the sample loop.
-    const float jx = sobol_rng(params.sobol_directions, pixel_index,
-                               params.frame_index, params.frame_index, kDimJitterX);
-    const float jy = sobol_rng(params.sobol_directions, pixel_index,
-                               params.frame_index, params.frame_index, kDimJitterY);
-
-    const float u = (static_cast<float>(idx.x) + jx) / static_cast<float>(params.width);
-    const float v = (static_cast<float>(idx.y) + jy) / static_cast<float>(params.height);
-    const float ndc_x = u * 2.0f - 1.0f;
-    const float ndc_y = -(v * 2.0f - 1.0f);
-
-    const float4 clip_target = make_float4(ndc_x, ndc_y, 1.0f, 1.0f);
-    float4 view_target = mul(params.inv_projection, clip_target);
-    const float inv_w = 1.0f / view_target.w;
-    view_target = make_float4(view_target.x * inv_w,
-                              view_target.y * inv_w,
-                              view_target.z * inv_w,
-                              1.0f);
-    const float4 dir_w = mul(params.inv_view, make_float4(view_target.x,
-                                                          view_target.y,
-                                                          view_target.z,
-                                                          0.0f));
-    const float3 primary_dir = normalize(make_float3(dir_w.x, dir_w.y, dir_w.z));
-
     // Register-local accumulation across all samples in this frame.
     float3 frame_radiance = make_float3(0.0f, 0.0f, 0.0f);
 
-    // First-bounce capture for MV + sky aux defaults (sample 0 only;
-    // primary ray is identical across samples due to shared jitter).
+    // First-bounce capture for MV + sky aux defaults (sample 0 only).
     float3 primary_hit_pos = make_float3(0.0f, 0.0f, 0.0f);
     float3 primary_sky_color = make_float3(0.0f, 0.0f, 0.0f);
+    float3 primary_dir_saved = make_float3(0.0f, 0.0f, 1.0f); // sample 0's direction for MV
     bool primary_is_hit = false;
 
     for (uint32_t s = 0; s < params.samples_per_frame; ++s) {
         const uint32_t sample_index = params.sample_count + s;
+
+        // ---- Subpixel jitter + primary ray ----
+        // DLSS ON: global jitter from host (uniform across pixels, matches
+        //   InJitterOffset for temporal super-resolution). Per-frame: all
+        //   samples share the same jitter so primary ray is identical.
+        // DLSS OFF: per-pixel Sobol + CP rotation, per-sample (each sample
+        //   gets a different jitter for faster Monte Carlo convergence).
+        float jx, jy;
+        if (params.dlss_enabled) {
+            jx = params.jitter_x;
+            jy = params.jitter_y;
+        } else {
+            jx = sobol_rng(params.sobol_directions, pixel_index,
+                           sample_index, params.frame_index, kDimJitterX);
+            jy = sobol_rng(params.sobol_directions, pixel_index,
+                           sample_index, params.frame_index, kDimJitterY);
+        }
+
+        const float u = (static_cast<float>(idx.x) + jx) / static_cast<float>(params.width);
+        const float v = (static_cast<float>(idx.y) + jy) / static_cast<float>(params.height);
+        const float ndc_x = u * 2.0f - 1.0f;
+        const float ndc_y = -(v * 2.0f - 1.0f);
+
+        const float4 clip_target = make_float4(ndc_x, ndc_y, 1.0f, 1.0f);
+        float4 view_target = mul(params.inv_projection, clip_target);
+        const float inv_w = 1.0f / view_target.w;
+        view_target = make_float4(view_target.x * inv_w,
+                                  view_target.y * inv_w,
+                                  view_target.z * inv_w,
+                                  1.0f);
+        const float4 dir_w = mul(params.inv_view, make_float4(view_target.x,
+                                                              view_target.y,
+                                                              view_target.z,
+                                                              0.0f));
+        const float3 primary_dir = normalize(make_float3(dir_w.x, dir_w.y, dir_w.z));
 
         // ---- PathState ----
         PathState path{};
@@ -195,8 +203,9 @@ __global__ void __raygen__rg() { // NOLINT(*-reserved-identifier)
                 p12, p13, p14, p15, p16, p17);
 
             // Capture first-bounce result for MV + sky aux defaults.
-            // Sample 0 only — all samples share per-frame jitter (D37).
+            // Sample 0 only — uses its primary_dir for MV sky projection.
             if (s == 0 && path.bounce == 0) {
+                primary_dir_saved = primary_dir;
                 if (d.hit_distance >= 0.0f) {
                     primary_is_hit = true;
                     primary_hit_pos = cam_origin + primary_dir * d.hit_distance;
@@ -266,7 +275,7 @@ __global__ void __raygen__rg() { // NOLINT(*-reserved-identifier)
     // current and previous unjittered VP. Pixel-space result with MVScale=1.
     {
         const float hw = primary_is_hit ? 1.0f : 0.0f;
-        const float3 pos = primary_is_hit ? primary_hit_pos : primary_dir;
+        const float3 pos = primary_is_hit ? primary_hit_pos : primary_dir_saved;
         const float4 homo = make_float4(pos.x, pos.y, pos.z, hw);
         const float4 curr_clip = mul(params.view_projection, homo);
         const float4 prev_clip = mul(params.prev_view_projection, homo);

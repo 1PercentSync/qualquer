@@ -12,6 +12,7 @@
 #include <vector>
 
 #include <glm/glm.hpp>
+#include <glm/gtc/type_ptr.hpp>
 
 #include <cuda_runtime.h>
 
@@ -35,6 +36,43 @@
 
 namespace qualquer::renderer {
     namespace {
+        /**
+         * @brief Host-side Sobol sample (mirrors the device sobol_sample).
+         *
+         * Pure integer math — identical algorithm to rng.cuh sobol_sample.
+         * Used to compute the global per-frame jitter for DLSS-RR (without
+         * per-pixel Cranley-Patterson rotation, so all pixels share the
+         * same sub-pixel offset).
+         */
+        uint32_t sobol_sample_host(const uint32_t *directions,
+                                    const uint32_t dim,
+                                    uint32_t sample_index) {
+            uint32_t result = 0;
+            const uint32_t offset = dim * 32u;
+            for (uint32_t bit = 0; bit < 32u && sample_index != 0u; ++bit) {
+                if ((sample_index & 1u) != 0u) {
+                    result ^= directions[offset + bit];
+                }
+                sample_index >>= 1u;
+            }
+            return result;
+        }
+
+        /**
+         * @brief Computes global per-frame jitter for DLSS-RR mode.
+         *
+         * Uses Sobol dim 0/1 with golden-ratio temporal offset but NO
+         * per-pixel Cranley-Patterson rotation. Returns [0,1) in pixel space.
+         */
+        float global_jitter(const uint32_t *directions,
+                            const uint32_t frame_index,
+                            const uint32_t dimension) {
+            uint32_t sobol_val = sobol_sample_host(directions, dimension, frame_index);
+            // Golden-ratio temporal offset (same as device rng, 2654435769 ≈ φ × 2^32)
+            sobol_val += frame_index * 2654435769u;
+            return static_cast<float>(sobol_val) / static_cast<float>(0xFFFFFFFFu);
+        }
+
         /**
          * @brief Converts a glm column-major mat4 to the row-major float4x4 the
          *        device reads (rows[i] = i-th row).
@@ -455,16 +493,24 @@ namespace qualquer::renderer {
         // writes it back unchanged, count stays the same, display freezes.
         const float exposure_linear = std::pow(2.0f, scene.settings.exposure_ev);
 
+        // Runtime DLSS flag: user wants it AND feature is actually created.
+        const bool dlss_active = scene.settings.dlss_enabled && dlss_rr.feature_active();
+
         const bool camera_changed =
             scene.camera.inv_view != prev_inv_view_ ||
             scene.camera.inv_projection != prev_inv_projection_;
         const bool settings_changed =
             scene.settings.max_bounces != prev_max_bounces_ ||
             scene.settings.samples_per_frame != prev_samples_per_frame_ ||
-            scene.settings.env_rotation != prev_env_rotation_;
+            scene.settings.env_rotation != prev_env_rotation_ ||
+            scene.settings.dlss_enabled != prev_dlss_enabled_;
         const bool needs_reset = camera_changed || settings_changed || reset_requested_;
         reset_requested_ = false;
-        const uint32_t chain_count = needs_reset ? 0 : accum_counts_[accum_index_];
+        // DLSS ON: always overwrite (single-frame output, no accumulation).
+        // DLSS OFF: normal Separate Sum chain.
+        const uint32_t chain_count = (needs_reset || dlss_active)
+                                         ? 0
+                                         : accum_counts_[accum_index_];
         const uint32_t effective_spp = scene.settings.accumulation_enabled
                                            ? scene.settings.samples_per_frame
                                            : 0;
@@ -474,6 +520,11 @@ namespace qualquer::renderer {
         prev_max_bounces_ = scene.settings.max_bounces;
         prev_samples_per_frame_ = scene.settings.samples_per_frame;
         prev_env_rotation_ = scene.settings.env_rotation;
+        prev_dlss_enabled_ = scene.settings.dlss_enabled;
+
+        // Global per-frame jitter for DLSS mode (no per-pixel CP rotation).
+        const float jitter_x = global_jitter(kSobolDirectionData, frame_counter_, 0);
+        const float jitter_y = global_jitter(kSobolDirectionData, frame_counter_, 1);
 
         // Unjittered VP for motion vector computation (row-major for device mul()).
         const float4x4 current_vp = to_float4x4(scene.camera.projection * scene.camera.view);
@@ -496,7 +547,9 @@ namespace qualquer::renderer {
             .max_bounces = scene.settings.max_bounces,
             .samples_per_frame = effective_spp,
             .sample_count = chain_count,
-            .dlss_enabled = dlss_rr.feature_active() ? 1u : 0u,
+            .dlss_enabled = dlss_active ? 1u : 0u,
+            .jitter_x = jitter_x,
+            .jitter_y = jitter_y,
             // The rotation angle is a launch constant: precompute the sin/cos
             // pair so device code avoids a per-hit sincosf.
             .env_rotation_sin = std::sin(scene.settings.env_rotation),
@@ -570,16 +623,49 @@ namespace qualquer::renderer {
         // that this frame's tonemap is about to read.
         CUDA_CHECK(cudaStreamWaitEvent(cuda_context.display_stream, event_raygen_done_[prev_slot]));
 
-        // Tonemap reads the ping-pong read slot via texture object. In DLSS
-        // OFF mode it divides by the sample count (Separate Sum); in DLSS ON
-        // mode the tonemap source will change in a later sub-item (Step 14.4).
-        launch_tonemap(accum_buffers_[accum_index_].tex_object(),
-                       cuda_context.display_surface,
-                       render_width, render_height,
-                       width, height,
-                       accum_counts_[accum_index_],
-                       exposure_linear,
-                       cuda_context.display_stream);
+        if (dlss_active) {
+            // DLSS ON: evaluate reads the previous frame's noisy buffer (read
+            // slot) and writes the denoised+upscaled result to dlss_output.
+            // Then tonemap reads dlss_output at display resolution (1:1, no
+            // resampling, no Separate Sum division — sample_count=1).
+            const optix::DlssRR::EvalInput eval_input{
+                .color_tex = accum_buffers_[accum_index_].tex_object(),
+                .output_surf = dlss_output_.surf_object(),
+                .depth_tex = aux_depth_.tex_object(),
+                .motion_vectors_tex = aux_motion_vectors_.tex_object(),
+                .diffuse_albedo_tex = aux_diffuse_albedo_.tex_object(),
+                .specular_albedo_tex = aux_specular_albedo_.tex_object(),
+                .normals_tex = aux_normals_.tex_object(),
+                .roughness_tex = aux_roughness_.tex_object(),
+                .render_width = render_width,
+                .render_height = render_height,
+                .jitter_x = jitter_x,
+                .jitter_y = jitter_y,
+                .view_matrix = glm::value_ptr(scene.camera.view),
+                .projection_matrix = glm::value_ptr(scene.camera.projection),
+                .reset = needs_reset,
+                .frame_time_ms = scene.frame_time_ms,
+            };
+            dlss_rr.evaluate(eval_input);
+
+            launch_tonemap(dlss_output_.tex_object(),
+                           cuda_context.display_surface,
+                           width, height,      // dlss_output is display resolution
+                           width, height,      // 1:1, no resampling
+                           1,                  // no Separate Sum division
+                           exposure_linear,
+                           cuda_context.display_stream);
+        } else {
+            // DLSS OFF: tonemap reads the ping-pong read slot directly,
+            // resamples if render != display, divides by sample count.
+            launch_tonemap(accum_buffers_[accum_index_].tex_object(),
+                           cuda_context.display_surface,
+                           render_width, render_height,
+                           width, height,
+                           accum_counts_[accum_index_],
+                           exposure_linear,
+                           cuda_context.display_stream);
+        }
 
         CUDA_CHECK(cudaEventRecord(event_tonemap_done_[slot], cuda_context.display_stream));
 

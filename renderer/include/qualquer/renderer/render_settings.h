@@ -46,6 +46,12 @@ namespace qualquer::renderer {
 
         /** @brief IBL Y-axis rotation in radians, accumulated from left-drag input. */
         float env_rotation = 0.0f;
+
+        /** @brief DLSS-RR enabled. When true and the feature is active, raygen
+         *  outputs single-frame noisy HDR and DLSS-RR handles temporal
+         *  accumulation + denoising + upscaling. When false, Separate Sum
+         *  accumulation is used (Phase 4 fallback). */
+        bool dlss_enabled = false;
     };
 
     /**

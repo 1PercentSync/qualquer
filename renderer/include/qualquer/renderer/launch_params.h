@@ -167,11 +167,23 @@ struct LaunchParams {
     /**
      * @brief DLSS-RR pipeline mode selector.
      *
-     * 1: raygen writes single-frame noisy HDR (no accumulation, no read).
+     * 1: raygen writes single-frame noisy HDR (no accumulation, no read),
+     *    and uses jitter_x/jitter_y instead of per-pixel Sobol dim 0-1.
      * 0: raygen performs Separate Sum accumulation (reads color_input,
-     *    writes accumulated total to color_output).
+     *    writes accumulated total to color_output), per-pixel Sobol jitter.
      */
     uint32_t dlss_enabled;
+
+    /**
+     * @brief Global per-frame subpixel jitter (DLSS ON only).
+     *
+     * Host-computed Sobol dim 0-1 without per-pixel Cranley-Patterson
+     * rotation, so all pixels share the same jitter offset. DLSS-RR needs
+     * a single InJitterOffset per frame for temporal super-resolution.
+     * Range [0,1) in pixel space. Ignored when dlss_enabled == 0.
+     */
+    float jitter_x;
+    float jitter_y;
 
     /**
      * @brief Sine of the IBL Y-axis rotation angle.
