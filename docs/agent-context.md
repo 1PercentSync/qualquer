@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4.5 — 收敛质量 + DLSS-RR + 自适应
-- **进度**：Phase 4.5 Step 12 完成（aux data 写入全链路 + debug view 六项验证通过 + hit_distance 语义修复与 surface flag 修复）
+- **进度**：Phase 4.5 Step 13 第一小项完成：`third_party/dlss` 预编译二进制集成（STATIC IMPORTED 目标 + optix 层链接 + DLL 部署）
 
 ### 下一个任务
 
-Phase 4.5 Step 13 第一小项：DLSS SDK CMake 集成
+Phase 4.5 Step 13 第二小项：DLSS-RR 封装类
 
 ---
 
