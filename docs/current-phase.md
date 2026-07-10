@@ -735,6 +735,33 @@ blit / record_vulkan 全幅不变，Vulkan 侧不感知渲染分辨率。DLSS-RR
 
 **⚠ Diffuse albedo 存疑**：SDK 仅说"the diffuse component of Reflectance material"，未明确是否预乘 (1-metallic)。vk_denoise_dlssrr 传 raw baseColor（参考 `primary.rgen:451`）。我们跟随此做法传 raw base_color。若出现与 albedo 相关的 DLSS-RR 伪影，优先排查此处，备选方案为 `base_color × (1 - metallic)`。
 
+#### Aux Data 资源与分配
+
+**CudaArrayBuffer\<T\>**（optix 层）：RAII 模板，管理一个 2D `cudaArray_t` + `cudaTextureObject_t`（DLSS 读取，point sample / clamp / unnormalized coords）+ `cudaSurfaceObject_t`（着色器 `surf2Dwrite` 写入）。支持 float / float2 / float4 元素类型。
+
+**Aux input buffers**（渲染分辨率，6 个）：
+
+| Buffer | 类型 | 元素 |
+|--------|------|------|
+| depth | `CudaArrayBuffer<float>` | R32F |
+| motion_vectors | `CudaArrayBuffer<float2>` | RG32F |
+| diffuse_albedo | `CudaArrayBuffer<float4>` | RGBA32F |
+| specular_albedo | `CudaArrayBuffer<float4>` | RGBA32F |
+| normals | `CudaArrayBuffer<float4>` | RGBA32F |
+| roughness | `CudaArrayBuffer<float>` | R32F |
+
+specular hit distance 不分配（optional 输入，DLSS-RR 传 nullptr，见 D32）。
+
+**DLSS output buffer**（显示分辨率）：`CudaArrayBuffer<float4>`，DLSS-RR 写入 → tonemap 读取。跟随窗口 resize（不跟随渲染分辨率变化）。
+
+**生命周期**：init 时分配，destroy 时释放。渲染分辨率变化时 aux input buffers 与 accum_buffers 一起 drain + resize；显示分辨率变化时 DLSS output buffer 单独 drain + resize。
+
+**LaunchParams 传递**：aux buffers 通过 `cudaSurfaceObject_t` 传入 LaunchParams（closesthit / raygen 用 `surf2Dwrite` 写入）。MV 计算需要 `view_projection` + `prev_view_projection`（unjittered，row-major `float4x4`），host 端每帧末缓存当前 VP 为下帧 prevVP。
+
+**写入策略**：closesthit 在首 sample 的 bounce 0 写入 depth / diffuse albedo / specular albedo / normals / roughness（`sample_index == sample_count` 门控，D37 共享 jitter → 首 sample 写一次即可）。raygen 在 sample loop 后写入 MV（hit/miss 统一）+ miss 像素的其余 aux 默认值。
+
+**BrdfParams::E_glossy_rgb**：`init_brdf_params` 已经逐通道计算 E_glossy 用于 diffuse weight，现存入 `BrdfParams` 供 closesthit 直接读取写入 specular albedo，避免重算。
+
 ### 完成标准
 
 - DLSS-RR 输出干净、无明显伪影的放大画面
