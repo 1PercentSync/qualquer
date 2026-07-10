@@ -150,18 +150,6 @@ return G + G * G - G * G * G;
 
 **问题**：DLSS 模式下需要全局统一 jitter（host 端 Sobol 不加 per-pixel Cranley-Patterson rotation），使所有像素共享同一个 jitter 偏移，与 `InJitterOffset` 一致。per-pixel rotation 会使 DLSS 收到的单一 jitter 值失真。DLSS OFF 模式则需要恢复 per-sample jitter 以加速收敛。
 
-此外，DLSS evaluate 调用需要延迟一帧 gating（`dlss_active && prev_dlss_active`），避免首帧读到 enable 之前的 Separate Sum 陈旧累积总和。首次 evaluate 传 `InReset=1`；普通的相机移动不触发 reset。
-
-### 7. UI render height 滑块弹回
-
-**问题**：拖动 Render Height 滑块释放后值弹回原值，Renderer 从未收到新值（日志无 reallocated 记录）。
-
-**原因**：`slider_uint_on_release` 中 `display` 是局部变量，每帧从 `*v` 重新初始化。拖拽期间 `*v` 不更新（等释放才提交），所以每帧 `display` 都被重置回旧值。拖拽中 ImGui `SliderInt` 会用拖拽位置覆写 `display`，但在释放帧 widget 已不是 active——`SliderBehavior` 不再应用拖拽位置，`display` 保持为从 `*v` 初始化的旧值。于是 `IsItemDeactivatedAfterEdit()` 返回 true，但 `committed == *v` → 返回 false，值永远提交不上去。
-
-**根因**：标准 ImGui on-release 模式要求被编辑的变量跨帧持久化（static 或成员），释放帧才能保有上一帧的拖拽值。当前代码每帧用旧值重新初始化局部变量，破坏了这个前提。
-
-**修复**：widget active 期间将 `display` 值存入 ImGui StateStorage（`GetStateStorage()->SetInt(GetItemID(), display)`），释放帧从 StateStorage 取回最后的拖拽值用于提交。
-
 ---
 
 ## 待定事项

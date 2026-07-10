@@ -159,7 +159,9 @@ MUSTREAD:4
 ## Step 14.5：Step 11–14 正确性修复
 
 - [ ] `slider_uint_on_release` / `slider_float_deferred` 弹回修复：widget active 期间将拖拽值存入 ImGui StateStorage，释放帧从 StateStorage 取回最后的拖拽值用于提交（两个函数使用同一模式，一起修复）
-- [ ] 请求用户在 CLion 中编译验证（render height / exposure / FOV 滑块拖拽释放后值正常提交）
+- [ ] 单面 back-face pass-through aux 默认值：closesthit 中 pass-through return 前，若 `bounce == 0 && first sample`，写入 sky 默认值（depth=inf, normal=0, roughness=0, diffuse albedo=0, specular albedo=0），语义为「此像素无有意义的表面信息」
+- [ ] 首次 evaluate InReset：DLSS evaluate 延迟一帧 gating（`dlss_active && prev_dlss_active`），首次 evaluate 传 `InReset=1` 丢弃时域历史，避免首帧 `prev_view_projection_` 为 identity 产生的错误 MV 以及 enable 前的陈旧累积数据被 DLSS-RR 消费
+- [ ] 请求用户在 CLion 中编译验证（render height / exposure / FOV 滑块拖拽释放后值正常提交；相机进入单面几何体内部时无 aux data 陈旧伪影）
 
 ## Step 15：自适应 Sample 数
 

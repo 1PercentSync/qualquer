@@ -508,7 +508,7 @@ struct SceneStats {
 - SceneStats：Application 在 load_scene 后统计并缓存
 - DebugUIContext 新增 `RenderSettings&`（mutable）、`Camera&`（mutable，FOV）、`accumulated_samples`（只读）、`const SceneStats&`
 - 参数变化检测：Renderer 自行比对前帧值（与 camera 检测同机制），chain_count=0。手动 Reset 走 DebugUIActions
-- Deferred slider：slider_float_deferred + slider_angle_deferred，匿名命名空间工具函数
+- Deferred slider：slider_float_deferred + slider_angle_deferred + slider_uint_on_release，匿名命名空间工具函数。ImGui on-release 模式要求被编辑的中间值跨帧持久化：widget active 期间将拖拽值存入 `ImGui::GetStateStorage()->SetInt(ImGui::GetItemID(), display)`，释放帧从 StateStorage 取回最后拖拽值用于提交。局部变量每帧从 `*v` 重新初始化会导致释放帧丢失拖拽值（`SliderBehavior` 在 widget 非 active 时不应用拖拽位置），表现为滑块弹回原值
 
 ---
 
@@ -741,16 +741,16 @@ blit / record_vulkan 全幅不变，Vulkan 侧不感知渲染分辨率。DLSS-RR
 
 #### DLSS-RR Aux Data 写入时机
 
-| 数据 | 写入位置 | hit 像素 | miss (sky) 像素 |
-|------|---------|---------|---------------|
-| depth | closesthit / raygen | view-space Z：`dot(camera_forward, hitPos - camera_origin)` | infinity |
-| diffuse albedo | closesthit / raygen | raw `base_color`（⚠ 见下方说明） | `pbr_neutral_tonemap(sky_color)`（HDR 压到 [0,1] 作去调制引导） |
-| specular albedo | closesthit / raygen | E_glossy 逐通道 | (0,0,0,0)（天空无 specular 层） |
-| normals | closesthit / raygen | shading normal (world space) | (0,0,0,0) |
-| roughness | closesthit / raygen | linear roughness | 0 |
-| specular hit distance | — | 不分配，DLSS-RR 传 nullptr（optional 输入，实测无改善） | — |
-| motion vectors | raygen | MV 两端均用 unjittered VP 投影（`vk_gltf_renderer` 做法），MV 只含几何运动，jitter 信息由 InJitterOffset 单独提供；hit 像素：world hit pos 以 w=1 齐次坐标投影到当前/前帧 unjittered VP；miss 像素：ray direction 以 w=0 齐次坐标投影 | 同左 |
-| color | raygen | 多 spp 同 jitter 平均后的 noisy HDR | 天空 HDR 辐射度 |
+| 数据 | 写入位置 | hit 像素 | miss (sky) 像素 | back-face pass-through 像素 |
+|------|---------|---------|---------------|---------------------------|
+| depth | closesthit / raygen | view-space Z：`dot(camera_forward, hitPos - camera_origin)` | infinity | infinity |
+| diffuse albedo | closesthit / raygen | raw `base_color`（⚠ 见下方说明） | `pbr_neutral_tonemap(sky_color)`（HDR 压到 [0,1] 作去调制引导） | (0,0,0,0) |
+| specular albedo | closesthit / raygen | E_glossy 逐通道 | (0,0,0,0)（天空无 specular 层） | (0,0,0,0) |
+| normals | closesthit / raygen | shading normal (world space) | (0,0,0,0) | (0,0,0,0) |
+| roughness | closesthit / raygen | linear roughness | 0 | 0 |
+| specular hit distance | — | 不分配，DLSS-RR 传 nullptr（optional 输入，multi-spp 下无单一有意义值） | — | — |
+| motion vectors | raygen | MV 两端均用 unjittered VP 投影（`vk_gltf_renderer` 做法），MV 只含几何运动，jitter 信息由 InJitterOffset 单独提供；hit 像素：world hit pos 以 w=1 齐次坐标投影到当前/前帧 unjittered VP；miss 像素：ray direction 以 w=0 齐次坐标投影 | 同左 | 同 hit（pass-through 表面 hit_distance > 0） |
+| color | raygen | 多 spp 同 jitter 平均后的 noisy HDR | 天空 HDR 辐射度 | 正常路径累积（pass-through 后续 bounce 的贡献） |
 
 **多 spp 与 aux data 一致性**（D37）：帧内所有 sample 共享同一 subpixel jitter（per-frame），primary ray 相同 → aux data 写一次即可。BRDF/NEE 维度仍 per-sample。跨帧 jitter 变化保留 DLSS-RR 时域超分辨率。
 
@@ -777,9 +777,13 @@ specular hit distance 不分配（optional 输入，DLSS-RR 传 nullptr，见 D3
 
 **生命周期**：init 时分配，destroy 时释放。渲染分辨率变化时 aux input buffers 与 accum_buffers 一起 drain + resize；显示分辨率变化时 DLSS output buffer 单独 drain + resize。
 
-**LaunchParams 传递**：aux buffers 通过 `cudaSurfaceObject_t` 传入 LaunchParams（closesthit / raygen 用 `surf2Dwrite` 写入）。MV 计算需要 `view_projection` + `prev_view_projection`（unjittered，row-major `float4x4`），host 端每帧末缓存当前 VP 为下帧 prevVP。
+**LaunchParams 传递**：aux buffers 通过 `cudaSurfaceObject_t` 传入 LaunchParams（closesthit / raygen 用 `surf2Dwrite` 写入）。MV 计算需要 `view_projection` + `prev_view_projection`（unjittered，row-major `float4x4`），host 端每帧末缓存当前 VP 为下帧 prevVP。`prev_view_projection_` 初始值为 identity；首帧 MV 因此无效，由首次 DLSS evaluate 的 `InReset=1` 丢弃。
+
+**首次 evaluate gating**：DLSS evaluate 延迟一帧 gating（`dlss_active && prev_dlss_active`），首次 evaluate 传 `InReset=1`。作用：(1) 避免消费 enable 前的 Separate Sum 陈旧累积总和；(2) 丢弃首帧因 `prev_view_projection_` 为 identity 产生的错误 MV。普通相机移动不触发 reset。
 
 **写入策略**：closesthit 在首 sample 的 bounce 0 写入 depth / diffuse albedo / specular albedo / normals / roughness（`sample_index == sample_count` 门控，D37 共享 jitter → 首 sample 写一次即可）。raygen 在 sample loop 后写入 MV（hit/miss 统一）+ miss 像素的其余 aux 默认值。
+
+**单面 back-face pass-through**：primary ray 命中单面材质背面时，closesthit 在 aux 写入块之前 return（pass-through），bounce 0 的 aux 数据未写入。pass-through 表面不可见，其材质属性与像素最终颜色无对应关系，应在 pass-through return 前写入 sky 默认值（depth=inf, normal=0, roughness=0, diffuse albedo=0, specular albedo=0），语义为「此像素无有意义的表面信息」。
 
 **BrdfParams::E_glossy_rgb**：`init_brdf_params` 已经逐通道计算 E_glossy 用于 diffuse weight，现存入 `BrdfParams` 供 closesthit 直接读取写入 specular albedo，避免重算。
 
