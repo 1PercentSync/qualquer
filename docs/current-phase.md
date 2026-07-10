@@ -727,7 +727,7 @@ blit / record_vulkan 全幅不变，Vulkan 侧不感知渲染分辨率。DLSS-RR
 | specular albedo | closesthit / raygen | E_glossy 逐通道 | (0,0,0,0)（天空无 specular 层） |
 | normals | closesthit / raygen | shading normal (world space) | (0,0,0,0) |
 | roughness | closesthit / raygen | linear roughness | 0 |
-| specular hit distance | closesthit / raygen | 写 infinity（optix-subd 实测不改善 DLSS-RR 输出） | 0 |
+| specular hit distance | — | 不分配，DLSS-RR 传 nullptr（optional 输入，实测无改善） | — |
 | motion vectors | raygen | MV 两端均用 unjittered VP 投影（`vk_gltf_renderer` 做法），MV 只含几何运动，jitter 信息由 InJitterOffset 单独提供；hit 像素：world hit pos 以 w=1 齐次坐标投影到当前/前帧 unjittered VP；miss 像素：ray direction 以 w=0 齐次坐标投影 | 同左 |
 | color | raygen | 多 spp 同 jitter 平均后的 noisy HDR | 天空 HDR 辐射度 |
 

@@ -742,15 +742,13 @@ DLSS-RR 同时做时域累积、去噪、放大，OptiX Denoiser 只做去噪。
 | pInSpecularAlbedo | float4 | E_glossy 逐通道（见下） |
 | pInNormals | float4 | shading normal（world space） |
 | pInRoughness | R32F | linear roughness |
-| pInSpecularHitDistance | R32F | 写 infinity（optix-subd 实测不改善输出） |
-
 **矩阵**（host 侧每帧传入）：pInWorldToViewMatrix + pInViewToClipMatrix（float[16]，row major）。
 
-**Specular Hit Distance**：NVIDIA optix-subd 参考实现实测发现写入实际 specular hit distance 对 DLSS-RR 输出质量无改善，直接写 `std::numeric_limits<float>::infinity()`（代码注释："doing so did not improve the denoiser output"）。Qualquer 同样写 infinity。
+**Specular Hit Distance**：不分配、不写入，DLSS-RR 传 nullptr。SDK 结构体中位于 `OPTIONAL` 注释之后；vk_denoise_dlssrr 枚举标注 "optional guide buffers"；vk_gltf_renderer 显式判空传 nullptr。optix-subd 写 infinity 但实测无改善（代码注释："doing so did not improve the denoiser output"）。不提供此输入比提供全 infinity 更诚实——nullptr 让 SDK 知道此信号不可用，而非误以为所有像素的 specular 反射距离均为无穷。
 
 **Specular Albedo 使用 E_glossy**：DLSS-RR 文档附录给出 EnvBRDFApprox2（Ray Tracing Gems Ch.32 split-sum 近似），但 Qualquer 的 specular 层使用 Turquin 多散射补偿，实际 specular 能量高于单散射近似。E_glossy 与渲染的 specular 能量自洽，guide buffer 和 color 的一致性优于匹配训练分布。
 
-**Specular Motion**：提供 pInSpecularHitDistance（infinity）+ 两个矩阵，SDK 内部推导 specular motion vectors。
+**Specular Motion**：pInSpecularHitDistance 传 nullptr（不提供），两个矩阵照常传入。SDK 在无 specular hit distance 时回退到基于 2D MV 的 specular motion 推导。
 
 **多 spp 与 aux data 一致性**：帧内多 sample 共享同一 subpixel jitter（per-frame jitter，不 per-sample jitter），所有 sample 的 primary ray 相同 → aux data（depth、normals、albedo、roughness）在所有 sample 间完全一致，写一次即可。跨帧 jitter 变化保留 DLSS-RR 时域超分辨率能力。Color 为同一亚像素位置 N 个 sample 的辐射度平均（更干净的点采样，非 box filter）。Jitter offset 每帧一个值，无歧义。详见 D37。
 

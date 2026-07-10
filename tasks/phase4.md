@@ -129,13 +129,13 @@ MUSTREAD:4
 
 ## Step 12：Aux Data 写入
 
-- [x] Aux input buffers 分配（CUDA array + `cudaTextureObject_t`，渲染分辨率）：depth（R32F）、motion vectors（RG32F）、diffuse albedo（float4）、specular albedo（float4）、normals（float4）、roughness（R32F）、specular hit distance（R32F）
+- [x] Aux input buffers 分配（CUDA array + `cudaTextureObject_t`，渲染分辨率）：depth（R32F）、motion vectors（RG32F）、diffuse albedo（float4）、specular albedo（float4）、normals（float4）、roughness（R32F）；specular hit distance 不分配（optional 输入，传 nullptr）
 - [x] DLSS-RR output buffer 分配（CUDA array + `cudaSurfaceObject_t`，输出分辨率，float4）：中间 HDR buffer，DLSS-RR 写入、tonemap 读取
 - [ ] LaunchParams 扩展：aux buffer 指针 + 前帧 VP 矩阵
-- [ ] Closesthit bounce==0 写入：view-space Z depth、diffuse albedo、specular albedo、shading normal、linear roughness、specular hit distance
+- [ ] Closesthit bounce==0 写入：view-space Z depth、diffuse albedo、specular albedo、shading normal、linear roughness
 - [ ] Motion vectors：raygen 计算屏幕空间 MV，hit 像素和 miss 像素均需写入
 - [ ] 多 spp jitter 策略（D37）：raygen sample loop 内所有 sample 共享同一 subpixel jitter（per-frame），aux data 写一次即可；BRDF/NEE 维度仍 per-sample
-- [ ] Debug view：UI enum 切换显示各 aux buffer 内容（depth / diffuse albedo / specular albedo / normals / roughness / specular hit distance / motion vectors）
+- [ ] Debug view：UI enum 切换显示各 aux buffer 内容（depth / diffuse albedo / specular albedo / normals / roughness / motion vectors）
 - [ ] 请求用户在 CLion 中编译验证（debug view 下各 aux buffer 内容正确）
 
 ## Step 13：DLSS-RR SDK 接入
