@@ -243,6 +243,10 @@ __global__ void __raygen__rg() { // NOLINT(*-reserved-identifier)
     }
 
     // ---- Color output ----
+    // Alpha is always 1.0 — the DLSS-OFF tonemap resampling paths (Catmull-Rom
+    // upscale / box-filter downscale) skip alpha interpolation and hardcode
+    // 1.0, so a non-trivial alpha written here would be silently discarded
+    // when render != display resolution. Keep in sync if alpha gains meaning.
     // DLSS ON: single-frame noisy HDR (no accumulation).
     // DLSS OFF: Separate Sum — read old total via tex2D, add new, write total.
     {

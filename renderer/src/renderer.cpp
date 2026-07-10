@@ -513,6 +513,10 @@ namespace qualquer::renderer {
         const bool camera_changed =
             scene.camera.inv_view != prev_inv_view_ ||
             scene.camera.inv_projection != prev_inv_projection_;
+        // render_height is intentionally absent: a render-resolution change
+        // triggers buffer reallocation above, which resets accum_counts_ to
+        // {0,0} — chain_count becomes 0 through that path, not through
+        // needs_reset.
         const bool settings_changed =
             scene.settings.max_bounces != prev_max_bounces_ ||
             scene.settings.samples_per_frame != prev_samples_per_frame_ ||
