@@ -47,6 +47,7 @@ namespace qualquer::renderer {
 #include <qualquer/renderer/rng.cuh>
 #include <qualquer/renderer/pt_common.cuh>
 #include <qualquer/renderer/payload_helpers.cuh>
+#include <qualquer/renderer/tonemap.cuh>
 #include <qualquer/renderer/nee.cuh>
 
 // OptiX locates program groups by the entry function symbol name (e.g.
@@ -79,6 +80,13 @@ __global__ void __raygen__rg() { // NOLINT(*-reserved-identifier)
 
     // Register-local accumulation across all samples in this frame.
     float3 frame_radiance = make_float3(0.0f, 0.0f, 0.0f);
+
+    // First-bounce capture for MV + sky aux defaults (sample 0 only;
+    // all samples share per-frame jitter so the primary ray is identical).
+    float3 primary_hit_pos = make_float3(0.0f, 0.0f, 0.0f);
+    float3 primary_ray_dir = make_float3(0.0f, 0.0f, 0.0f);
+    float3 primary_sky_color = make_float3(0.0f, 0.0f, 0.0f);
+    bool primary_is_hit = false;
 
     for (uint32_t s = 0; s < params.samples_per_frame; ++s) {
         const uint32_t sample_index = params.sample_count + s;
@@ -181,6 +189,19 @@ __global__ void __raygen__rg() { // NOLINT(*-reserved-identifier)
                 p6, p7, p8, p9, p10, p11,
                 p12, p13, p14, p15, p16, p17);
 
+            // Capture first-bounce result for MV + sky aux defaults.
+            // Sample 0 only — all samples share per-frame jitter (D37).
+            if (s == 0 && path.bounce == 0) {
+                if (d.hit_distance >= 0.0f) {
+                    primary_is_hit = true;
+                    primary_hit_pos = cam_origin + path.direction * d.hit_distance;
+                } else {
+                    primary_is_hit = false;
+                    primary_ray_dir = path.direction;
+                    primary_sky_color = d.color;
+                }
+            }
+
             // Accumulate radiance contribution from this bounce.
             float3 contribution = path.throughput * d.color;
             if (d.hit_distance < 0.0f) {
@@ -218,6 +239,52 @@ __global__ void __raygen__rg() { // NOLINT(*-reserved-identifier)
                 make_float4(old.x + frame_radiance.x,
                             old.y + frame_radiance.y,
                             old.z + frame_radiance.z, 1.0f);
+    }
+
+    // ---- Aux G-buffer: motion vectors + sky defaults ----
+    const int sx = static_cast<int>(idx.x);
+    const int sy = static_cast<int>(idx.y);
+    const float2 resolution = make_float2(
+        static_cast<float>(params.width), static_cast<float>(params.height));
+
+    // MV: project world position (w=1 hit) or direction (w=0 sky) through
+    // current and previous unjittered VP. Pixel-space result with MVScale=1.
+    {
+        const float hw = primary_is_hit ? 1.0f : 0.0f;
+        const float3 pos = primary_is_hit ? primary_hit_pos : primary_ray_dir;
+        const float4 homo = make_float4(pos.x, pos.y, pos.z, hw);
+        const float4 curr_clip = mul(params.view_projection, homo);
+        const float4 prev_clip = mul(params.prev_view_projection, homo);
+        const float2 curr_ndc = make_float2(curr_clip.x / curr_clip.w,
+                                            curr_clip.y / curr_clip.w);
+        const float2 prev_ndc = make_float2(prev_clip.x / prev_clip.w,
+                                            prev_clip.y / prev_clip.w);
+        const float2 mv = make_float2(
+            (prev_ndc.x - curr_ndc.x) * 0.5f * resolution.x,
+            (prev_ndc.y - curr_ndc.y) * 0.5f * resolution.y);
+        surf2Dwrite(mv, params.aux_motion_vectors,
+                    sx * static_cast<int>(sizeof(float2)), sy);
+    }
+
+    // Sky pixels: closesthit never ran, so write aux defaults.
+    if (!primary_is_hit) {
+        const float inf = __int_as_float(0x7f800000);
+        surf2Dwrite(inf, params.aux_depth,
+                    sx * static_cast<int>(sizeof(float)), sy);
+
+        // Tonemapped sky radiance as diffuse albedo guide (HDR compressed
+        // to [0,1] so DLSS-RR preserves sky detail without denoising it).
+        const float3 sky_albedo = pbr_neutral_tonemap(primary_sky_color);
+        surf2Dwrite(make_float4(sky_albedo.x, sky_albedo.y, sky_albedo.z, 1.0f),
+                    params.aux_diffuse_albedo,
+                    sx * static_cast<int>(sizeof(float4)), sy);
+
+        surf2Dwrite(make_float4(0.0f, 0.0f, 0.0f, 0.0f), params.aux_specular_albedo,
+                    sx * static_cast<int>(sizeof(float4)), sy);
+        surf2Dwrite(make_float4(0.0f, 0.0f, 0.0f, 0.0f), params.aux_normals,
+                    sx * static_cast<int>(sizeof(float4)), sy);
+        surf2Dwrite(0.0f, params.aux_roughness,
+                    sx * static_cast<int>(sizeof(float)), sy);
     }
 }
 
