@@ -87,6 +87,21 @@
 - CLTC 或 E_FON 拟合多项式的边角输入
 - Shadow terminator 因子在特殊几何下输出负值
 
+**静态代码审计发现：Shadow Terminator 修正存在确定的负值路径。**
+
+`shadow_terminator_factor()` 的接口契约声明返回 `[0,1]`，实现却直接计算：
+
+```cpp
+const float G = NgdotL / (NdotL * dot(N_geo, N_shading));
+return G + G * G - G * G * G;
+```
+
+实现中的分支只检查 `NgdotL > 0` 且 `NgdotL < NdotL`，这不足以保证注释声称的 `G ∈ (0,1)`，因为分母还包含 `dot(N_geo, N_shading)`。当 `G > (1 + sqrt(5)) / 2` 时，多项式 `G + G² - G³` 为负。该情况在几何法线、着色法线和光照方向均为有效单位向量时也能出现，并非仅由非法输入触发。
+
+该函数依赖的法线一致性前提也与调用点不一致：`programs.cu` 使用 `ensure_normal_consistency(N_mapped, N_interp)` 修正着色法线，但调用 `shadow_terminator_factor()` 时传入的几何法线是 `N_face`。因此，函数注释所依赖的 `dot(N_geo, N_shading) > 0` 并未由上游保证；该点积接近零或为负时，`G` 还会进一步越界或变号。
+
+返回的修正因子直接乘入环境光 NEE 和 emissive NEE 的 `nee_radiance`，随后经 payload 进入 `path.radiance`，构成从该函数到最终 color 负值的完整传播路径。
+
 **建议做法**：在 device 端做临时统计（负值出现频率 × 归属调用点），精确定位后在源头修复。源头修好后再评估是否仍保留写入端钳制作为防御层。
 
 ### 2. E_glossy 缺失 clamp（潜伏 bug）
