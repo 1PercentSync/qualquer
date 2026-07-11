@@ -169,7 +169,7 @@ MUSTREAD:4
 - [ ] Render preset 变化触发 feature 重建：加 `prev_dlss_preset_` 检测
 - [ ] `cache_optimal_settings` 错误处理：当前任一 mode 查询失败会提前 return 跳过剩余 mode，改为单 mode 失败不影响其余 mode 的查询
 - [x] NGX 崩溃诊断：NGX init 时提供日志回调（桥接 spdlog，`ON`，`DisableOtherLoggingSinks`）；所有 abort 宏（CUDA/OPTIX/VK/NGX）在 abort 前 flush spdlog
-- [ ] display_stream blocking 回测：负值修复落地后，若 DLSS 仍崩溃则将 display_stream 改为 blocking（去掉 `cudaStreamNonBlocking`）；若不崩溃则直接勾选
+- [x] display_stream blocking 回测：保持 `compute_stream` non-blocking、将 `display_stream` 改为 blocking 并保留 SER；当前多轮压力测试稳定，且 1 spp / 32 spp 吞吐与 `optixTrace` + non-blocking 基线相当。根因候选保留 NGX/default-stream 排序缺口与 DLSS-RR CUDA/SER 底层兼容性两种可能；若后续再次出现偶发崩溃，切换到 `optixTrace` 做长期对照，以是否显著改善稳定性决定最终关闭 SER
 - [ ] EvalStorage 持久化回测：NGX 日志回调落地后，若 NGX 错误仍不可见则将 evaluate() 传给 NGX 的指针目标（矩阵、tex/surf object）改为持久成员；若可见则直接勾选
 - [x] 呈现链路计时（debug only）：CUDA timing events 测量 PT（compute_stream）和 display_stream 耗时；Vulkan timestamp queries 测量 blit + ImGui 耗时；CPU frame chrono 测量活跃工作时间；UI 显示各项 ms/占比/理想帧率，FrameStats 窗口平滑
 - [ ] 请求用户在 CLion 中编译验证（render height / exposure / FOV 滑块拖拽释放后值正常提交；相机进入单面几何体内部时无 aux data 陈旧伪影；垂直相机运动下 DLSS-RR 无 ghosting）
