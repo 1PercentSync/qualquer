@@ -806,7 +806,7 @@ blit / record_vulkan 全幅不变，Vulkan 侧不感知渲染分辨率。DLSS-RR
 
 **InReset 语义拆分**：accumulation reset（`chain_count=0`）和 DLSS `InReset`（丢弃时域历史）是两个独立语义。连续相机运动和参数变化只重置累积；场景切换、相机瞬移、HDR 重载和显式 Reset 请求 DLSS history reset。SDK 文档："Set to 1 when scene changes completely (new level etc)"。参考项目（optix-subd、vk_gltf_renderer）均仅在显式 reset 事件时设置。
 
-**DLSS ON color 均值**：D32 规定 color 输入为"同一亚像素位置 N 个 sample 的辐射度平均"。raygen 的 `frame_radiance` 是 sample loop 的累加总和，spp > 1 时 DLSS 收到 N 倍亮度。写入前除以 `samples_per_frame`（防 0）。帧末 `accum_counts_[write_slot]` 置 1（而非当前的 `chain_count + spp`），确保切回 DLSS OFF 时 tonemap 除数匹配。
+**DLSS ON color 均值**：D32 规定 color 输入为"同一亚像素位置 N 个 sample 的辐射度平均"。`effective_spp > 0` 时，raygen 将 sample loop 的 `frame_radiance` 累加总和除以 `effective_spp` 后写入 color write slot，并将该 slot 的 `accum_counts_` 置 1；该值表示已经归一化的一份单帧 radiance，切回 DLSS OFF 时不能再次按 spp 除法。`effective_spp == 0` 时不生成 color/aux/metadata、不改变 slot validity、不翻转 ping-pong，也不重复 evaluate 同一 input；已有 DLSS output 有效时直接 tonemap 最后输出，否则 fallback tonemap 当前 read color，从而保持暂停画面不变。
 
 **DLSS ON primary ray 提出 sample loop**：DLSS ON 时 per-frame jitter 统一，所有 sample 的 primary ray 相同，但当前在 loop 内每 sample 重算（矩阵乘法 + normalize）。自适应 spp（Step 15）会在 DLSS ON 下提高 spp，冗余计算不可忽略。将 DLSS ON 分支的 jitter + primary ray 移到 loop 外，loop body 抽为 `__forceinline__` 函数供两个分支共用。
 
