@@ -430,6 +430,34 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
         const float pass_eps = fmaxf(hit_t * 1e-4f, 1e-6f);
         const float3 pass_origin = optixGetWorldRayOrigin() + ray_dir * (hit_t + pass_eps);
 
+        // Aux defaults for the invisible pass-through surface. Without
+        // this write the aux data stays stale from the previous frame
+        // (the SDK warns: "A common integration error is to leave sky
+        // pixels uncleared"). The pass-through surface has no meaningful
+        // material attributes, so write "no surface" values matching the
+        // sky/miss convention used by the reference projects.
+        if (payload_get_bounce() == 0
+            && payload_get_sample_index() == params.sample_count) {
+            const uint3 li = optixGetLaunchIndex();
+            const int sx = static_cast<int>(li.x);
+            const int sy = static_cast<int>(li.y);
+            const float inf = __int_as_float(0x7f800000);
+
+            surf2Dwrite(inf, params.aux_depth,
+                        sx * static_cast<int>(sizeof(float)), sy);
+            surf2Dwrite(make_float4(0.0f, 0.0f, 0.0f, 0.0f),
+                        params.aux_diffuse_albedo,
+                        sx * static_cast<int>(sizeof(float4)), sy);
+            surf2Dwrite(make_float4(0.0f, 0.0f, 0.0f, 0.0f),
+                        params.aux_specular_albedo,
+                        sx * static_cast<int>(sizeof(float4)), sy);
+            surf2Dwrite(make_float4(0.0f, 0.0f, 0.0f, 0.0f),
+                        params.aux_normals,
+                        sx * static_cast<int>(sizeof(float4)), sy);
+            surf2Dwrite(0.0f, params.aux_roughness,
+                        sx * static_cast<int>(sizeof(float)), sy);
+        }
+
         payload_set_next_origin(pass_origin);
         payload_set_next_direction(ray_dir);
         payload_set_throughput_update(make_float3(1.0f, 1.0f, 1.0f));
