@@ -209,12 +209,12 @@ namespace qualquer::renderer {
         /**
          * @brief Submits raygen and tonemap on two CUDA streams, then signals the semaphore.
          *
-         * compute_stream: waits previous tonemap done → params upload + optixLaunch →
-         * records raygen done. display_stream: waits previous raygen done + waits
-         * reverse semaphore → tonemap → records tonemap done → signals forward
-         * semaphore. The two streams run in parallel; CUDA events enforce the
-         * ping-pong buffer dependencies, the reverse semaphore protects the display
-         * surface's write-after-read dependency (blit read before tonemap write).
+         * compute_stream: waits until the write slot is no longer displayed,
+         * then uploads params, launches raygen, and records that slot as produced.
+         * display_stream waits until the read slot is produced plus the reverse
+         * semaphore, evaluates DLSS/tonemaps, records that slot as consumed, and
+         * signals the forward semaphore. The two streams run in parallel while
+         * slot-indexed CUDA events protect color and guide resources together.
          *
          * The render resolution derives from scene.settings.render_height and the
          * display aspect ratio; when it differs from the current accumulation-buffer
@@ -255,8 +255,9 @@ namespace qualquer::renderer {
          * @brief Forces the next frame to overwrite instead of accumulating,
          *        and discards DLSS-RR temporal history.
          *
-         * Sets deferred flags consumed by the next submit_cuda: chain_count=0
-         * (accumulation overwrite) and eval.InReset=1 (DLSS history discard).
+         * Sets deferred flags consumed by submit_cuda: chain_count=0 triggers
+         * accumulation overwrite, and the next write slot carries a DLSS
+         * history-reset token in its metadata.
          * Used for scene switch, camera teleport, env map reload, manual Reset.
          * Continuous camera motion and parameter changes trigger accumulation
          * reset through camera_changed/settings_changed in submit_cuda, which
@@ -265,6 +266,70 @@ namespace qualquer::renderer {
         void reset_accumulation();
 
     private:
+        /**
+         * @brief Six render-resolution guide resources belonging to one color slot.
+         *
+         * Keeping the resources under one slot owner prevents DLSS from mixing
+         * guide data with a color buffer produced by another frame.
+         */
+        struct AuxBufferSet {
+            /** @brief Allocates every guide resource at the same resolution. */
+            void alloc(uint32_t width, uint32_t height);
+
+            /** @brief Resizes every guide resource to the same resolution. */
+            void resize(uint32_t width, uint32_t height);
+
+            /** @brief Releases every guide resource. */
+            void free();
+
+            /** @brief View-space Z depth (R32F). */
+            optix::CudaArrayBuffer<float> depth;
+
+            /** @brief Screen-space motion vectors (RG32F). */
+            optix::CudaArrayBuffer<float2> motion_vectors;
+
+            /** @brief Raw base-color diffuse albedo (RGBA32F). */
+            optix::CudaArrayBuffer<float4> diffuse_albedo;
+
+            /** @brief Specular reflectance albedo (RGBA32F). */
+            optix::CudaArrayBuffer<float4> specular_albedo;
+
+            /** @brief World-space shading normal (RGBA32F, .w unused). */
+            optix::CudaArrayBuffer<float4> normals;
+
+            /** @brief Linear roughness (R32F). */
+            optix::CudaArrayBuffer<float> roughness;
+        };
+
+        /**
+         * @brief Host inputs produced with one color/aux slot.
+         *
+         * These values travel with their GPU resources so DLSS evaluation never
+         * combines previous-frame images with current-frame camera state.
+         */
+        struct DlssFrameMetadata {
+            /** @brief Raw horizontal Sobol jitter in [0,1). */
+            float jitter_x = 0.0f;
+
+            /** @brief Raw vertical Sobol jitter in [0,1). */
+            float jitter_y = 0.0f;
+
+            /** @brief World-to-view matrix for this input frame. */
+            glm::mat4 view_matrix{1.0f};
+
+            /** @brief View-to-clip matrix for this input frame. */
+            glm::mat4 projection_matrix{1.0f};
+
+            /** @brief Frame delta supplied with this input frame, in milliseconds. */
+            float frame_time_ms = 0.0f;
+
+            /** @brief Monotonic identifier of the frame that produced this slot. */
+            uint32_t frame_id = 0;
+
+            /** @brief Whether evaluation of this input discards DLSS history. */
+            bool reset = false;
+        };
+
         /** @brief OptiX pipeline (module, program groups, linked handle). */
         optix::Pipeline pipeline_;
 
@@ -336,23 +401,11 @@ namespace qualquer::renderer {
 
         // ---- Aux G-buffer channels (render resolution, for DLSS-RR input) ----
 
-        /** @brief View-space Z depth (R32F). */
-        optix::CudaArrayBuffer<float> aux_depth_;
+        /** @brief Per-color-slot DLSS guide resources. */
+        std::array<AuxBufferSet, 2> aux_buffers_;
 
-        /** @brief Screen-space motion vectors (RG32F). */
-        optix::CudaArrayBuffer<float2> aux_motion_vectors_;
-
-        /** @brief Raw base_color diffuse albedo (RGBA32F). */
-        optix::CudaArrayBuffer<float4> aux_diffuse_albedo_;
-
-        /** @brief Specular reflectance albedo (RGBA32F). */
-        optix::CudaArrayBuffer<float4> aux_specular_albedo_;
-
-        /** @brief World-space shading normal (RGBA32F, .w unused). */
-        optix::CudaArrayBuffer<float4> aux_normals_;
-
-        /** @brief Linear roughness (R32F). */
-        optix::CudaArrayBuffer<float> aux_roughness_;
+        /** @brief Per-color-slot host inputs consumed by DLSS evaluation. */
+        std::array<DlssFrameMetadata, 2> dlss_frame_metadata_{};
 
         // ---- DLSS-RR output (display resolution) ----
 
@@ -384,8 +437,8 @@ namespace qualquer::renderer {
         /**
          * @brief Deferred DLSS history reset flag set by reset_accumulation().
          *
-         * Consumed by submit_cuda on the next frame: sets eval.InReset=1 to
-         * discard DLSS-RR temporal history.
+         * The next write slot receives the token; evaluation consumes it
+         * together with that slot's color, guides, and camera metadata.
          */
         bool dlss_reset_requested_ = false;
 
@@ -433,20 +486,18 @@ namespace qualquer::renderer {
         };
 
         /**
-         * @brief Recorded after raygen completes on compute_stream.
+         * @brief Per-resource-slot event recorded after raygen completes.
          *
-         * The next frame's tonemap waits on the previous slot's event to ensure the
-         * accumulation buffer it reads has been fully written.
-         * Double-buffered by frame_counter_ % 2.
+         * Display waits on the read slot's event before consuming its color and
+         * guide resources.
          */
         std::array<cudaEvent_t, 2> event_raygen_done_{};
 
         /**
-         * @brief Recorded after tonemap completes on display_stream.
+         * @brief Per-resource-slot event recorded after display consumption completes.
          *
-         * The next frame's raygen waits on the previous slot's event to ensure the
-         * accumulation buffer it writes is no longer being read by tonemap.
-         * Double-buffered by frame_counter_ % 2.
+         * Compute waits on the write slot's event before overwriting its color and
+         * guide resources.
          */
         std::array<cudaEvent_t, 2> event_tonemap_done_{};
 
