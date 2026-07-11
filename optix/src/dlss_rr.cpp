@@ -322,7 +322,11 @@ namespace qualquer::optix {
             return {display_height, DlssQualityMode::Dlaa};
         }
 
-        // Find the mode whose optimal height is closest.
+        // Find the mode whose optimal height is closest. The loop goes from
+        // MaxPerf (most upscaling) to Dlaa (least); strict-less-than means ties
+        // keep the first match, favoring a higher upscale ratio — the neural
+        // network does more reconstruction work at higher ratios, improving
+        // output quality for the same render resolution.
         DlssQualityMode best_mode = DlssQualityMode::Dlaa;
         uint32_t best_distance = UINT32_MAX;
 
