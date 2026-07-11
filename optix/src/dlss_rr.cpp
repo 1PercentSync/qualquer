@@ -357,10 +357,11 @@ namespace qualquer::optix {
             return false;
         }
 
+        bool all_ok = true;
         for (uint32_t i = 0; i < kDlssQualityModeCount; ++i) {
             auto &s = optimal_settings_[i];
             float sharpness = 0.0f;
-            NGX_CHECK_WARN(NGX_DLSSD_GET_OPTIMAL_SETTINGS(
+            const NVSDK_NGX_Result result = NGX_DLSSD_GET_OPTIMAL_SETTINGS(
                 ngx_params_,
                 display_width, display_height,
                 static_cast<NVSDK_NGX_PerfQuality_Value>(i),
@@ -368,7 +369,14 @@ namespace qualquer::optix {
                 &s.max_width, &s.max_height,
                 &s.min_width, &s.min_height,
                 &sharpness
-            ));
+            );
+            if (NVSDK_NGX_FAILED(result)) {
+                spdlog::warn("DLSS-RR: {} optimal settings query failed: {}",
+                             kQualityModeNames[i], ngx_result_string(result));
+                s = {};
+                all_ok = false;
+                continue;
+            }
             spdlog::info("DLSS-RR: {} optimal {}x{}, range [{}x{} .. {}x{}]",
                          kQualityModeNames[i],
                          s.optimal_width, s.optimal_height,
@@ -376,7 +384,7 @@ namespace qualquer::optix {
                          s.max_width, s.max_height);
         }
 
-        return true;
+        return all_ok;
     }
 
     DlssRR::ResolvedRenderHeight DlssRR::resolve_render_height(uint32_t requested_height,
