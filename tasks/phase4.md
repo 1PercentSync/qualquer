@@ -152,7 +152,8 @@ MUSTREAD:4
 - [x] Raygen 适配：写入改 surf2Dwrite、Separate Sum 读改 tex2D；`dlss_enabled` 为 1 时单帧输出（不读 read buffer、不累加），为 0 时保留 Separate Sum
 - [x] DlssRR evaluate：新增 `evaluate()` 方法，填充 `NVSDK_NGX_CUDA_DLSSD_Eval_Params`（aux inputs 传 `CUtexObject*`、output 传 `CUsurfObject*`），调用 `NGX_CUDA_EVALUATE_DLSSD_EXT`
 - [x] Tonemap 适配：读取源改为 `cudaTextureObject_t`；DLSS ON 读 `dlss_output` tex（1:1 显示分辨率，无除法），OFF 读 accum slot tex（resampling + 除 count）；Renderer `submit_cuda` 双路径分支；DLSS ON 全局 jitter（host Sobol 无 CP rotation）、DLSS OFF 恢复 per-sample jitter
-- [ ] UI 适配：新增 DLSS-RR 面板（开/关、render preset 选择、只读显示：当前 quality mode 名称、渲染/输出分辨率、VRAM 占用）；accumulated samples 改为 DLSS OFF 时显示
+- [x] UI 适配：DLSS-RR 面板（开/关、render preset 选择、只读显示 quality mode 名称和渲染/输出分辨率）；accumulated samples 改为 DLSS OFF 时显示
+- [ ] UI 适配：VRAM 占用只读显示；`create_feature` 使用 `resolve_render_height` 返回的 clamped height（当前传原始值，render > display 时 NGX 拒绝创建）
 - [ ] InReset：拆除当前 `needs_reset` → `eval.InReset` 的错误绑定（每帧 camera_changed 都设 InReset=1 会丢弃 DLSS-RR 时域历史，比不设更差），改为仅在场景切换或相机瞬移（F 键聚焦）时设置 `InReset=1`
 - [ ] 请求用户在 CLion 中编译验证（ON 输出干净放大画面，OFF 保持原有累积行为，preset 可切换）
 
@@ -167,7 +168,7 @@ MUSTREAD:4
 - [ ] MV Y 分量符号修正：`eval.InMVScaleY = -1.0f`
 - [ ] Render preset 变化触发 feature 重建：加 `prev_dlss_preset_` 检测
 - [ ] `cache_optimal_settings` 错误处理：当前任一 mode 查询失败会提前 return 跳过剩余 mode，改为单 mode 失败不影响其余 mode 的查询
-- [ ] NGX 崩溃诊断：NGX init 时提供日志回调（桥接 spdlog，`ON`，`DisableOtherLoggingSinks`）；所有 abort 宏（CUDA/OPTIX/VK/NGX）在 abort 前 flush spdlog
+- [x] NGX 崩溃诊断：NGX init 时提供日志回调（桥接 spdlog，`ON`，`DisableOtherLoggingSinks`）；所有 abort 宏（CUDA/OPTIX/VK/NGX）在 abort 前 flush spdlog
 - [ ] display_stream blocking 回测：负值修复落地后，若 DLSS 仍崩溃则将 display_stream 改为 blocking（去掉 `cudaStreamNonBlocking`）；若不崩溃则直接勾选
 - [ ] EvalStorage 持久化回测：NGX 日志回调落地后，若 NGX 错误仍不可见则将 evaluate() 传给 NGX 的指针目标（矩阵、tex/surf object）改为持久成员；若可见则直接勾选
 - [ ] 请求用户在 CLion 中编译验证（render height / exposure / FOV 滑块拖拽释放后值正常提交；相机进入单面几何体内部时无 aux data 陈旧伪影；垂直相机运动下 DLSS-RR 无 ghosting）
