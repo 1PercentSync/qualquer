@@ -96,7 +96,7 @@ MUSTREAD:4
 
 > 目标：DLSS-RR 集成（时域累积+去噪+放大）、采样质量提升、自适应帧率
 >
-> 决策记录见 `docs/phase4-discussion.md`（D31-D40）。
+> 决策记录见 `docs/phase4-discussion.md`（D31-D41）。
 > 设计详见 `docs/current-phase.md` Phase 4.5 节。
 >
 > 每完成一个复选框暂停等待审查。一个 Step 结束时应请求用户在 CLion 中编译验证。
@@ -171,6 +171,12 @@ MUSTREAD:4
 - [x] NGX 崩溃诊断：NGX init 时提供日志回调（桥接 spdlog，`ON`，`DisableOtherLoggingSinks`）；所有 abort 宏（CUDA/OPTIX/VK/NGX）在 abort 前 flush spdlog
 - [x] display stream 排序修复：保留 SER 并恢复 NGX/default-stream 所需顺序，多轮压力测试稳定且吞吐无显著回退
 - [ ] 修复 `SceneLoader` 异步上传的 host source 生命周期，确保局部 source 析构前复制完成
+- [ ] 约束资产辐射度与材质输入的物理数值域
+- [ ] 保证几何与 shading frame 在退化输入下仍有效
+- [ ] 保证 BRDF 与能量模型在完整输入域内输出合法
+- [ ] 保证 importance distribution 的构建、采样与 PDF 一致且有效
+- [ ] 保证直接光照与 path estimator 的 contribution、概率及权重合法
+- [ ] 保证时域投影与 DLSS guide data 有限、同帧且语义有效
 - [ ] EvalStorage 持久化回测：NGX 日志回调落地后，若 NGX 错误仍不可见则将 evaluate() 传给 NGX 的指针目标（矩阵、tex/surf object）改为持久成员；若可见则直接勾选
 - [x] 呈现链路计时（debug only）：CUDA timing events 测量 PT（compute_stream）和 display_stream 耗时；Vulkan timestamp queries 测量 blit + ImGui 耗时；CPU frame chrono 测量活跃工作时间；UI 显示各项 ms/占比/理想帧率，FrameStats 窗口平滑
 - [ ] 请求用户在 CLion 中编译验证（render height / exposure / FOV 滑块拖拽释放后值正常提交；相机进入单面几何体内部时无 aux data 陈旧伪影；垂直相机运动下 DLSS-RR 无 ghosting）

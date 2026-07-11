@@ -551,7 +551,7 @@ struct SceneStats {
 > 目标：DLSS-RR 集成（时域累积+去噪+放大）、采样质量提升、自适应帧率
 >
 > 任务清单见 `tasks/phase4.md` Step 9+。
-> 决策记录见 `docs/phase4-discussion.md`（D31-D40）。
+> 决策记录见 `docs/phase4-discussion.md`（D31-D41）。
 
 ### 实现步骤
 
@@ -765,6 +765,8 @@ blit / record_vulkan 全幅不变，Vulkan 侧不感知渲染分辨率。DLSS-RR
 
 **多 spp 与 aux data 一致性**（D37）：帧内所有 sample 共享同一 subpixel jitter（per-frame），primary ray 相同 → aux data 写一次即可。BRDF/NEE 维度仍 per-sample。跨帧 jitter 变化保留 DLSS-RR 时域超分辨率。
 
+**Sky depth 有限值回测**：miss/无表面像素默认写 IEEE float infinity。若 IBL/sky 区域出现可见 DLSS-RR 问题，将 65504.0（FP16 max）作为定向 A/B 方案。该替换未消除此前的暗色方框，不作为默认修复或其他伪影的通用解释。
+
 **⚠ Diffuse albedo 存疑**：SDK 仅说"the diffuse component of Reflectance material"，未明确是否预乘 (1-metallic)。vk_denoise_dlssrr 传 raw baseColor（参考 `primary.rgen:451`）。我们跟随此做法传 raw base_color。若出现与 albedo 相关的 DLSS-RR 伪影，优先排查此处，备选方案为 `base_color × (1 - metallic)`。
 
 #### Aux Data 资源与分配
@@ -815,6 +817,19 @@ blit / record_vulkan 全幅不变，Vulkan 侧不感知渲染分辨率。DLSS-RR
 **DLSS input 同槽 ping-pong**：当前单份 aux 会被 compute 写入并被并行 display evaluate 读取，且 guide data、color 与 host 参数可能来自不同帧。按“Aux Data 资源与分配”的 slot 设计迁移为 color、全部 aux、metadata 同槽生产和消费，不通过新增 stream 同步解决竞争。
 
 **异步上传 host source 生命周期**：`CudaBuffer::upload()` 的 host source 必须存活到对应 stream copy 完成。`SceneLoader` 按 source 所有权批次组织上传；同批 upload 共用一次 `cudaStreamSynchronize(stream)`，同步点位于任何局部 source 析构或提前返回之前。持久成员 source 不增加同步，不使用 `cudaDeviceSynchronize()`；无法延长到批次同步点的内层 source 在其所有权边界单独完成复制。
+
+**数值正确性源头修正**：在源头责任域完成并分别验证之前，不增加最终 radiance clamp 或非有限值清零作为统一兜底，避免掩盖修正是否生效。各责任域必须满足以下不变量：
+
+| 责任域 | 范围 | 不变量 |
+|--------|------|--------|
+| 资产辐射度与材质输入 | 解码、压缩、缓存、环境光、发光与材质参数 | 原始输入有限，物理量处于各自定义域 |
+| 几何与 shading frame | 几何/插值/贴图法线、tangent frame、空间变换与退化几何 | 着色基有限、非退化且方向关系自洽 |
+| BRDF 与能量模型 | 散射评估、采样、能量补偿、lobe 概率与 PDF | BRDF、权重、概率和 PDF 有限并满足模型范围 |
+| Importance distribution | luminance weights、alias distribution、采样与 PDF | 分布可归一化，索引/维度有效，sampling 与 PDF 一致 |
+| 直接光照与 path estimator | NEE、MIS、shadow correction、throughput、RR 与 bounce contribution | contribution、分母、概率及权重有限且物理有效 |
+| 时域投影与 DLSS guide data | MV、矩阵、depth、normal、albedo、roughness 及特殊像素 | guide data 有限、同帧并满足输入语义 |
+
+实现顺序为资产输入 → geometry/shading frame → BRDF/能量模型 → importance distribution → 直接光照/path estimator → 时域投影/guide data。全部源头验证完成后，再单独评估 accumulation/output 边界是否保留防御层。
 
 ### 完成标准
 

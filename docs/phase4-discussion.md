@@ -757,7 +757,7 @@ DLSS-RR 同时做时域累积、去噪、放大，OptiX Denoiser 只做去噪。
 **保留项**（能做但先不做，出现可见问题时再评估）：
 - pInDepthHighRes：若边缘有可见 bleeding/ghosting，可考虑 OptiX primary ray only launch 生成输出分辨率 depth。optix-subd 参考实现未给 DLSS-RR 喂此值。vk_denoise_dlssrr 亦未使用。
 - postProcess 背景修正：若 DLSS-RR 输出出现 sky 伪影，在输出分辨率上用 depth 分类 sky 像素并重着色环境光（参考 optix-subd `postProcessKernel` WAR）。与 pInDepthHighRes 共享输出分辨率 depth 资源。vk_denoise_dlssrr 未做此处理。
-- infinity 值替换为 65504.0（FP16 max）：sky depth 和 specular hit distance 当前用 IEEE float infinity。若 DLSS-RR 对 infinity 有可见问题，改用 65504.0（vk_denoise_dlssrr 的做法）。
+- infinity 值替换为 65504.0（FP16 max）：sky depth 当前使用 IEEE float infinity；若 IBL/sky 区域出现可见 DLSS-RR 问题，将 65504.0 作为定向 A/B 方案（vk_denoise_dlssrr 的做法）。该替换未消除此前的暗色方框，不作为默认修复。specular hit distance 当前不提供。
 
 **不适用的可选输入**：
 - pInDiffuseHitDistance / pInReflectedAlbedo：PT stochastic lobe 选择下 per-sample 不一致，无单一正确值
@@ -881,3 +881,15 @@ blocking display stream 恢复其与 legacy default stream 的顺序，不取消
 **决策**：✅ **按 host source 所有权批次同步加载期上传。**
 
 同一所有权批次的多个 upload 共用一次对应 stream 同步，同步点位于任一局部 source 失效之前。持久成员 source 不增加同步；不使用 device-wide 同步。相比逐 upload 同步，该方案保留批内并行；相比持久 staging + event 回收，加载路径的复杂度和收益不支持额外所有权系统。
+
+---
+
+### D41. 数值正确性采用源头优先策略
+
+**来源**：DLSS-RR 输入异常与长期低频 device fault 排查。
+
+**核心问题**：最终 color 或 accumulation 边界的统一 clamp/sanitize 可以阻止异常扩散，但会掩盖资产、几何、BRDF、采样和 estimator 中的真实错误，使单项修正无法验证。
+
+**决策**：✅ **先按责任域修正并验证所有数值源头，最后再评估边界防御。**
+
+源头责任划分为资产辐射度与材质输入、几何与 shading frame、BRDF 与能量模型、importance distribution、直接光照与 path estimator、时域投影与 DLSS guide data。每个责任域独立满足自身物理和数值不变量，不依赖最终输出兜底获得表面正确结果。只有全部源头修正完成后，才讨论 accumulation/output 边界的非有限值隔离；该防御层不承担修正物理模型的职责。
