@@ -32,16 +32,6 @@
 
 ## 已确认的修复方案
 
-### 修复 1：display_stream 改为 blocking 模式
-
-**问题**：开启 DLSS 后必现崩溃。
-
-**原因**：NGX SDK 除了在传入的 `InCUStream`（display_stream）上执行工作外，还会向 CUDA legacy null stream（默认流）发布内部初始化工作。`display_stream` 当前以 `cudaStreamNonBlocking` 创建（`context.cpp:160`），non-blocking 流与 null stream 之间没有任何隐式排序保证，导致 NGX 自己的 kernel 抢跑到初始化完成之前。
-
-**修复**：`context.cpp` 中将 `display_stream` 改为 blocking 模式（去掉 `cudaStreamNonBlocking` flag）。
-
-**待回测**：崩溃可能全部源于负值路径，blocking 可能只是当时的"止血"措施。负值修复稳定后可回测 non-blocking——如果稳定则恢复（消除与 null stream 的意外序列化点），如果仍崩溃则坐实 NGX 的 null-stream 排序需求并写入 `technical-decisions.md`。
-
 ### 修复 2：Color 输出负值钳制
 
 **问题**：扫描式闪动暗色方框（上述根因）。
@@ -52,20 +42,6 @@
 
 **注意**：这是症状层面的修复。负值的真正源头需要定位并在源头修复（见下方"正确性问题 1"）。
 
-### 修复 3：Debug overlay 方向修正（现象 3）
-
-**原因**：`InIndicatorInvertYAxis` 仅控制 overlay 的行渲染顺序，不影响 DLSS 的实际处理逻辑。我们的 CUDA surface 行 0 在顶部（top-down），不需要翻转。原实现设为 1 是因为错误地参照了 optix-subd 和 Blender 的做法——它们设 1 是因为 GL interop buffer 行 0 在底部（bottom-up），与我们的情况不同。
-
-**修复**：`dlss_rr.cpp` 中 `eval.InIndicatorInvertYAxis = 0`。
-
-### 修复 4：NGX 日志与错误可见性（现象 4）
-
-**修复**（多项）：
-
-- NGX 日志回调桥接 spdlog（`[NGX]` 前缀），在 `NVSDK_NGX_CUDA_Init_with_ProjectID` 时传入 `FeatureCommonInfo.LoggingInfo`
-- 所有 abort 宏（CUDA/OPTIX/VK/NGX）在 abort 前先 flush 日志
-- `evaluate()` 失败改为非致命——记录日志并跳过该帧，不直接 abort
-- `EvalStorage`（存放传给 NGX 的指针目标值的结构）改为持久化成员——NGX 保留裸指针，不能指向栈临时变量
 
 ---
 

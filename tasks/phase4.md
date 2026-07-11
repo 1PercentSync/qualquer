@@ -162,6 +162,10 @@ MUSTREAD:4
 - [ ] 单面 back-face pass-through aux 默认值：closesthit 中 pass-through return 前，若 `bounce == 0 && first sample`，写入 sky 默认值（depth=inf, normal=0, roughness=0, diffuse albedo=0, specular albedo=0），语义为「此像素无有意义的表面信息」
 - [ ] 首次 evaluate InReset：DLSS evaluate 延迟一帧 gating（`dlss_active && prev_dlss_active`），首次 evaluate 传 `InReset=1` 丢弃时域历史，避免首帧 `prev_view_projection_` 为 identity 产生的错误 MV 以及 enable 前的陈旧累积数据被 DLSS-RR 消费
 - [ ] MV Y 分量符号修正：`eval.InMVScaleY = -1.0f`（设计依据见 `current-phase.md`「MV Y 分量符号」节）
+- [ ] `cache_optimal_settings` 错误处理：当前任一 mode 查询失败会提前 return 跳过剩余 mode，改为单 mode 失败不影响其余 mode 的查询
+- [ ] NGX 崩溃诊断：NGX init 时提供日志回调（桥接 spdlog，`ON`，`DisableOtherLoggingSinks`）；所有 abort 宏（CUDA/OPTIX/VK/NGX）在 abort 前 flush spdlog
+- [ ] display_stream blocking 回测：负值修复落地后，若 DLSS 仍崩溃则将 display_stream 改为 blocking（去掉 `cudaStreamNonBlocking`）；若不崩溃则直接勾选
+- [ ] EvalStorage 持久化回测：NGX 日志回调落地后，若 NGX 错误仍不可见则将 evaluate() 传给 NGX 的指针目标（矩阵、tex/surf object）改为持久成员；若可见则直接勾选
 - [ ] 请求用户在 CLion 中编译验证（render height / exposure / FOV 滑块拖拽释放后值正常提交；相机进入单面几何体内部时无 aux data 陈旧伪影；垂直相机运动下 DLSS-RR 无 ghosting）
 
 ## Step 15：自适应 Sample 数
