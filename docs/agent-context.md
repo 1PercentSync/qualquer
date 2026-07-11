@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4.5 — 收敛质量 + DLSS-RR + 自适应
-- **进度**：Phase 4.5 Step 14.5 首次 evaluate 有效性状态机完成；DLSS 仅消费 valid input slot，history reset 随首个新 slot 传递，缺少 temporal predecessor 时生成零 MV
+- **进度**：Phase 4.5 Step 14.5 DLSS radiance 均值与暂停语义完成；DLSS color 按 effective spp 归一化，0 spp 不提交 raygen/evaluate、不翻资源 slot并复用最后有效输出
 
 ### 下一个任务
 
-Phase 4.5 Step 14.5 DLSS ON radiance 均值与 0 spp 暂停语义
+Phase 4.5 Step 14.5 DLSS ON primary ray sample loop 提取
 
 ---
 
