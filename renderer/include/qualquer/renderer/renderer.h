@@ -323,9 +323,6 @@ namespace qualquer::renderer {
             /** @brief Frame delta supplied with this input frame, in milliseconds. */
             float frame_time_ms = 0.0f;
 
-            /** @brief Monotonic identifier of the frame that produced this slot. */
-            uint32_t frame_id = 0;
-
             /** @brief Whether evaluation of this input discards DLSS history. */
             bool reset = false;
 

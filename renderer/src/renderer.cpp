@@ -656,7 +656,6 @@ namespace qualquer::renderer {
                 .view_matrix = scene.camera.view,
                 .projection_matrix = scene.camera.projection,
                 .frame_time_ms = scene.frame_time_ms,
-                .frame_id = frame_counter_,
                 .reset = slot_reset,
                 .valid = produces_dlss_input,
             };
