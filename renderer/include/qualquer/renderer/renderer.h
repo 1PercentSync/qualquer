@@ -330,8 +330,25 @@ namespace qualquer::renderer {
             bool valid = false;
         };
 
-        /** @brief Invalidates both DLSS input slots and requests history reset. */
-        void invalidate_dlss_inputs();
+        /**
+         * @brief Invalidates DLSS input slots and requests history reset.
+         *
+         * Marks both slots as not containing a valid DLSS input and sets a
+         * pending reset token. Does NOT clear dlss_output_valid_ — the last
+         * DLSS output remains displayable as a frozen frame (e.g. during
+         * paused camera motion).
+         */
+        void invalidate_dlss_history();
+
+        /**
+         * @brief Full DLSS state invalidation: history + cached output.
+         *
+         * Calls invalidate_dlss_history() and additionally clears
+         * dlss_output_valid_, so the display falls back to raw-color tonemap.
+         * Used when the output buffer itself is reallocated or the scene
+         * content changes (feature lifecycle, resize, scene switch).
+         */
+        void invalidate_dlss_state();
 
         /** @brief OptiX pipeline (module, program groups, linked handle). */
         optix::Pipeline pipeline_;

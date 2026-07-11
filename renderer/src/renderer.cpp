@@ -280,13 +280,17 @@ namespace qualquer::renderer {
         roughness.free();
     }
 
-    void Renderer::invalidate_dlss_inputs() {
+    void Renderer::invalidate_dlss_history() {
         for (auto &metadata: dlss_frame_metadata_) {
             metadata.valid = false;
             metadata.reset = false;
         }
-        dlss_output_valid_ = false;
         dlss_reset_requested_ = true;
+    }
+
+    void Renderer::invalidate_dlss_state() {
+        invalidate_dlss_history();
+        dlss_output_valid_ = false;
     }
 
     void Renderer::init(const optix::Context &cuda_context,
@@ -427,7 +431,7 @@ namespace qualquer::renderer {
     void Renderer::load_scene(const optix::Context &cuda_context,
                               const std::span<const Mesh> meshes,
                               const std::span<const MeshInstance> instances) {
-        invalidate_dlss_inputs();
+        invalidate_dlss_state();
 
         // Runtime scene switching: tear down the previous scene's AS and
         // geometry-info buffer before rebuilding.
@@ -523,7 +527,7 @@ namespace qualquer::renderer {
                 buffers.resize(render_width, render_height);
             }
             accum_counts_ = {0, 0};
-            invalidate_dlss_inputs();
+            invalidate_dlss_state();
             render_width_ = render_width;
             render_height_ = render_height;
             render_res_changed = true;
@@ -545,7 +549,7 @@ namespace qualquer::renderer {
                 }
                 dlss_rr.create_feature(render_width, render_height, width, height,
                                        scene.dlss_preset, cuda_context.display_stream);
-                invalidate_dlss_inputs();
+                invalidate_dlss_state();
             }
         }
         // Release feature when user disables DLSS (free VRAM immediately).
@@ -553,7 +557,7 @@ namespace qualquer::renderer {
             CUDA_CHECK(cudaStreamSynchronize(cuda_context.compute_stream));
             CUDA_CHECK(cudaStreamSynchronize(cuda_context.display_stream));
             dlss_rr.release_feature();
-            invalidate_dlss_inputs();
+            invalidate_dlss_state();
         }
 
         // Dual-stream overlap: compute_stream runs raygen while display_stream
@@ -612,6 +616,14 @@ namespace qualquer::renderer {
         } else if (camera_changed || settings_changed) {
             // Preserve automatic reset causes until a frame is actually produced.
             reset_requested_ = true;
+            // Camera/projection change during pause is a temporal discontinuity:
+            // the old DLSS input slots no longer match the new viewpoint. Mark
+            // them invalid and request history reset so the first resumed frame
+            // starts a fresh temporal sequence. The cached DLSS output stays
+            // displayable as a frozen frame until new data arrives.
+            if (dlss_active && camera_changed) {
+                invalidate_dlss_history();
+            }
         }
 
         // DLSS ON: always overwrite (single-frame output, no accumulation).
@@ -825,9 +837,10 @@ namespace qualquer::renderer {
                            1,                  // no Separate Sum division
                            exposure_linear,
                            cuda_context.display_stream);
-        } else if (dlss_active && !has_new_samples && dlss_output_valid_) {
-            // Paused DLSS input: reuse the last completed output without
-            // evaluating the same noisy frame or advancing temporal history.
+        } else if (dlss_active && dlss_output_valid_) {
+            // No evaluable input but a valid cached output exists: reuse it.
+            // Covers both paused frames and the bootstrap frame after a
+            // history-only invalidation (e.g. camera moved while paused).
             launch_tonemap(dlss_output_.tex_object(),
                            cuda_context.display_surface,
                            width, height,
@@ -1118,6 +1131,6 @@ namespace qualquer::renderer {
 
     void Renderer::reset_accumulation() {
         reset_requested_ = true;
-        invalidate_dlss_inputs();
+        invalidate_dlss_state();
     }
 } // namespace qualquer::renderer
