@@ -156,8 +156,11 @@ namespace qualquer::optix {
         device_id_ = best_device;
         device_uuid = get_device_uuid(prop);
 
+        // Compute stays independent for PT/display overlap. Display participates
+        // in legacy default-stream ordering because NGX's CUDA path may enqueue
+        // internal work there before tonemap and completion events.
         CUDA_CHECK(cudaStreamCreateWithFlags(&compute_stream, cudaStreamNonBlocking));
-        CUDA_CHECK(cudaStreamCreateWithFlags(&display_stream, cudaStreamNonBlocking));
+        CUDA_CHECK(cudaStreamCreate(&display_stream));
 
         spdlog::info("CUDA device {}: \"{}\" with compute capability {}.{}",
                      best_device, prop.name, best_major, best_minor);
