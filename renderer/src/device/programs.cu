@@ -56,6 +56,156 @@ namespace qualquer::renderer {
 extern "C" {
 __constant__ qualquer::renderer::LaunchParams params;
 
+/// Traces one path from a primary ray, returning per-sample radiance.
+/// When capture_primary is true (first sample), writes primary hit/miss
+/// info into the output parameters for MV and sky aux-default computation.
+__forceinline__ __device__ float3 trace_sample(
+    const float3 cam_origin,
+    const float3 primary_dir,
+    const uint32_t pixel_index,
+    const uint32_t sample_index,
+    const bool capture_primary,
+    float3 &primary_hit_pos,
+    float3 &primary_sky_color,
+    bool &primary_is_hit
+) {
+    using namespace qualquer::renderer;
+
+    PathState path{};
+    path.origin = cam_origin;
+    path.direction = primary_dir;
+    path.throughput = make_float3(1.0f, 1.0f, 1.0f);
+    path.radiance = make_float3(0.0f, 0.0f, 0.0f);
+    path.pixel_index = pixel_index;
+    path.sample_index = sample_index;
+    path.bounce = 0;
+    path.alive = true;
+
+    // Payload registers persist across bounces: closesthit's env_mis_weight
+    // (p13) survives into the next iteration's miss read.
+    uint32_t p0 = 0, p1 = 0, p2 = 0, p3 = 0, p4 = 0, p5 = 0;
+    uint32_t p6 = 0, p7 = 0, p8 = 0, p9 = 0, p10 = 0, p11 = 0;
+    uint32_t p12 = 0, p13 = __float_as_uint(1.0f), p14 = 0;
+    uint32_t p15 = 0, p16 = 0, p17 = 0;
+
+    while (path.alive && path.bounce < params.max_bounces) {
+        // ---- Russian Roulette (bounce >= 2) ----
+        if (path.bounce >= 2) {
+            const uint32_t rr_dim = bounce_dim_base(path.bounce) + kBounceOffsetRR;
+            const float rr_rand = sobol_rng(params.sobol_directions, pixel_index,
+                                           sample_index, params.frame_index, rr_dim);
+            const float rr_prob = fminf(0.95f,
+                fmaxf(0.05f, fmaxf(path.throughput.x,
+                                   fmaxf(path.throughput.y, path.throughput.z))));
+            if (rr_rand >= rr_prob) {
+                path.alive = false;
+                break;
+            }
+            path.throughput = path.throughput / rr_prob;
+        }
+
+        p15 = sample_index;
+        p17 = path.bounce;
+
+        optixTraverse(params.traversable,
+                      path.origin,
+                      path.direction,
+                      0.0f, // tmin
+                      1e16f, // tmax
+                      0.0f, // rayTime
+                      0xFF, // visibilityMask
+                      OPTIX_RAY_FLAG_NONE,
+                      0, // SBT offset
+                      0, // SBT stride (all geometries share one hitgroup record)
+                      0, // miss SBT index (env)
+                      p0, p1, p2, p3, p4, p5,
+                      p6, p7, p8, p9, p10, p11,
+                      p12, p13, p14, p15, p16, p17);
+        // SER: reorder by material for texture cache coherence. With a
+        // single hitgroup record the default hint only separates hit vs
+        // miss; the masked material hint additionally groups threads by
+        // material. 10 bits cover 1024 materials exactly; beyond that the
+        // mask aliases low index bits (bucket-sharing materials still
+        // group, quality degrades gracefully). Wider hints measurably pay
+        // more sort cost; narrower ones cap the exact-grouping capacity.
+        uint32_t reorder_hint = 0;
+        if (optixHitObjectIsHit()) {
+            const uint32_t geo_idx = optixHitObjectGetInstanceId()
+                                   + optixHitObjectGetSbtGASIndex();
+            reorder_hint = params.geometry_infos[geo_idx].material_buffer_offset;
+        }
+        optixReorder(reorder_hint & 0x3FFu, 10);
+        optixInvoke(p0, p1, p2, p3, p4, p5,
+                    p6, p7, p8, p9, p10, p11,
+                    p12, p13, p14, p15, p16, p17);
+
+        const PayloadData d = payload_unpack(
+            p0, p1, p2, p3, p4, p5,
+            p6, p7, p8, p9, p10, p11,
+            p12, p13, p14, p15, p16, p17);
+
+        // Capture first-bounce result for MV + sky aux defaults (first sample only).
+        if (capture_primary && path.bounce == 0) {
+            if (d.hit_distance >= 0.0f) {
+                primary_is_hit = true;
+                primary_hit_pos = cam_origin + primary_dir * d.hit_distance;
+            } else {
+                primary_is_hit = false;
+                primary_sky_color = d.color;
+            }
+        }
+
+        // Accumulate radiance contribution from this bounce.
+        float3 contribution = path.throughput * d.color;
+        if (d.hit_distance < 0.0f) {
+            contribution = contribution * d.env_mis_weight;
+        }
+        path.radiance = path.radiance + contribution;
+
+        if (d.hit_distance < 0.0f) {
+            path.alive = false;
+            break;
+        }
+
+        path.throughput = path.throughput * d.throughput_update;
+
+        if (fmaxf(path.throughput.x, fmaxf(path.throughput.y, path.throughput.z)) < 1e-6f) {
+            path.alive = false;
+            break;
+        }
+
+        path.origin = d.next_origin;
+        path.direction = d.next_direction;
+        path.bounce += 1;
+    }
+
+    return path.radiance;
+}
+
+/// Computes the primary ray direction from subpixel jitter offsets.
+__forceinline__ __device__ float3 compute_primary_dir(
+    const uint32_t px, const uint32_t py,
+    const float jx, const float jy
+) {
+    const float u = (static_cast<float>(px) + jx) / static_cast<float>(params.width);
+    const float v = (static_cast<float>(py) + jy) / static_cast<float>(params.height);
+    const float ndc_x = u * 2.0f - 1.0f;
+    const float ndc_y = -(v * 2.0f - 1.0f);
+
+    const float4 clip_target = make_float4(ndc_x, ndc_y, 1.0f, 1.0f);
+    float4 view_target = mul(params.inv_projection, clip_target);
+    const float inv_w = 1.0f / view_target.w;
+    view_target = make_float4(view_target.x * inv_w,
+                              view_target.y * inv_w,
+                              view_target.z * inv_w,
+                              1.0f);
+    const float4 dir_w = mul(params.inv_view, make_float4(view_target.x,
+                                                          view_target.y,
+                                                          view_target.z,
+                                                          0.0f));
+    return normalize(make_float3(dir_w.x, dir_w.y, dir_w.z));
+}
+
 /// Ray generation: samples_per_frame paths per pixel with subpixel jitter,
 /// accumulated in registers and written once as a DLSS mean or fallback sum.
 __global__ void __raygen__rg() { // NOLINT(*-reserved-identifier)
@@ -86,160 +236,42 @@ __global__ void __raygen__rg() { // NOLINT(*-reserved-identifier)
     // First-bounce capture for MV + sky aux defaults (sample 0 only).
     float3 primary_hit_pos = make_float3(0.0f, 0.0f, 0.0f);
     float3 primary_sky_color = make_float3(0.0f, 0.0f, 0.0f);
-    float3 primary_dir_saved = make_float3(0.0f, 0.0f, 1.0f); // sample 0's direction for MV
+    float3 primary_dir_saved = make_float3(0.0f, 0.0f, 1.0f);
     bool primary_is_hit = false;
 
-    for (uint32_t s = 0; s < params.samples_per_frame; ++s) {
-        const uint32_t sample_index = params.sample_count + s;
+    if (params.dlss_enabled) {
+        // DLSS ON: per-frame jitter is uniform across pixels and samples.
+        // Primary ray is identical for all samples — compute once, loop
+        // only over path tracing.
+        const float3 primary_dir = compute_primary_dir(
+            idx.x, idx.y, params.jitter_x, params.jitter_y);
+        primary_dir_saved = primary_dir;
 
-        // ---- Subpixel jitter + primary ray ----
-        // DLSS ON: global jitter from host (uniform across pixels, matches
-        //   InJitterOffset for temporal super-resolution). Per-frame: all
-        //   samples share the same jitter so primary ray is identical.
-        // DLSS OFF: per-pixel Sobol + CP rotation, per-sample (each sample
-        //   gets a different jitter for faster Monte Carlo convergence).
-        float jx, jy;
-        if (params.dlss_enabled) {
-            jx = params.jitter_x;
-            jy = params.jitter_y;
-        } else {
-            jx = sobol_rng(params.sobol_directions, pixel_index,
-                           sample_index, params.frame_index, kDimJitterX);
-            jy = sobol_rng(params.sobol_directions, pixel_index,
-                           sample_index, params.frame_index, kDimJitterY);
+        for (uint32_t s = 0; s < params.samples_per_frame; ++s) {
+            const uint32_t sample_index = params.sample_count + s;
+            frame_radiance = frame_radiance + trace_sample(
+                cam_origin, primary_dir, pixel_index, sample_index,
+                s == 0, primary_hit_pos, primary_sky_color, primary_is_hit);
         }
+    } else {
+        // DLSS OFF: per-pixel Sobol + CP rotation, per-sample jitter.
+        // Each sample gets a different primary ray for Monte Carlo convergence.
+        for (uint32_t s = 0; s < params.samples_per_frame; ++s) {
+            const uint32_t sample_index = params.sample_count + s;
+            const float jx = sobol_rng(params.sobol_directions, pixel_index,
+                                       sample_index, params.frame_index, kDimJitterX);
+            const float jy = sobol_rng(params.sobol_directions, pixel_index,
+                                       sample_index, params.frame_index, kDimJitterY);
+            const float3 primary_dir = compute_primary_dir(idx.x, idx.y, jx, jy);
 
-        const float u = (static_cast<float>(idx.x) + jx) / static_cast<float>(params.width);
-        const float v = (static_cast<float>(idx.y) + jy) / static_cast<float>(params.height);
-        const float ndc_x = u * 2.0f - 1.0f;
-        const float ndc_y = -(v * 2.0f - 1.0f);
-
-        const float4 clip_target = make_float4(ndc_x, ndc_y, 1.0f, 1.0f);
-        float4 view_target = mul(params.inv_projection, clip_target);
-        const float inv_w = 1.0f / view_target.w;
-        view_target = make_float4(view_target.x * inv_w,
-                                  view_target.y * inv_w,
-                                  view_target.z * inv_w,
-                                  1.0f);
-        const float4 dir_w = mul(params.inv_view, make_float4(view_target.x,
-                                                              view_target.y,
-                                                              view_target.z,
-                                                              0.0f));
-        const float3 primary_dir = normalize(make_float3(dir_w.x, dir_w.y, dir_w.z));
-
-        // ---- PathState ----
-        PathState path{};
-        path.origin = cam_origin;
-        path.direction = primary_dir;
-        path.throughput = make_float3(1.0f, 1.0f, 1.0f);
-        path.radiance = make_float3(0.0f, 0.0f, 0.0f);
-        path.pixel_index = pixel_index;
-        path.sample_index = sample_index;
-        path.bounce = 0;
-        path.alive = true;
-
-        // ---- Bounce loop ----
-        // Payload registers persist across bounces: closesthit's env_mis_weight
-        // (p13) survives into the next iteration's miss read.
-        uint32_t p0 = 0, p1 = 0, p2 = 0, p3 = 0, p4 = 0, p5 = 0;
-        uint32_t p6 = 0, p7 = 0, p8 = 0, p9 = 0, p10 = 0, p11 = 0;
-        uint32_t p12 = 0, p13 = __float_as_uint(1.0f), p14 = 0;
-        uint32_t p15 = 0, p16 = 0, p17 = 0;
-
-        while (path.alive && path.bounce < params.max_bounces) {
-            // ---- Russian Roulette (bounce >= 2) ----
-            if (path.bounce >= 2) {
-                const uint32_t rr_dim = bounce_dim_base(path.bounce) + kBounceOffsetRR;
-                const float rr_rand = sobol_rng(params.sobol_directions, pixel_index,
-                                               sample_index, params.frame_index, rr_dim);
-                const float rr_prob = fminf(0.95f,
-                    fmaxf(0.05f, fmaxf(path.throughput.x,
-                                       fmaxf(path.throughput.y, path.throughput.z))));
-                if (rr_rand >= rr_prob) {
-                    path.alive = false;
-                    break;
-                }
-                path.throughput = path.throughput / rr_prob;
-            }
-
-            p15 = sample_index;
-            p17 = path.bounce;
-
-            optixTraverse(params.traversable,
-                          path.origin,
-                          path.direction,
-                          0.0f, // tmin
-                          1e16f, // tmax
-                          0.0f, // rayTime
-                          0xFF, // visibilityMask
-                          OPTIX_RAY_FLAG_NONE,
-                          0, // SBT offset
-                          0, // SBT stride (all geometries share one hitgroup record)
-                          0, // miss SBT index (env)
-                          p0, p1, p2, p3, p4, p5,
-                          p6, p7, p8, p9, p10, p11,
-                          p12, p13, p14, p15, p16, p17);
-            // SER: reorder by material for texture cache coherence. With a
-            // single hitgroup record the default hint only separates hit vs
-            // miss; the masked material hint additionally groups threads by
-            // material. 10 bits cover 1024 materials exactly; beyond that the
-            // mask aliases low index bits (bucket-sharing materials still
-            // group, quality degrades gracefully). Wider hints measurably pay
-            // more sort cost; narrower ones cap the exact-grouping capacity.
-            uint32_t reorder_hint = 0;
-            if (optixHitObjectIsHit()) {
-                const uint32_t geo_idx = optixHitObjectGetInstanceId()
-                                       + optixHitObjectGetSbtGASIndex();
-                reorder_hint = params.geometry_infos[geo_idx].material_buffer_offset;
-            }
-            optixReorder(reorder_hint & 0x3FFu, 10);
-            optixInvoke(p0, p1, p2, p3, p4, p5,
-                        p6, p7, p8, p9, p10, p11,
-                        p12, p13, p14, p15, p16, p17);
-
-            const PayloadData d = payload_unpack(
-                p0, p1, p2, p3, p4, p5,
-                p6, p7, p8, p9, p10, p11,
-                p12, p13, p14, p15, p16, p17);
-
-            // Capture first-bounce result for MV + sky aux defaults.
-            // Sample 0 only — uses its primary_dir for MV sky projection.
-            if (s == 0 && path.bounce == 0) {
+            if (s == 0) {
                 primary_dir_saved = primary_dir;
-                if (d.hit_distance >= 0.0f) {
-                    primary_is_hit = true;
-                    primary_hit_pos = cam_origin + primary_dir * d.hit_distance;
-                } else {
-                    primary_is_hit = false;
-                    primary_sky_color = d.color;
-                }
             }
 
-            // Accumulate radiance contribution from this bounce.
-            float3 contribution = path.throughput * d.color;
-            if (d.hit_distance < 0.0f) {
-                contribution = contribution * d.env_mis_weight;
-            }
-            path.radiance = path.radiance + contribution;
-
-            if (d.hit_distance < 0.0f) {
-                path.alive = false;
-                break;
-            }
-
-            path.throughput = path.throughput * d.throughput_update;
-
-            if (fmaxf(path.throughput.x, fmaxf(path.throughput.y, path.throughput.z)) < 1e-6f) {
-                path.alive = false;
-                break;
-            }
-
-            path.origin = d.next_origin;
-            path.direction = d.next_direction;
-            path.bounce += 1;
+            frame_radiance = frame_radiance + trace_sample(
+                cam_origin, primary_dir, pixel_index, sample_index,
+                s == 0, primary_hit_pos, primary_sky_color, primary_is_hit);
         }
-
-        frame_radiance = frame_radiance + path.radiance;
     }
 
     // ---- Color output ----
