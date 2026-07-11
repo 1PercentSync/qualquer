@@ -220,10 +220,12 @@ namespace qualquer::optix {
         [[nodiscard]] NVSDK_NGX_Parameter *ngx_params() const { return ngx_params_; }
 
         /**
-         * @brief Queries VRAM allocated by the active DLSS-RR feature.
-         * @return Bytes allocated, or 0 if no feature is active or the query fails.
+         * @brief Returns VRAM allocated by the active DLSS-RR feature.
+         *
+         * Cached at feature creation time; no per-frame NGX query.
+         * @return Bytes allocated, or 0 if no feature is active.
          */
-        [[nodiscard]] uint64_t vram_allocated_bytes() const;
+        [[nodiscard]] uint64_t vram_allocated_bytes() const { return cached_vram_bytes_; }
 
         /**
          * @brief Releases the current DLSS-RR feature, freeing its VRAM.
@@ -241,6 +243,7 @@ namespace qualquer::optix {
         NVSDK_NGX_Parameter *ngx_params_ = nullptr;
         NVSDK_NGX_Handle *ngx_handle_ = nullptr;
         std::array<DlssOptimalSettings, kDlssQualityModeCount> optimal_settings_{};
+        uint64_t cached_vram_bytes_ = 0;
     };
 
 } // namespace qualquer::optix

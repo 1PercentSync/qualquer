@@ -332,17 +332,16 @@ namespace qualquer::optix {
         eval.InPreExposure = 1.0f;
 
         NGX_CHECK(NGX_CUDA_EVALUATE_DLSSD_EXT(ngx_handle_, ngx_params_, &eval));
-    }
 
-    uint64_t DlssRR::vram_allocated_bytes() const {
-        if (!ngx_params_) {
-            return 0;
+        // VRAM allocation stabilizes after the first evaluate. Query once,
+        // then stop — the value is constant for this feature's lifetime.
+        if (cached_vram_bytes_ == 0) {
+            unsigned long long vram = 0;
+            if (NVSDK_NGX_SUCCEEDED(NGX_DLSSD_GET_STATS(ngx_params_, &vram))
+                && vram > 0) {
+                cached_vram_bytes_ = vram;
+            }
         }
-        unsigned long long bytes = 0;
-        if (NVSDK_NGX_FAILED(NGX_DLSSD_GET_STATS(ngx_params_, &bytes))) {
-            return 0;
-        }
-        return bytes;
     }
 
     void DlssRR::release_feature() {
@@ -350,6 +349,7 @@ namespace qualquer::optix {
             NGX_CHECK(NVSDK_NGX_CUDA_ReleaseFeature(ngx_handle_));
             ngx_handle_ = nullptr;
         }
+        cached_vram_bytes_ = 0;
     }
 
     bool DlssRR::cache_optimal_settings(uint32_t display_width, uint32_t display_height) {
