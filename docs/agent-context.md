@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4.5 — 收敛质量 + DLSS-RR + 自适应
-- **进度**：Phase 4.5 Step 14.5 `cache_optimal_settings` 错误处理改进完成；单 mode 查询失败不再跳过剩余 mode
+- **进度**：Phase 4.5 Step 14.5 DLSS-RR VRAM 统计缓存完成；首次 evaluate 后查询并缓存，移除每帧 NGX stats 查询
 
 ### 下一个任务
 
-Phase 4.5 Step 14.5 按 feature 生命周期缓存 DLSS-RR VRAM 统计
+Phase 4.5 Step 14.5 DLSS ON primary ray 提出 sample loop
 
 ---
 
