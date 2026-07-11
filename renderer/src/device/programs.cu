@@ -57,7 +57,7 @@ extern "C" {
 __constant__ qualquer::renderer::LaunchParams params;
 
 /// Ray generation: samples_per_frame paths per pixel with subpixel jitter,
-/// accumulated in registers and written once to the Separate Sum buffer.
+/// accumulated in registers and written once as a DLSS mean or fallback sum.
 __global__ void __raygen__rg() { // NOLINT(*-reserved-identifier)
     using namespace qualquer::renderer;
 
@@ -247,14 +247,20 @@ __global__ void __raygen__rg() { // NOLINT(*-reserved-identifier)
     // upscale / box-filter downscale) skip alpha interpolation and hardcode
     // 1.0, so a non-trivial alpha written here would be silently discarded
     // when render != display resolution. Keep in sync if alpha gains meaning.
-    // DLSS ON: single-frame noisy HDR (no accumulation).
+    // DLSS ON: mean single-frame noisy HDR (no persistent accumulation).
     // DLSS OFF: Separate Sum — read old total via tex2D, add new, write total.
     {
         const int sx = static_cast<int>(idx.x);
         const int sy = static_cast<int>(idx.y);
         float4 out_color;
         if (params.dlss_enabled) {
-            out_color = make_float4(frame_radiance.x, frame_radiance.y, frame_radiance.z, 1.0f);
+            const float inverse_sample_count =
+                1.0f / static_cast<float>(params.samples_per_frame);
+            out_color = make_float4(
+                frame_radiance.x * inverse_sample_count,
+                frame_radiance.y * inverse_sample_count,
+                frame_radiance.z * inverse_sample_count,
+                1.0f);
         } else if (params.sample_count == 0) {
             out_color = make_float4(frame_radiance.x, frame_radiance.y, frame_radiance.z, 1.0f);
         } else {

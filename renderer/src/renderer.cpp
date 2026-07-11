@@ -285,6 +285,7 @@ namespace qualquer::renderer {
             metadata.valid = false;
             metadata.reset = false;
         }
+        dlss_output_valid_ = false;
         dlss_reset_requested_ = true;
     }
 
@@ -337,6 +338,7 @@ namespace qualquer::renderer {
         dlss_output_.alloc(width, height);
         dlss_output_width_ = width;
         dlss_output_height_ = height;
+        dlss_output_valid_ = false;
 
         render_width_ = width;
         render_height_ = height;
@@ -477,6 +479,7 @@ namespace qualquer::renderer {
             dlss_output_.resize(width, height);
             dlss_output_width_ = width;
             dlss_output_height_ = height;
+            dlss_output_valid_ = false;
             display_res_changed = true;
             spdlog::info("DLSS output buffer reallocated ({}x{} display resolution)",
                          width, height);
@@ -567,20 +570,25 @@ namespace qualquer::renderer {
         const AuxBufferSet &read_aux = aux_buffers_[read_slot];
         AuxBufferSet &write_aux = aux_buffers_[write_slot];
         const DlssFrameMetadata &read_metadata = dlss_frame_metadata_[read_slot];
+        const uint32_t effective_spp = scene.settings.accumulation_enabled
+                                           ? scene.settings.samples_per_frame
+                                           : 0;
+        const bool has_new_samples = effective_spp > 0;
 
         // --- compute_stream: wait write-slot consumption → raygen → record ---
         // The write slot's color and guides share this ownership boundary.
-        CUDA_CHECK(cudaStreamWaitEvent(
-            cuda_context.compute_stream, event_tonemap_done_[write_slot]));
+        if (has_new_samples) {
+            CUDA_CHECK(cudaStreamWaitEvent(
+                cuda_context.compute_stream, event_tonemap_done_[write_slot]));
+        }
 
         // Accumulation reset: any change in camera matrices or render settings
         // breaks the chain — chain_count drops to 0 so raygen overwrites instead
         // of accumulating. No buffer clearing: the read slot keeps its valid
         // count for tonemap; the write slot's count is set at frame end.
         //
-        // Accumulation pause (accumulation_enabled=false): effective_spp=0 so
-        // raygen's sample loop doesn't execute — it reads the old total and
-        // writes it back unchanged, count stays the same, display freezes.
+        // Accumulation pause (accumulation_enabled=false): no input is
+        // produced, no resource slot flips, and display reuses the last result.
         const float exposure_linear = std::pow(2.0f, scene.settings.exposure_ev);
 
         // Runtime DLSS flag: user wants it AND feature is actually created.
@@ -599,17 +607,20 @@ namespace qualquer::renderer {
             scene.settings.env_rotation != prev_env_rotation_ ||
             scene.settings.dlss_enabled != prev_dlss_enabled_;
         const bool needs_reset = camera_changed || settings_changed || reset_requested_;
-        reset_requested_ = false;
+        if (has_new_samples) {
+            reset_requested_ = false;
+        } else if (camera_changed || settings_changed) {
+            // Preserve automatic reset causes until a frame is actually produced.
+            reset_requested_ = true;
+        }
+
         // DLSS ON: always overwrite (single-frame output, no accumulation).
         // DLSS OFF: normal Separate Sum chain.
         const uint32_t chain_count = (needs_reset || dlss_active)
                                          ? 0
                                          : accum_counts_[read_slot];
-        const uint32_t effective_spp = scene.settings.accumulation_enabled
-                                           ? scene.settings.samples_per_frame
-                                           : 0;
         const bool produces_dlss_input = dlss_active
-                                         && effective_spp > 0
+                                         && has_new_samples
                                          && accel_.tlas_handle() != 0;
         const bool slot_reset = produces_dlss_input && dlss_reset_requested_;
         if (produces_dlss_input) {
@@ -638,16 +649,18 @@ namespace qualquer::renderer {
                                                     * read_metadata.view_matrix)
                                               : current_vp;
 
-        dlss_frame_metadata_[write_slot] = {
-            .jitter_x = jitter_x,
-            .jitter_y = jitter_y,
-            .view_matrix = scene.camera.view,
-            .projection_matrix = scene.camera.projection,
-            .frame_time_ms = scene.frame_time_ms,
-            .frame_id = frame_counter_,
-            .reset = slot_reset,
-            .valid = produces_dlss_input,
-        };
+        if (has_new_samples) {
+            dlss_frame_metadata_[write_slot] = {
+                .jitter_x = jitter_x,
+                .jitter_y = jitter_y,
+                .view_matrix = scene.camera.view,
+                .projection_matrix = scene.camera.projection,
+                .frame_time_ms = scene.frame_time_ms,
+                .frame_id = frame_counter_,
+                .reset = slot_reset,
+                .valid = produces_dlss_input,
+            };
+        }
 
         LaunchParams params{
             // Ping-pong color buffers as CUDA arrays: raygen writes via
@@ -702,52 +715,54 @@ namespace qualquer::renderer {
         };
         std::memcpy(params.sobol_directions, kSobolDirectionData, sizeof(params.sobol_directions));
 
+        if (has_new_samples) {
 #ifndef NDEBUG
-        // Read frame N-2's PT timing. Synchronize the end event to ensure the
-        // compute_stream work is complete (fence only guarantees display_stream).
-        // Nearly zero wait in practice — frame N-2's raygen is consumed by
-        // frame N-1's display_stream before the fence.
-        if (frame_counter_ >= 2) {
-            CUDA_CHECK(cudaEventSynchronize(event_pt_end_[timing_slot]));
-            cudaEventElapsedTime(
-                &pt_ms_, event_pt_start_[timing_slot], event_pt_end_[timing_slot]);
+            // Read frame N-2's PT timing. Synchronize the end event to ensure the
+            // compute_stream work is complete (fence only guarantees display_stream).
+            // Nearly zero wait in practice — frame N-2's raygen is consumed by
+            // frame N-1's display_stream before the fence.
+            if (frame_counter_ >= 2) {
+                CUDA_CHECK(cudaEventSynchronize(event_pt_end_[timing_slot]));
+                cudaEventElapsedTime(
+                    &pt_ms_, event_pt_start_[timing_slot], event_pt_end_[timing_slot]);
+            }
+            CUDA_CHECK(cudaEventRecord(
+                event_pt_start_[timing_slot], cuda_context.compute_stream));
+#endif
+
+            params_buffer_.upload(&params, 1, cuda_context.compute_stream);
+
+            const OptixShaderBindingTable sbt{
+                .raygenRecord = sbt_raygen_.device_ptr(),
+                .exceptionRecord = 0,
+                .missRecordBase = sbt_miss_.device_ptr(),
+                .missRecordStrideInBytes = sizeof(SbtRecord),
+                .missRecordCount = 2,
+                .hitgroupRecordBase = sbt_hit_.device_ptr(),
+                .hitgroupRecordStrideInBytes = sizeof(SbtRecord),
+                .hitgroupRecordCount = 1,
+                .callablesRecordBase = 0,
+                .callablesRecordStrideInBytes = 0,
+                .callablesRecordCount = 0,
+            };
+
+            // traversable=0 is valid: raygen does not call optixTrace, so no
+            // acceleration structure is traversed.
+            OPTIX_CHECK(optixLaunch(pipeline_.handle,
+                cuda_context.compute_stream,
+                params_buffer_.device_ptr(),
+                sizeof(LaunchParams),
+                &sbt,
+                render_width, render_height, 1));
+
+#ifndef NDEBUG
+            CUDA_CHECK(cudaEventRecord(
+                event_pt_end_[timing_slot], cuda_context.compute_stream));
+#endif
+
+            CUDA_CHECK(cudaEventRecord(
+                event_raygen_done_[write_slot], cuda_context.compute_stream));
         }
-        CUDA_CHECK(cudaEventRecord(
-            event_pt_start_[timing_slot], cuda_context.compute_stream));
-#endif
-
-        params_buffer_.upload(&params, 1, cuda_context.compute_stream);
-
-        const OptixShaderBindingTable sbt{
-            .raygenRecord = sbt_raygen_.device_ptr(),
-            .exceptionRecord = 0,
-            .missRecordBase = sbt_miss_.device_ptr(),
-            .missRecordStrideInBytes = sizeof(SbtRecord),
-            .missRecordCount = 2,
-            .hitgroupRecordBase = sbt_hit_.device_ptr(),
-            .hitgroupRecordStrideInBytes = sizeof(SbtRecord),
-            .hitgroupRecordCount = 1,
-            .callablesRecordBase = 0,
-            .callablesRecordStrideInBytes = 0,
-            .callablesRecordCount = 0,
-        };
-
-        // traversable=0 is valid: raygen does not call optixTrace, so no
-        // acceleration structure is traversed.
-        OPTIX_CHECK(optixLaunch(pipeline_.handle,
-            cuda_context.compute_stream,
-            params_buffer_.device_ptr(),
-            sizeof(LaunchParams),
-            &sbt,
-            render_width, render_height, 1));
-
-#ifndef NDEBUG
-        CUDA_CHECK(cudaEventRecord(
-            event_pt_end_[timing_slot], cuda_context.compute_stream));
-#endif
-
-        CUDA_CHECK(cudaEventRecord(
-            event_raygen_done_[write_slot], cuda_context.compute_stream));
 
         // --- display_stream: wait read-slot production → evaluate/tonemap → record ---
         // Wait for the previous frame's blit to finish reading display_surface
@@ -777,7 +792,10 @@ namespace qualquer::renderer {
             event_display_start_[timing_slot], cuda_context.display_stream));
 #endif
 
-        if (dlss_active && read_metadata.valid) {
+        const bool evaluate_dlss = dlss_active
+                                   && has_new_samples
+                                   && read_metadata.valid;
+        if (evaluate_dlss) {
             // DLSS ON: evaluate reads the previous valid noisy input (read
             // slot) and writes the denoised+upscaled result to dlss_output.
             // Then tonemap reads dlss_output at display resolution (1:1, no
@@ -801,12 +819,23 @@ namespace qualquer::renderer {
                 .frame_time_ms = read_metadata.frame_time_ms,
             };
             dlss_rr.evaluate(eval_input);
+            dlss_output_valid_ = true;
 
             launch_tonemap(dlss_output_.tex_object(),
                            cuda_context.display_surface,
                            width, height,      // dlss_output is display resolution
                            width, height,      // 1:1, no resampling
                            1,                  // no Separate Sum division
+                           exposure_linear,
+                           cuda_context.display_stream);
+        } else if (dlss_active && !has_new_samples && dlss_output_valid_) {
+            // Paused DLSS input: reuse the last completed output without
+            // evaluating the same noisy frame or advancing temporal history.
+            launch_tonemap(dlss_output_.tex_object(),
+                           cuda_context.display_surface,
+                           width, height,
+                           width, height,
+                           1,
                            exposure_linear,
                            cuda_context.display_stream);
         } else {
@@ -836,15 +865,19 @@ namespace qualquer::renderer {
         constexpr cudaExternalSemaphoreSignalParams signal_params{};
         CUDA_CHECK(cudaSignalExternalSemaphoresAsync(&sem, &signal_params, 1, cuda_context.display_stream));
 
-        // The write slot now holds chain_count + samples_per_frame samples.
-        // Empty scene (traversable == 0): device wrote black, no valid samples
-        // produced — keep the write-slot count at 0 so tonemap shows black and
-        // the next frame enters overwrite mode when a scene is loaded.
-        accum_counts_[write_slot] = accel_.tlas_handle() == 0
-                                         ? 0
-                                         : chain_count + params.samples_per_frame;
-        accum_index_ = write_slot;
-        prev_view_projection_ = current_vp;
+        if (has_new_samples) {
+            // DLSS color is already a per-frame mean, while the fallback path
+            // stores a Separate Sum paired with its accumulated sample count.
+            if (dlss_active) {
+                accum_counts_[write_slot] = produces_dlss_input ? 1 : 0;
+            } else {
+                accum_counts_[write_slot] = accel_.tlas_handle() == 0
+                                                 ? 0
+                                                 : chain_count + effective_spp;
+            }
+            accum_index_ = write_slot;
+            prev_view_projection_ = current_vp;
+        }
         ++frame_counter_;
     }
 

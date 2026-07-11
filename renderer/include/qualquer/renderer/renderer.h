@@ -355,9 +355,10 @@ namespace qualquer::renderer {
         /**
          * @brief Ping-pong HDR color buffers (RGBA32F, CUDA array + tex/surf).
          *
-         * Frame N reads buffer [accum_index_] via texture object and writes
-         * [1 - accum_index_] via surface object, then flips the index for the
-         * next frame. DLSS-RR reads the read slot via CUtexObject*; raygen
+         * A produced frame reads buffer [accum_index_] via texture object and
+         * writes [1 - accum_index_] via surface object, then flips the index.
+         * A paused frame keeps the index unchanged. DLSS-RR reads the read slot
+         * via CUtexObject*; raygen
          * writes via surf2Dwrite. CUDA arrays are required for DLSS CUDA API
          * resource consumption (see current-phase.md "Ping-pong Buffer 类型迁移").
          */
@@ -366,7 +367,7 @@ namespace qualquer::renderer {
         /** @brief Device-side launch-params buffer (one LaunchParams). */
         optix::CudaBuffer<LaunchParams> params_buffer_;
 
-        /** @brief Index into accum_buffers_ of the buffer read this frame; flipped per frame. */
+        /** @brief Read slot index; flipped only after producing a new sample frame. */
         uint32_t accum_index_ = 0;
 
         /**
@@ -384,21 +385,18 @@ namespace qualquer::renderer {
         /**
          * @brief Monotonic frame counter; never reset.
          *
-         * Indexes the ping-pong buffers and CUDA events via frame_counter_ % 2,
-         * and is uploaded as LaunchParams::frame_index for device-side temporal
-         * variation (e.g. RNG seed). Never reset so both uses advance
-         * monotonically across the session.
+         * Uploaded as LaunchParams::frame_index for device-side temporal
+         * variation and indexes debug timing events. Resource ownership uses
+         * accum_index_ independently, so paused frames do not flip resources.
          */
         uint32_t frame_counter_ = 0;
 
         /**
-         * @brief Per-slot sample count: accum_counts_[i] is the number of samples
-         *        whose contributions are summed in accum_buffers_[i].
+         * @brief Per-slot normalization count paired with accum_buffers_.
          *
-         * Paired with the buffer contents so tonemap always divides by the
-         * count that matches what it reads, even across reset boundaries.
-         * On reset only the chain_count (fed to raygen) drops to 0; the read
-         * slot's count stays valid until raygen overwrites that buffer.
+         * DLSS OFF stores a Separate Sum and its accumulated sample count.
+         * DLSS ON stores a per-frame mean and therefore uses count 1. On reset
+         * the read slot stays valid until a produced frame overwrites it.
          */
         std::array<uint32_t, 2> accum_counts_ = {0, 0};
 
@@ -430,6 +428,9 @@ namespace qualquer::renderer {
 
         /** @brief Display height the DLSS output buffer is allocated for. */
         uint32_t dlss_output_height_ = 0;
+
+        /** @brief Whether dlss_output_ represents a valid evaluation result. */
+        bool dlss_output_valid_ = false;
 
         /**
          * @brief Deferred accumulation reset flag set by reset_accumulation().
