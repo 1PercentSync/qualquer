@@ -635,7 +635,7 @@ ngxParams->Set(NVSDK_NGX_Parameter_FreeMemOnReleaseFeature, 1);
 
 vk_denoise_dlssrr 与 vk_gltf_renderer 做法矛盾。跟随 vk_gltf_renderer（转置），理由：vk_gltf_renderer 是更活跃维护的项目，且与 optix-subd 的 row-major 直传语义一致。
 
-**前帧 VP 矩阵**：LaunchParams 传当前帧和前帧各一个 unjittered `VP = projection × view`（`float4x4`，row-major 供 device `mul()` 使用），MV 计算将 world pos 分别投影到两帧 VP 取差（vk_gltf_renderer `dlss_util.h:87-96` 做法）。host 端每帧末缓存当前帧 VP 作为下帧的 prevVP。
+**前帧 VP 矩阵**：LaunchParams 传当前帧和前帧各一个 unjittered `VP = projection × view`（`float4x4`，row-major 供 device `mul()` 使用），MV 计算将 world pos 分别投影到两帧 VP 取差（vk_gltf_renderer `dlss_util.h:87-96` 做法）。前帧 VP 来自 read slot 的 `DlssFrameMetadata`（与该 slot 的 color/aux 同帧产出）；没有有效 temporal predecessor 时回退到 current VP（零 MV）。不使用独立的 `prev_view_projection_` 成员——前帧矩阵与 slot 数据配对，避免帧错配。
 
 **Stream 分配与管线流程**（DLSS ON / OFF 双路径）：
 
@@ -808,7 +808,9 @@ blit / record_vulkan 全幅不变，Vulkan 侧不感知渲染分辨率。DLSS-RR
 
 **InReset 语义拆分**：accumulation reset（`chain_count=0`）和 DLSS `InReset`（丢弃时域历史）是两个独立语义。连续相机运动和参数变化只重置累积；场景切换、相机瞬移、HDR 重载和显式 Reset 请求 DLSS history reset。SDK 文档："Set to 1 when scene changes completely (new level etc)"。参考项目（optix-subd、vk_gltf_renderer）均仅在显式 reset 事件时设置。
 
-**DLSS ON color 均值**：D32 规定 color 输入为"同一亚像素位置 N 个 sample 的辐射度平均"。`effective_spp > 0` 时，raygen 将 sample loop 的 `frame_radiance` 累加总和除以 `effective_spp` 后写入 color write slot，并将该 slot 的 `accum_counts_` 置 1；该值表示已经归一化的一份单帧 radiance，切回 DLSS OFF 时不能再次按 spp 除法。`effective_spp == 0` 时不生成 color/aux/metadata、不改变 slot validity、不翻转 ping-pong，也不重复 evaluate 同一 input；已有 DLSS output 有效时直接 tonemap 最后输出，否则 fallback tonemap 当前 read color，从而保持暂停画面不变。
+**DLSS ON color 均值**：D32 规定 color 输入为"同一亚像素位置 N 个 sample 的辐射度平均"。`effective_spp > 0` 时，raygen 将 sample loop 的 `frame_radiance` 累加总和除以 `effective_spp` 后写入 color write slot，并将该 slot 的 `accum_counts_` 置 1；该值表示已经归一化的一份单帧 radiance，切回 DLSS OFF 时不能再次按 spp 除法。`effective_spp == 0` 时不生成 color/aux/metadata、不改变 slot validity、不翻转 ping-pong，也不重复 evaluate 同一 input；已有 DLSS output 有效时直接 tonemap 最后输出，否则 fallback tonemap 当前 read color，从而保持暂停画面不变。暂停期间若相机或投影变化，视为时域断点——调用 `invalidate_dlss_history()` 使 input slots 失效并请求 reset，但保留 `dlss_output_valid_` 使冻结画面不闪；恢复后首帧以 `InReset=1` 和零 MV 开启新历史。
+
+**DLSS invalidation 两级语义**：`invalidate_dlss_history()` 清 input slot validity + 请求 reset，保留 `dlss_output_valid_`（暂停期间相机变化使用）。`invalidate_dlss_state()` 调前者并清 `dlss_output_valid_`（feature 生命周期、resize、场景切换使用——output buffer 本身已重分配或内容已无关）。
 
 **DLSS ON primary ray 提出 sample loop**：DLSS ON 时 per-frame jitter 统一，所有 sample 的 primary ray 相同，但当前在 loop 内每 sample 重算（矩阵乘法 + normalize）。自适应 spp（Step 15）会在 DLSS ON 下提高 spp，冗余计算不可忽略。将 DLSS ON 分支的 jitter + primary ray 移到 loop 外，loop body 抽为 `__forceinline__` 函数供两个分支共用。
 

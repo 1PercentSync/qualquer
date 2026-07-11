@@ -11,7 +11,7 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4.5 — 收敛质量 + DLSS-RR + 自适应
-- **进度**：Phase 4.5 Step 14.5 DLSS radiance 均值与暂停语义完成；DLSS color 按 effective spp 归一化，0 spp 不提交 raygen/evaluate、不翻资源 slot并复用最后有效输出
+- **进度**：Phase 4.5 Step 14.5 暂停期间相机变化 DLSS reset 修复完成；invalidation 拆为 `invalidate_dlss_history()`（保留冻结画面）和 `invalidate_dlss_state()`（完整失效）；死代码清理（`frame_id`、`prev_view_projection_`）
 
 ### 下一个任务
 
