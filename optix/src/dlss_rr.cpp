@@ -337,7 +337,7 @@ namespace qualquer::optix {
         // then stop — the value is constant for this feature's lifetime.
         if (cached_vram_bytes_ == 0) {
             unsigned long long vram = 0;
-            if (NVSDK_NGX_SUCCEEDED(NGX_DLSSD_GET_STATS(ngx_params_, &vram))
+            if (NGX_DLSSD_GET_STATS(ngx_params_, &vram) == NVSDK_NGX_Result_Success
                 && vram > 0) {
                 cached_vram_bytes_ = vram;
             }
