@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4.5 — 收敛质量 + DLSS-RR + 自适应
-- **进度**：Phase 4.5 Step 14.5 NGX 崩溃诊断完成（NGX 日志回调桥接 spdlog + 所有 abort 宏 flush）；Step 14 UI 适配拆分，已完成部分勾选
+- **进度**：Phase 4.5 Step 14 UI 适配全部完成（VRAM 显示 + 分辨率 clamp + resolve 算法修正 + slider 弹回）；Step 14.5 NGX 崩溃诊断完成
 
 ### 下一个任务
 
-Phase 4.5 Step 14 UI 适配（未完成部分）：VRAM 占用显示 + create_feature 使用 resolved render height
+Phase 4.5 Step 14 InReset 语义拆分
 
 ---
 

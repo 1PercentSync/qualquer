@@ -153,7 +153,7 @@ MUSTREAD:4
 - [x] DlssRR evaluate：新增 `evaluate()` 方法，填充 `NVSDK_NGX_CUDA_DLSSD_Eval_Params`（aux inputs 传 `CUtexObject*`、output 传 `CUsurfObject*`），调用 `NGX_CUDA_EVALUATE_DLSSD_EXT`
 - [x] Tonemap 适配：读取源改为 `cudaTextureObject_t`；DLSS ON 读 `dlss_output` tex（1:1 显示分辨率，无除法），OFF 读 accum slot tex（resampling + 除 count）；Renderer `submit_cuda` 双路径分支；DLSS ON 全局 jitter（host Sobol 无 CP rotation）、DLSS OFF 恢复 per-sample jitter
 - [x] UI 适配：DLSS-RR 面板（开/关、render preset 选择、只读显示 quality mode 名称和渲染/输出分辨率）；accumulated samples 改为 DLSS OFF 时显示
-- [ ] UI 适配：VRAM 占用只读显示；`create_feature` 使用 `resolve_render_height` 返回的 clamped height（当前传原始值，render > display 时 NGX 拒绝创建）
+- [x] UI 适配：VRAM 占用只读显示；`create_feature` 使用 `resolve_render_height` 返回的 clamped height；resolve 算法修正（单轮 clamp+optimal 距离）；DLSS OFF 时分辨率变化不创建 feature；optimal settings 提前 cache；slider 弹回 resolved 值
 - [ ] InReset：拆除当前 `needs_reset` → `eval.InReset` 的错误绑定（每帧 camera_changed 都设 InReset=1 会丢弃 DLSS-RR 时域历史，比不设更差），改为仅在场景切换或相机瞬移（F 键聚焦）时设置 `InReset=1`
 - [ ] 请求用户在 CLion 中编译验证（ON 输出干净放大画面，OFF 保持原有累积行为，preset 可切换）
 
