@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4.5 — 收敛质量 + DLSS-RR + 自适应
-- **进度**：Phase 4.5 Step 14.5 display stream blocking 回测完成；保留 SER，`compute_stream` non-blocking、`display_stream` blocking，多轮 DLSS-RR 压力测试稳定且吞吐与关闭 SER 基线相当
+- **进度**：Phase 4.5 Step 14.5 DLSS input 同槽 ping-pong 完成；color、六个 aux resources 与 host metadata 按资源 slot 配对，CUDA producer/consumer events 改为 slot 所有权同步
 
 ### 下一个任务
 
-Phase 4.5 Step 14 编译验证请求
+Phase 4.5 Step 14.5 首次 evaluate 有效性状态机
 
 ---
 
