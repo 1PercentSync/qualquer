@@ -6,6 +6,7 @@
  */
 
 #include <array>
+#include <chrono>
 #include <string>
 
 #include <qualquer/app/camera_controller.h>
@@ -235,5 +236,22 @@ namespace qualquer::app {
          * by a caller, so it lives as a member rather than being threaded as a param.
          */
         uint32_t image_index_ = 0;
+
+#ifndef NDEBUG
+        /** @brief Timestamp query pool (4 queries: 2 per frame-in-flight). */
+        VkQueryPool timestamp_pool_ = VK_NULL_HANDLE;
+
+        /** @brief Nanoseconds per timestamp tick (from physical device properties). */
+        float timestamp_period_ = 0.0f;
+
+        /** @brief Most recent Vulkan display pipeline elapsed time in milliseconds. */
+        float vk_display_ms_ = 0.0f;
+
+        /** @brief Most recent CPU frame work time in milliseconds. */
+        float cpu_frame_ms_ = 0.0f;
+
+        /** @brief Time point when CPU work started (after fence wait). */
+        std::chrono::high_resolution_clock::time_point cpu_frame_start_{};
+#endif
     };
 } // namespace qualquer::app

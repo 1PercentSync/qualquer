@@ -98,6 +98,22 @@ namespace qualquer::renderer {
 
         /** @brief Current DLSS render preset (mutable for combo write-back). */
         optix::DlssRenderPreset &dlss_preset;
+
+#ifndef NDEBUG
+        // ---- Pipeline timing (debug only) ----
+
+        /** @brief PT (raygen) time in ms. */
+        float pt_ms = 0.0f;
+
+        /** @brief CUDA display pipeline time in ms (DLSS eval + tonemap). */
+        float cuda_display_ms = 0.0f;
+
+        /** @brief Vulkan display pipeline time in ms (blit + ImGui). */
+        float vk_display_ms = 0.0f;
+
+        /** @brief CPU active work time in ms (fence return to submit complete). */
+        float cpu_frame_ms = 0.0f;
+#endif
     };
 
     /**
@@ -196,8 +212,28 @@ namespace qualquer::renderer {
             /**
              * @brief Feeds one frame's delta time in seconds.
              * @param delta_time Seconds elapsed since the previous frame.
+             * @param cuda_display_ms CUDA display pipeline time this frame (debug only, ignored in release).
+             * @param vk_display_ms VK display pipeline time this frame (debug only, ignored in release).
              */
-            void push(float delta_time);
+            void push(float delta_time, float pt_ms, float cuda_display_ms,
+                      float vk_display_ms, float cpu_frame_ms);
+
+#ifndef NDEBUG
+            /** @brief Average PT (raygen) time over the last window, in ms. */
+            float avg_pt_ms = 0.0f;
+
+            /** @brief Average CUDA display pipeline time over the last window, in ms. */
+            float avg_cuda_display_ms = 0.0f;
+
+            /** @brief Average VK display pipeline time over the last window, in ms. */
+            float avg_vk_display_ms = 0.0f;
+
+            /** @brief Average total display pipeline time (CUDA + VK), in ms. */
+            float avg_total_display_ms = 0.0f;
+
+            /** @brief Average CPU active work time, in ms. */
+            float avg_cpu_frame_ms = 0.0f;
+#endif
 
         private:
             /** @brief Update interval: statistics recompute once per this many seconds. */
@@ -208,6 +244,20 @@ namespace qualquer::renderer {
 
             /** @brief Elapsed time within the current window. */
             float elapsed_ = 0.0f;
+
+#ifndef NDEBUG
+            /** @brief PT ms samples within the current window. */
+            std::vector<float> pt_samples_;
+
+            /** @brief CUDA display ms samples within the current window. */
+            std::vector<float> cuda_display_samples_;
+
+            /** @brief VK display ms samples within the current window. */
+            std::vector<float> vk_display_samples_;
+
+            /** @brief CPU frame ms samples within the current window. */
+            std::vector<float> cpu_frame_samples_;
+#endif
 
             /** @brief Recomputes avg/1%-low stats from samples_ (caller clears the window). */
             void compute();

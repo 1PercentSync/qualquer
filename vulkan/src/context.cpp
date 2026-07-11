@@ -345,8 +345,16 @@ namespace qualquer::vulkan {
             .pQueuePriorities = &queue_priority,
         };
 
+        VkPhysicalDeviceVulkan12Features features_12{
+            .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
+#ifndef NDEBUG
+            .hostQueryReset = VK_TRUE,
+#endif
+        };
+
         VkPhysicalDeviceVulkan13Features features_13{
             .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
+            .pNext = &features_12,
             .synchronization2 = VK_TRUE,
             .dynamicRendering = VK_TRUE,
         };

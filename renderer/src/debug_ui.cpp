@@ -169,8 +169,18 @@ namespace qualquer::renderer {
 
     // ---- FrameStats ----
 
-    void DebugUI::FrameStats::push(const float delta_time) {
+    void DebugUI::FrameStats::push(const float delta_time,
+                                    [[maybe_unused]] const float pt_ms,
+                                    [[maybe_unused]] const float cuda_display_ms,
+                                    [[maybe_unused]] const float vk_display_ms,
+                                    [[maybe_unused]] const float cpu_frame_ms) {
         samples_.push_back(delta_time);
+#ifndef NDEBUG
+        pt_samples_.push_back(pt_ms);
+        cuda_display_samples_.push_back(cuda_display_ms);
+        vk_display_samples_.push_back(vk_display_ms);
+        cpu_frame_samples_.push_back(cpu_frame_ms);
+#endif
         elapsed_ += delta_time;
 
         // Recompute once per kUpdateInterval and freeze the display between updates
@@ -178,6 +188,12 @@ namespace qualquer::renderer {
         if (elapsed_ >= kUpdateInterval) {
             compute();
             samples_.clear();
+#ifndef NDEBUG
+            pt_samples_.clear();
+            cuda_display_samples_.clear();
+            vk_display_samples_.clear();
+            cpu_frame_samples_.clear();
+#endif
             elapsed_ = 0.0f;
         }
     }
@@ -206,6 +222,19 @@ namespace qualquer::renderer {
         }
         low1_frame_time_ms = (low_total / static_cast<float>(low_count)) * 1000.0f;
         low1_fps = 1000.0f / low1_frame_time_ms;
+
+#ifndef NDEBUG
+        const auto avg = [&](const std::vector<float> &v) {
+            float sum = 0.0f;
+            for (const float s : v) { sum += s; }
+            return sum / static_cast<float>(n);
+        };
+        avg_pt_ms = avg(pt_samples_);
+        avg_cuda_display_ms = avg(cuda_display_samples_);
+        avg_vk_display_ms = avg(vk_display_samples_);
+        avg_total_display_ms = avg_cuda_display_ms + avg_vk_display_ms;
+        avg_cpu_frame_ms = avg(cpu_frame_samples_);
+#endif
     }
 
     // ---- DebugUI ----
@@ -213,7 +242,14 @@ namespace qualquer::renderer {
     DebugUIActions DebugUI::draw(const DebugUIContext &ctx) {
         DebugUIActions actions;
 
-        frame_stats_.push(ctx.delta_time);
+        frame_stats_.push(ctx.delta_time,
+#ifndef NDEBUG
+                          ctx.pt_ms, ctx.cuda_display_ms, ctx.vk_display_ms,
+                          ctx.cpu_frame_ms
+#else
+                          0.0f, 0.0f, 0.0f, 0.0f
+#endif
+        );
 
         ImGui::SetNextWindowPos({0, 0}, ImGuiCond_Once);
         ImGui::Begin("Debug", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
@@ -259,6 +295,21 @@ namespace qualquer::renderer {
     void DebugUI::draw_frame_stats(const FrameStats &stats) {
         ImGui::Text("FPS: %.1f (%.2f ms)", stats.avg_fps, stats.avg_frame_time_ms);
         ImGui::Text("1%% Low: %.1f (%.2f ms)", stats.low1_fps, stats.low1_frame_time_ms);
+#ifndef NDEBUG
+        if (stats.avg_frame_time_ms > 0.0f) {
+            const float ft = stats.avg_frame_time_ms;
+            const auto line = [&](const char *label, const float ms) {
+                ImGui::Text("  %s: %.2f ms (%4.1f%%) ~%.0f fps",
+                            label, ms, ms / ft * 100.0f,
+                            ms > 0.001f ? 1000.0f / ms : 0.0f);
+            };
+            line("PT", stats.avg_pt_ms);
+            line("Display", stats.avg_total_display_ms);
+            line("  CUDA", stats.avg_cuda_display_ms);
+            line("  VK", stats.avg_vk_display_ms);
+            line("CPU", stats.avg_cpu_frame_ms);
+        }
+#endif
     }
 
     void DebugUI::draw_gpu_info(const DebugUIContext &ctx) {

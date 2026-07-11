@@ -326,6 +326,17 @@ namespace qualquer::renderer {
             CUDA_CHECK(cudaEventRecord(event, cuda_context.compute_stream));
         }
 
+#ifndef NDEBUG
+        // Timing events (no DisableTiming) for pipeline profiling.
+        for (auto *arr : {&event_display_start_, &event_display_end_,
+                          &event_pt_start_, &event_pt_end_}) {
+            for (auto &event : *arr) {
+                CUDA_CHECK(cudaEventCreate(&event));
+                CUDA_CHECK(cudaEventRecord(event, cuda_context.compute_stream));
+            }
+        }
+#endif
+
         spdlog::info("Renderer initialized ({}x{}, {} SBT records)",
                      width,
                      height,
@@ -369,6 +380,17 @@ namespace qualquer::renderer {
                 event = nullptr;
             }
         }
+#ifndef NDEBUG
+        for (auto *arr : {&event_display_start_, &event_display_end_,
+                          &event_pt_start_, &event_pt_end_}) {
+            for (auto &event : *arr) {
+                if (event != nullptr) {
+                    CUDA_CHECK(cudaEventDestroy(event));
+                    event = nullptr;
+                }
+            }
+        }
+#endif
     }
 
     void Renderer::load_scene(const optix::Context &cuda_context,
@@ -614,6 +636,19 @@ namespace qualquer::renderer {
             // initialized from another array in a designated initializer).
         };
         std::memcpy(params.sobol_directions, kSobolDirectionData, sizeof(params.sobol_directions));
+
+#ifndef NDEBUG
+        // Read frame N-2's PT timing. Synchronize the end event to ensure the
+        // compute_stream work is complete (fence only guarantees display_stream).
+        // Nearly zero wait in practice — frame N-2's raygen is consumed by
+        // frame N-1's display_stream before the fence.
+        if (frame_counter_ >= 2) {
+            CUDA_CHECK(cudaEventSynchronize(event_pt_end_[slot]));
+            cudaEventElapsedTime(&pt_ms_, event_pt_start_[slot], event_pt_end_[slot]);
+        }
+        CUDA_CHECK(cudaEventRecord(event_pt_start_[slot], cuda_context.compute_stream));
+#endif
+
         params_buffer_.upload(&params, 1, cuda_context.compute_stream);
 
         const OptixShaderBindingTable sbt{
@@ -639,6 +674,10 @@ namespace qualquer::renderer {
             &sbt,
             render_width, render_height, 1));
 
+#ifndef NDEBUG
+        CUDA_CHECK(cudaEventRecord(event_pt_end_[slot], cuda_context.compute_stream));
+#endif
+
         CUDA_CHECK(cudaEventRecord(event_raygen_done_[slot], cuda_context.compute_stream));
 
         // --- display_stream: wait reverse sem + wait prev raygen → tonemap → record → signal ---
@@ -657,6 +696,16 @@ namespace qualquer::renderer {
         // Wait until the previous frame's raygen finished writing the buffer
         // that this frame's tonemap is about to read.
         CUDA_CHECK(cudaStreamWaitEvent(cuda_context.display_stream, event_raygen_done_[prev_slot]));
+
+#ifndef NDEBUG
+        if (frame_counter_ >= 2
+            && cudaEventQuery(event_display_end_[slot]) == cudaSuccess) {
+            cudaEventElapsedTime(&cuda_display_ms_,
+                                 event_display_start_[slot],
+                                 event_display_end_[slot]);
+        }
+        CUDA_CHECK(cudaEventRecord(event_display_start_[slot], cuda_context.display_stream));
+#endif
 
         if (dlss_active) {
             // DLSS ON: evaluate reads the previous frame's noisy buffer (read
@@ -702,6 +751,10 @@ namespace qualquer::renderer {
                            cuda_context.display_stream);
         }
 
+#ifndef NDEBUG
+        CUDA_CHECK(cudaEventRecord(event_display_end_[slot], cuda_context.display_stream));
+#endif
+
         CUDA_CHECK(cudaEventRecord(event_tonemap_done_[slot], cuda_context.display_stream));
 
         // Signal after tonemap completes on display_stream. Binary OPAQUE_WIN32
@@ -729,6 +782,16 @@ namespace qualquer::renderer {
         // ReSharper disable once CppLocalVariableMayBeConst
         VkImage swapchain_image = input.swapchain.images[input.image_index];
         const VkExtent2D extent = input.swapchain.extent;
+
+#ifndef NDEBUG
+        if (input.timestamp_pool != VK_NULL_HANDLE) {
+            vkCmdResetQueryPool(cmd, input.timestamp_pool,
+                                input.timestamp_query_base, 2);
+            vkCmdWriteTimestamp2(cmd, VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
+                                input.timestamp_pool,
+                                input.timestamp_query_base);
+        }
+#endif
 
         // --- Layout transitions before the blit ---
         // Display buffer acquire: CUDA just wrote it via a surface object (external
@@ -934,6 +997,14 @@ namespace qualquer::renderer {
             .pImageMemoryBarriers = &to_present,
         };
         vkCmdPipelineBarrier2(cmd, &to_present_dep);
+
+#ifndef NDEBUG
+        if (input.timestamp_pool != VK_NULL_HANDLE) {
+            vkCmdWriteTimestamp2(cmd, VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT,
+                                input.timestamp_pool,
+                                input.timestamp_query_base + 1);
+        }
+#endif
     }
 
     uint32_t Renderer::accumulated_samples() const {

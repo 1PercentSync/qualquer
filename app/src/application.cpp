@@ -97,6 +97,24 @@ namespace qualquer::app {
                        swapchain_.extent.height,
                        "shaders/programs.optixir");
 
+#ifndef NDEBUG
+        // Timestamp query pool for VK display pipeline profiling.
+        {
+            const VkQueryPoolCreateInfo pool_info{
+                .sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,
+                .queryType = VK_QUERY_TYPE_TIMESTAMP,
+                .queryCount = vulkan::kMaxFramesInFlight * 2,
+            };
+            VK_CHECK(vkCreateQueryPool(context_.device, &pool_info, nullptr, &timestamp_pool_));
+            vkResetQueryPool(context_.device, timestamp_pool_, 0,
+                             vulkan::kMaxFramesInFlight * 2);
+
+            VkPhysicalDeviceProperties props{};
+            vkGetPhysicalDeviceProperties(context_.physical_device, &props);
+            timestamp_period_ = props.limits.timestampPeriod;
+        }
+#endif
+
         // --- Scene (default textures → glTF load → AS build → camera framing) ---
         default_textures_ = optix::create_default_textures();
         if (!config_.scene_path.empty()) {
@@ -133,6 +151,10 @@ namespace qualquer::app {
             }
 
             wait_frame_slot();
+
+#ifndef NDEBUG
+            cpu_frame_start_ = std::chrono::high_resolution_clock::now();
+#endif
 
             // begin_frame before submit_cuda: CameraController::update reads ImGui IO
             // (WantCaptureMouse / IsKeyPressed) that is current only after NewFrame.
@@ -194,6 +216,12 @@ namespace qualquer::app {
                 .scene_stats = scene_stats_,
                 .dlss_rr = dlss_rr_,
                 .dlss_preset = dlss_preset_,
+#ifndef NDEBUG
+                .pt_ms = renderer_.pt_ms(),
+                .cuda_display_ms = renderer_.cuda_display_ms(),
+                .vk_display_ms = vk_display_ms_,
+                .cpu_frame_ms = cpu_frame_ms_,
+#endif
             };
             const auto actions = debug_ui_.draw(ui_ctx); // only CPU side, render command is in record()
 
@@ -253,6 +281,14 @@ namespace qualquer::app {
             record();
             end_frame();
 
+#ifndef NDEBUG
+            {
+                const auto end = std::chrono::high_resolution_clock::now();
+                cpu_frame_ms_ = std::chrono::duration<float, std::milli>(
+                    end - cpu_frame_start_).count();
+            }
+#endif
+
             if (actions.present_mode_changed) {
                 // The combo wrote the new selection into swapchain_.present_mode during
                 // draw; now that this frame has been presented on the old swapchain,
@@ -267,6 +303,23 @@ namespace qualquer::app {
         // wait returns immediately.
         const auto &frame = context_.current_frame();
         VK_CHECK(vkWaitForFences(context_.device, 1, &frame.render_fence, VK_TRUE, UINT64_MAX));
+
+#ifndef NDEBUG
+        // Read the timestamp pair from frame N-2 (same slot, guaranteed done).
+        if (timestamp_pool_ != VK_NULL_HANDLE) {
+            const uint32_t base = context_.frame_index * 2;
+            uint64_t timestamps[2] = {};
+            const VkResult qr = vkGetQueryPoolResults(
+                context_.device, timestamp_pool_, base, 2,
+                sizeof(timestamps), timestamps, sizeof(uint64_t),
+                VK_QUERY_RESULT_64_BIT);
+            if (qr == VK_SUCCESS) {
+                vk_display_ms_ = static_cast<float>(
+                    static_cast<double>(timestamps[1] - timestamps[0])
+                    * static_cast<double>(timestamp_period_) / 1e6);
+            }
+        }
+#endif
     }
 
     bool Application::acquire_image() {
@@ -346,6 +399,10 @@ namespace qualquer::app {
             .image_index = image_index_,
             .graphics_queue_family = context_.graphics_queue_family,
             .imgui = imgui_backend_,
+#ifndef NDEBUG
+            .timestamp_pool = timestamp_pool_,
+            .timestamp_query_base = context_.frame_index * 2,
+#endif
         };
         qualquer::renderer::Renderer::record_vulkan(input);
 
@@ -666,9 +723,15 @@ namespace qualquer::app {
         default_textures_.white.destroy();
         default_textures_.flat_normal.destroy();
         default_textures_.black.destroy();
+#ifndef NDEBUG
+        if (timestamp_pool_ != VK_NULL_HANDLE) {
+            vkDestroyQueryPool(context_.device, timestamp_pool_, nullptr);
+            timestamp_pool_ = VK_NULL_HANDLE;
+        }
+#endif
         // CUDA releases its imported surface/semaphores before the Vulkan resources
         // they wrap: the surface backs the display-buffer image memory, and the
-        // imported semaphores back the Vulkan external semaphores.
+        // imported semaphores back the Vulkan external semaphore.
         cuda_context_.destroy();
         for (auto &sem: interop_semaphores_) {
             sem.destroy(context_);

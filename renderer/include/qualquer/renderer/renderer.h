@@ -75,6 +75,14 @@ namespace qualquer::renderer {
 
         /** @brief ImGui backend for overlay recording. */
         vulkan::ImGuiBackend &imgui;
+
+#ifndef NDEBUG
+        /** @brief Timestamp query pool for display pipeline timing (VK_NULL_HANDLE to skip). */
+        VkQueryPool timestamp_pool = VK_NULL_HANDLE;
+
+        /** @brief Base query index for this frame's timestamp pair (slot * 2). */
+        uint32_t timestamp_query_base = 0;
+#endif
     };
 
     /**
@@ -429,5 +437,32 @@ namespace qualquer::renderer {
          * Double-buffered by frame_counter_ % 2.
          */
         std::array<cudaEvent_t, 2> event_tonemap_done_{};
+
+#ifndef NDEBUG
+        /** @brief Timing event recorded before display_stream work (DLSS + tonemap). */
+        std::array<cudaEvent_t, 2> event_display_start_{};
+
+        /** @brief Timing event recorded after display_stream work. */
+        std::array<cudaEvent_t, 2> event_display_end_{};
+
+        /** @brief Timing event recorded before compute_stream work (params upload + raygen). */
+        std::array<cudaEvent_t, 2> event_pt_start_{};
+
+        /** @brief Timing event recorded after compute_stream work (raygen done). */
+        std::array<cudaEvent_t, 2> event_pt_end_{};
+
+        /** @brief Most recent CUDA display-stream elapsed time in milliseconds. */
+        float cuda_display_ms_ = 0.0f;
+
+        /** @brief Most recent PT (raygen) elapsed time in milliseconds. */
+        float pt_ms_ = 0.0f;
+    public:
+        /** @brief CUDA display pipeline time (debug only). */
+        [[nodiscard]] float cuda_display_ms() const { return cuda_display_ms_; }
+
+        /** @brief PT (raygen) pipeline time (debug only). */
+        [[nodiscard]] float pt_ms() const { return pt_ms_; }
+    private:
+#endif
     };
 } // namespace qualquer::renderer
