@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4.5 — 收敛质量 + DLSS-RR + 自适应
-- **进度**：Phase 4.5 Step 14.5 DLSS input 同槽 ping-pong 完成；color、六个 aux resources 与 host metadata 按资源 slot 配对，CUDA producer/consumer events 改为 slot 所有权同步
+- **进度**：Phase 4.5 Step 14.5 首次 evaluate 有效性状态机完成；DLSS 仅消费 valid input slot，history reset 随首个新 slot 传递，缺少 temporal predecessor 时生成零 MV
 
 ### 下一个任务
 
-Phase 4.5 Step 14.5 首次 evaluate 有效性状态机
+Phase 4.5 Step 14.5 DLSS ON radiance 均值与 0 spp 暂停语义
 
 ---
 
