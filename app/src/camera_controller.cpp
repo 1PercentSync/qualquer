@@ -96,9 +96,10 @@ namespace qualquer::app {
                 camera_->position += glm::normalize(move) * speed * delta_time;
             }
 
-            // F-key focus.
+            // F-key focus (teleport — signals DLSS InReset).
             if (focus_target_ && ImGui::IsKeyPressed(ImGuiKey_F, false)) {
                 camera_->position = camera_->compute_focus_position(*focus_target_);
+                teleported = true;
             }
         }
 

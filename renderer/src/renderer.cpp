@@ -562,7 +562,9 @@ namespace qualquer::renderer {
             scene.settings.env_rotation != prev_env_rotation_ ||
             scene.settings.dlss_enabled != prev_dlss_enabled_;
         const bool needs_reset = camera_changed || settings_changed || reset_requested_;
+        const bool dlss_reset = dlss_reset_requested_;
         reset_requested_ = false;
+        dlss_reset_requested_ = false;
         // DLSS ON: always overwrite (single-frame output, no accumulation).
         // DLSS OFF: normal Separate Sum chain.
         const uint32_t chain_count = (needs_reset || dlss_active)
@@ -727,7 +729,7 @@ namespace qualquer::renderer {
                 .jitter_y = jitter_y,
                 .view_matrix = glm::value_ptr(scene.camera.view),
                 .projection_matrix = glm::value_ptr(scene.camera.projection),
-                .reset = needs_reset,
+                .reset = dlss_reset,
                 .frame_time_ms = scene.frame_time_ms,
             };
             dlss_rr.evaluate(eval_input);
@@ -1017,5 +1019,6 @@ namespace qualquer::renderer {
 
     void Renderer::reset_accumulation() {
         reset_requested_ = true;
+        dlss_reset_requested_ = true;
     }
 } // namespace qualquer::renderer

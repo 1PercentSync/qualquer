@@ -168,6 +168,12 @@ namespace qualquer::app {
             camera_controller_.update(ImGui::GetIO().DeltaTime);
             update_ibl_drag();
 
+            // F-key teleport: reset accumulation + DLSS history.
+            if (camera_controller_.teleported) {
+                renderer_.reset_accumulation();
+                camera_controller_.teleported = false;
+            }
+
             // CUDA submit before acquire so the CUDA starts computing while the CPU
             // waits on acquire — submission order decides when the engine starts, hence
             // whether the acquire wait overlaps CUDA compute (async submit alone does not).
@@ -583,6 +589,7 @@ namespace qualquer::app {
 
         camera_controller_.set_focus_target(&scene_loader_.scene_bounds());
         auto_position_camera(scene_loader_.scene_bounds());
+        renderer_.reset_accumulation();
 
         // Reload env map (destroy() cleared it along with scene resources)
         if (!config_.env_map_path.empty()) {

@@ -68,5 +68,14 @@ namespace qualquer::app {
 
         /** @brief Focus target AABB for F-key (nullptr = disabled). */
         const renderer::AABB *focus_target_ = nullptr;
+
+    public:
+        /**
+         * @brief True on the frame F-key focus teleports the camera.
+         *
+         * Set by update(), consumed (cleared) by the caller after reading.
+         * Used to signal DLSS InReset (teleport invalidates temporal history).
+         */
+        bool teleported = false;
     };
 } // namespace qualquer::app

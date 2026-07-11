@@ -252,11 +252,15 @@ namespace qualquer::renderer {
         [[nodiscard]] uint32_t tlas_instance_count() const;
 
         /**
-         * @brief Forces the next frame to overwrite instead of accumulating.
+         * @brief Forces the next frame to overwrite instead of accumulating,
+         *        and discards DLSS-RR temporal history.
          *
-         * Sets a deferred flag consumed by the next submit_cuda, which forces
-         * chain_count=0 without clearing per-slot counts (same path as camera
-         * reset, avoids black-frame flash).
+         * Sets deferred flags consumed by the next submit_cuda: chain_count=0
+         * (accumulation overwrite) and eval.InReset=1 (DLSS history discard).
+         * Used for scene switch, camera teleport, env map reload, manual Reset.
+         * Continuous camera motion and parameter changes trigger accumulation
+         * reset through camera_changed/settings_changed in submit_cuda, which
+         * intentionally does NOT discard DLSS history.
          */
         void reset_accumulation();
 
@@ -369,13 +373,21 @@ namespace qualquer::renderer {
         uint32_t dlss_output_height_ = 0;
 
         /**
-         * @brief Deferred reset flag set by reset_accumulation().
+         * @brief Deferred accumulation reset flag set by reset_accumulation().
          *
          * Consumed by submit_cuda on the next frame: forces chain_count to 0
          * (same path as camera-change reset) without clearing accum_counts_,
          * so the read slot keeps a valid count and tonemap avoids a black frame.
          */
         bool reset_requested_ = false;
+
+        /**
+         * @brief Deferred DLSS history reset flag set by reset_accumulation().
+         *
+         * Consumed by submit_cuda on the next frame: sets eval.InReset=1 to
+         * discard DLSS-RR temporal history.
+         */
+        bool dlss_reset_requested_ = false;
 
         /**
          * @brief Previous-frame inverse view matrix (accumulation-reset detection).
