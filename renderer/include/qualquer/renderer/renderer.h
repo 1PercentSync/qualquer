@@ -355,8 +355,8 @@ namespace qualquer::renderer {
          * A produced frame reads buffer [accum_index_] via texture object and
          * writes [1 - accum_index_] via surface object, then flips the index.
          * A paused frame keeps the index unchanged. DLSS-RR reads the read slot
-         * via CUtexObject*; raygen
-         * writes via surf2Dwrite. CUDA arrays are required for DLSS CUDA API
+         * via CUtexObject*; raygen writes via surf2Dwrite. CUDA arrays are
+         * required for DLSS CUDA API
          * resource consumption (see current-phase.md "Ping-pong Buffer 类型迁移").
          */
         std::array<optix::CudaArrayBuffer<float4>, 2> accum_buffers_;
@@ -473,21 +473,6 @@ namespace qualquer::renderer {
 
         /** @brief Previous-frame dlss_enabled (accumulation-reset detection). */
         bool prev_dlss_enabled_ = false;
-
-        /**
-         * @brief Previous-frame unjittered view-projection matrix (row-major).
-         *
-         * Cached at frame end; uploaded as LaunchParams::prev_view_projection
-         * for the next frame's motion vector computation.
-         */
-        float4x4 prev_view_projection_{
-            .rows = {
-                make_float4(1, 0, 0, 0),
-                make_float4(0, 1, 0, 0),
-                make_float4(0, 0, 1, 0),
-                make_float4(0, 0, 0, 1),
-            },
-        };
 
         /**
          * @brief Per-resource-slot event recorded after raygen completes.

@@ -382,7 +382,7 @@ namespace qualquer::renderer {
         // program groups, so it is torn down before the SBT buffers whose device
         // memory it bound. Pipeline::destroy and CudaBuffer::free are both
         // idempotent (null-reset), so a repeat call is a no-op. State members
-        // (accum_index_, frame_counter_, sample_count_) are intentionally not
+        // (accum_index_, frame_counter_, accum_counts_) are intentionally not
         // reset here — release is the sole responsibility; a subsequent init
         // resets them.
         pipeline_.destroy();
@@ -643,7 +643,7 @@ namespace qualquer::renderer {
         const bool has_temporal_predecessor = dlss_active
                                               && read_metadata.valid
                                               && !slot_reset;
-        const float4x4 dlss_previous_vp = has_temporal_predecessor
+        const float4x4 previous_vp = has_temporal_predecessor
                                               ? to_float4x4(
                                                     read_metadata.projection_matrix
                                                     * read_metadata.view_matrix)
@@ -706,9 +706,7 @@ namespace qualquer::renderer {
             .aux_roughness = write_aux.roughness.surf_object(),
             // Unjittered VP matrices for motion vector computation.
             .view_projection = current_vp,
-            .prev_view_projection = dlss_active
-                                        ? dlss_previous_vp
-                                        : prev_view_projection_,
+            .prev_view_projection = previous_vp,
             // sobol_directions filled below via memcpy (array can't be
             // initialized from another array in a designated initializer).
         };
@@ -875,7 +873,6 @@ namespace qualquer::renderer {
                                                  : chain_count + effective_spp;
             }
             accum_index_ = write_slot;
-            prev_view_projection_ = current_vp;
         }
         ++frame_counter_;
     }
