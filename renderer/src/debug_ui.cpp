@@ -56,6 +56,10 @@ namespace qualquer::renderer {
         /**
          * SliderFloat that applies immediately during mouse drag but defers
          * Ctrl+Click text-input changes until Enter / click-away / Tab.
+         *
+         * The text-input value is persisted in ImGui StateStorage so the
+         * deactivation frame can retrieve it even if SliderBehavior does not
+         * re-apply the value when the widget becomes inactive.
          */
         bool slider_float_deferred(const char *label,
                                    float *v,
@@ -66,9 +70,22 @@ namespace qualquer::renderer {
             const float original = *v;
             ImGui::SliderFloat(label, v, v_min, v_max, format, flags);
 
-            if (ImGui::IsItemActive() && ImGui::GetIO().WantTextInput) {
-                *v = original;
-                return false;
+            if (ImGui::IsItemActive()) {
+                if (ImGui::GetIO().WantTextInput) {
+                    // Persist the parsed text value before reverting, so the
+                    // confirmation frame can retrieve it from storage.
+                    ImGui::GetStateStorage()->SetFloat(ImGui::GetItemID(), *v);
+                    *v = original;
+                    return false;
+                }
+                // Drag mode: apply immediately.
+                return *v != original;
+            }
+
+            // Deactivation frame: if ImGui did not write the confirmed text
+            // value into *v (edge case), fall back to the persisted value.
+            if (ImGui::IsItemDeactivatedAfterEdit() && *v == original) {
+                *v = ImGui::GetStateStorage()->GetFloat(ImGui::GetItemID(), original);
             }
 
             return *v != original;
@@ -84,9 +101,17 @@ namespace qualquer::renderer {
             const float original = *v_rad;
             ImGui::SliderAngle(label, v_rad, v_degrees_min, v_degrees_max, format, flags);
 
-            if (ImGui::IsItemActive() && ImGui::GetIO().WantTextInput) {
-                *v_rad = original;
-                return false;
+            if (ImGui::IsItemActive()) {
+                if (ImGui::GetIO().WantTextInput) {
+                    ImGui::GetStateStorage()->SetFloat(ImGui::GetItemID(), *v_rad);
+                    *v_rad = original;
+                    return false;
+                }
+                return *v_rad != original;
+            }
+
+            if (ImGui::IsItemDeactivatedAfterEdit() && *v_rad == original) {
+                *v_rad = ImGui::GetStateStorage()->GetFloat(ImGui::GetItemID(), original);
             }
 
             return *v_rad != original;
@@ -97,6 +122,12 @@ namespace qualquer::renderer {
          * Ctrl+Click text-input confirm), for parameters whose every change
          * triggers expensive reallocation. Ctrl+Click text input may exceed the
          * slider range; the committed value is clamped to [hard_min, hard_max].
+         *
+         * The drag value is persisted in ImGui StateStorage across frames.
+         * Without this, the local `display` variable re-initialises from *v
+         * every frame; on the release frame SliderBehavior does not apply
+         * the drag position (widget inactive), so `display` bounces back to
+         * the original *v.
          */
         bool slider_uint_on_release(const char *label,
                                     uint32_t *v,
@@ -107,10 +138,27 @@ namespace qualquer::renderer {
             int display = static_cast<int>(*v);
             ImGui::SliderInt(label, &display, v_min, v_max);
 
+            const ImGuiID id = ImGui::GetItemID();
+            auto *storage = ImGui::GetStateStorage();
+
+            if (ImGui::IsItemActive()) {
+                // Persist the drag/text-input value so the release frame
+                // can retrieve it.
+                storage->SetInt(id, display);
+                return false;
+            }
+
             if (!ImGui::IsItemDeactivatedAfterEdit()) {
                 return false;
             }
-            const auto committed = static_cast<uint32_t>(std::clamp(display, hard_min, hard_max));
+
+            // Release frame: prefer ImGui's value if it differs from the
+            // original (text-input confirmation writes directly into
+            // `display`); otherwise retrieve the persisted drag value.
+            const int last = (display != static_cast<int>(*v))
+                                 ? display
+                                 : storage->GetInt(id, display);
+            const auto committed = static_cast<uint32_t>(std::clamp(last, hard_min, hard_max));
             if (committed == *v) {
                 return false;
             }
