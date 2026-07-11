@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4.5 — 收敛质量 + DLSS-RR + 自适应
-- **进度**：Phase 4.5 Step 14.5 暂停期间相机变化 DLSS reset 修复完成；invalidation 拆为 `invalidate_dlss_history()`（保留冻结画面）和 `invalidate_dlss_state()`（完整失效）；死代码清理（`frame_id`、`prev_view_projection_`）
+- **进度**：Phase 4.5 Step 14.5 preset 变化触发 feature 重建完成；`prev_dlss_preset_` 检测加入 `submit_cuda`，移除冗余的 Application 层 `dlss_preset_changed` action 处理
 
 ### 下一个任务
 
-Phase 4.5 Step 14.5 DLSS ON primary ray sample loop 提取
+Phase 4.5 Step 14.5 MV Y 分量符号修正
 
 ---
 

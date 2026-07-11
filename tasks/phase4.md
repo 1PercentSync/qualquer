@@ -166,7 +166,7 @@ MUSTREAD:4
 - [x] 修复 DLSS ON 单帧 radiance 均值语义，并在 0 spp 暂停时保持最后有效输出
 - [ ] DLSS ON primary ray 提出 sample loop，loop body 抽为 `__forceinline__` 函数
 - [ ] MV Y 分量符号修正：`eval.InMVScaleY = -1.0f`
-- [ ] Render preset 变化触发 feature 重建：加 `prev_dlss_preset_` 检测
+- [x] Render preset 变化触发 feature 重建：加 `prev_dlss_preset_` 检测
 - [ ] `cache_optimal_settings` 错误处理：当前任一 mode 查询失败会提前 return 跳过剩余 mode，改为单 mode 失败不影响其余 mode 的查询
 - [ ] 按 feature 生命周期缓存 DLSS-RR VRAM 统计，移除每帧 NGX stats 查询
 - [x] NGX 崩溃诊断：NGX init 时提供日志回调（桥接 spdlog，`ON`，`DisableOtherLoggingSinks`）；所有 abort 宏（CUDA/OPTIX/VK/NGX）在 abort 前 flush spdlog
