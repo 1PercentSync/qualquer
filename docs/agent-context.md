@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4.5 — 收敛质量 + DLSS-RR + 自适应
-- **进度**：Phase 4.5 Step 14.5 preset 变化触发 feature 重建完成；`prev_dlss_preset_` 检测加入 `submit_cuda`，移除冗余的 Application 层 `dlss_preset_changed` action 处理
+- **进度**：Phase 4.5 Step 14.5 MV Y 分量符号修正完成；`InMVScaleY = -1.0f` 修正 NDC Y-up 与 DLSS 屏幕空间 Y-down 方向不匹配
 
 ### 下一个任务
 
-Phase 4.5 Step 14.5 MV Y 分量符号修正
+Phase 4.5 Step 14.5 `cache_optimal_settings` 错误处理改进
 
 ---
 
