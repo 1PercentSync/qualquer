@@ -67,9 +67,27 @@ namespace qualquer::optix {
                 spdlog::critical("NGX call failed: {} returned {} at {}:{}",        \
                                  #call, ngx_result_string(ngx_result_),             \
                                  __FILE__, __LINE__);                               \
+                spdlog::default_logger()->flush();                                  \
                 std::abort();                                                       \
             }                                                                       \
         } while (0)
+
+    /**
+     * @brief NGX logging callback bridged to spdlog.
+     *
+     * NGX calls this from any thread; spdlog is thread-safe.
+     * ON-level messages map to spdlog::info, VERBOSE to spdlog::debug.
+     */
+    static void NVSDK_CONV ngx_log_callback(
+        const char *message,
+        NVSDK_NGX_Logging_Level logging_level,
+        NVSDK_NGX_Feature /*source_component*/) {
+        if (logging_level == NVSDK_NGX_LOGGING_LEVEL_VERBOSE) {
+            spdlog::debug("[NGX] {}", message);
+        } else {
+            spdlog::info("[NGX] {}", message);
+        }
+    }
 
     // Executable directory for NGX data path (logs, temp files).
     // NGX also searches for nvngx_dlssd.dll relative to this path.
@@ -88,12 +106,25 @@ namespace qualquer::optix {
 
         const std::wstring app_path = get_executable_directory();
 
+        // Route NGX internal logs through spdlog and suppress NGX's own
+        // file-based logging sinks.
+        const NVSDK_NGX_FeatureCommonInfo feature_info{
+            .PathListInfo = {},
+            .InternalData = nullptr,
+            .LoggingInfo = {
+                .LoggingCallback = ngx_log_callback,
+                .MinimumLoggingLevel = NVSDK_NGX_LOGGING_LEVEL_ON,
+                .DisableOtherLoggingSinks = true,
+            },
+        };
+
         // Init NGX with project ID (no NVIDIA-issued app ID required).
         NVSDK_NGX_Result result = NVSDK_NGX_CUDA_Init_with_ProjectID(
             kNgxProjectId,
             NVSDK_NGX_ENGINE_TYPE_CUSTOM,
             "1.0.0",
-            app_path.c_str()
+            app_path.c_str(),
+            &feature_info
         );
 
         if (NVSDK_NGX_FAILED(result)) {

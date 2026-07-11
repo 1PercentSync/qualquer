@@ -28,6 +28,7 @@
                              static_cast<int>(vk_check_result_),         \
                              __FILE__,                                   \
                              __LINE__);                                  \
+            spdlog::default_logger()->flush();                           \
             std::abort();                                                \
         }                                                                \
     } while (0)

@@ -25,6 +25,7 @@
                          cudaGetErrorString(cuda_check_result_),                           \
                          __FILE__,                                                        \
                          __LINE__);                                                       \
+            std::fflush(stderr);                                                          \
             std::abort();                                                                 \
         }                                                                                 \
     } while (0)
