@@ -20,6 +20,12 @@ namespace qualquer::optix {
     /** @brief NGX project identifier (UUID format required by NGX). */
     constexpr char kNgxProjectId[] = "d8b2224f-2576-4814-92ec-53596756923e";
 
+    /** @brief Quality mode names for logging, indexed by DlssQualityMode. */
+    constexpr const char *kQualityModeNames[] = {
+        "MaxPerf", "Balanced", "MaxQuality",
+        "UltraPerf", "UltraQuality", "DLAA",
+    };
+
     // NGX result string for logging. Covers the common error codes;
     // unknown codes fall back to the raw integer.
     static std::string ngx_result_string(NVSDK_NGX_Result result) {
@@ -195,6 +201,9 @@ namespace qualquer::optix {
             return;
         }
 
+        // The caller is responsible for resolving the render height via
+        // resolve_render_height() and passing the clamped dimensions here.
+        // This ensures buffers, raygen launch, and NGX all use the same size.
         const auto resolved = resolve_render_height(render_height, display_height);
         const DlssQualityMode quality = resolved.mode;
 
@@ -236,8 +245,9 @@ namespace qualquer::optix {
 
         NGX_CHECK(NGX_CUDA_CREATE_DLSSD_EXT(&ngx_handle_, ngx_params_, &cuda_params));
 
-        spdlog::info("DLSS-RR: feature created (render {}x{} -> display {}x{})",
-                     render_width, render_height, display_width, display_height);
+        spdlog::info("DLSS-RR: feature created (render {}x{} -> display {}x{}, mode {})",
+                     render_width, render_height, display_width, display_height,
+                     kQualityModeNames[static_cast<uint32_t>(quality)]);
     }
 
     void DlssRR::evaluate(const EvalInput &input) {
@@ -320,6 +330,17 @@ namespace qualquer::optix {
         NGX_CHECK(NGX_CUDA_EVALUATE_DLSSD_EXT(ngx_handle_, ngx_params_, &eval));
     }
 
+    uint64_t DlssRR::vram_allocated_bytes() const {
+        if (!ngx_params_) {
+            return 0;
+        }
+        unsigned long long bytes = 0;
+        if (NVSDK_NGX_FAILED(NGX_DLSSD_GET_STATS(ngx_params_, &bytes))) {
+            return 0;
+        }
+        return bytes;
+    }
+
     void DlssRR::release_feature() {
         if (ngx_handle_) {
             NGX_CHECK(NVSDK_NGX_CUDA_ReleaseFeature(ngx_handle_));
@@ -344,6 +365,11 @@ namespace qualquer::optix {
                 &s.min_width, &s.min_height,
                 &sharpness
             ));
+            spdlog::info("DLSS-RR: {} optimal {}x{}, range [{}x{} .. {}x{}]",
+                         kQualityModeNames[i],
+                         s.optimal_width, s.optimal_height,
+                         s.min_width, s.min_height,
+                         s.max_width, s.max_height);
         }
 
         return true;
@@ -356,59 +382,38 @@ namespace qualquer::optix {
             return {display_height, DlssQualityMode::Dlaa};
         }
 
-        // Find the mode whose optimal height is closest. The loop goes from
-        // MaxPerf (most upscaling) to Dlaa (least); strict-less-than means ties
-        // keep the first match, favoring a higher upscale ratio — the neural
-        // network does more reconstruction work at higher ratios, improving
-        // output quality for the same render resolution.
+        // Single-pass selection: for each mode, compute the clamped height
+        // and how far it is from the request (clamp distance) and from the
+        // mode's optimal (optimal distance).  Prefer smallest clamp distance
+        // first; among ties (e.g. multiple modes whose [min,max] all contain
+        // the request) pick the one with the closest optimal.
         DlssQualityMode best_mode = DlssQualityMode::Dlaa;
-        uint32_t best_distance = UINT32_MAX;
+        uint32_t best_clamped = display_height;
+        uint32_t best_clamp_dist = UINT32_MAX;
+        uint32_t best_optimal_dist = UINT32_MAX;
 
         for (uint32_t i = 0; i < kDlssQualityModeCount; ++i) {
             const auto &s = optimal_settings_[i];
             if (s.optimal_height == 0) {
                 continue;
             }
-            const auto mode = static_cast<DlssQualityMode>(i);
-            uint32_t d = requested_height > s.optimal_height
-                             ? requested_height - s.optimal_height
-                             : s.optimal_height - requested_height;
-            if (d < best_distance) {
-                best_distance = d;
-                best_mode = mode;
-            }
-        }
 
-        const auto &best = optimal_settings_[static_cast<uint32_t>(best_mode)];
+            const uint32_t clamped = std::clamp(requested_height,
+                                                s.min_height, s.max_height);
+            const uint32_t clamp_dist = clamped > requested_height
+                                            ? clamped - requested_height
+                                            : requested_height - clamped;
+            const uint32_t optimal_dist = requested_height > s.optimal_height
+                                              ? requested_height - s.optimal_height
+                                              : s.optimal_height - requested_height;
 
-        // If within [min, max], use as-is.
-        if (requested_height >= best.min_height && requested_height <= best.max_height) {
-            return {requested_height, best_mode};
-        }
-
-        // Out of range: check if an adjacent mode gives a smaller clamp distance.
-        uint32_t best_clamped = std::clamp(requested_height, best.min_height, best.max_height);
-        uint32_t best_clamp_dist = best_clamped > requested_height
-                                       ? best_clamped - requested_height
-                                       : requested_height - best_clamped;
-
-        for (uint32_t i = 0; i < kDlssQualityModeCount; ++i) {
-            const auto mode = static_cast<DlssQualityMode>(i);
-            if (mode == best_mode) {
-                continue;
-            }
-            const auto &s = optimal_settings_[i];
-            if (s.min_height == 0 && s.max_height == 0) {
-                continue;
-            }
-            uint32_t clamped = std::clamp(requested_height, s.min_height, s.max_height);
-            uint32_t d = clamped > requested_height
-                             ? clamped - requested_height
-                             : requested_height - clamped;
-            if (d < best_clamp_dist) {
-                best_clamp_dist = d;
+            if (clamp_dist < best_clamp_dist
+                || (clamp_dist == best_clamp_dist
+                    && optimal_dist < best_optimal_dist)) {
+                best_mode = static_cast<DlssQualityMode>(i);
                 best_clamped = clamped;
-                best_mode = mode;
+                best_clamp_dist = clamp_dist;
+                best_optimal_dist = optimal_dist;
             }
         }
 

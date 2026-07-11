@@ -208,11 +208,15 @@ namespace qualquer::app {
                 // so the current frame's DLSS evaluate (if running) finishes.
                 CUDA_CHECK(cudaStreamSynchronize(cuda_context_.compute_stream));
                 CUDA_CHECK(cudaStreamSynchronize(cuda_context_.display_stream));
+                // Use resolved render height so NGX dimensions match buffers.
+                auto resolved_rh = dlss_rr_.resolve_render_height(
+                    render_settings_.render_height,
+                    swapchain_.extent.height).render_height;
                 dlss_rr_.create_feature(
-                    renderer::compute_render_width(render_settings_.render_height,
+                    renderer::compute_render_width(resolved_rh,
                                                     swapchain_.extent.width,
                                                     swapchain_.extent.height),
-                    render_settings_.render_height,
+                    resolved_rh,
                     swapchain_.extent.width, swapchain_.extent.height,
                     dlss_preset_, cuda_context_.display_stream);
             }

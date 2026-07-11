@@ -220,6 +220,12 @@ namespace qualquer::optix {
         [[nodiscard]] NVSDK_NGX_Parameter *ngx_params() const { return ngx_params_; }
 
         /**
+         * @brief Queries VRAM allocated by the active DLSS-RR feature.
+         * @return Bytes allocated, or 0 if no feature is active or the query fails.
+         */
+        [[nodiscard]] uint64_t vram_allocated_bytes() const;
+
+        /**
          * @brief Releases the current DLSS-RR feature, freeing its VRAM.
          *
          * Called internally by create_feature (before recreating), destroy,

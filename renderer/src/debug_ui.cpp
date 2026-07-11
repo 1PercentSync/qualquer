@@ -364,6 +364,13 @@ namespace qualquer::renderer {
         // thrash device memory.
         slider_uint_on_release("Render Height", &ctx.settings.render_height,
                                240, 2160, 16, 8192);
+        // When DLSS is on, clamp render_height to the resolved value so
+        // the slider reflects what buffers and NGX actually use.
+        if (ctx.settings.dlss_enabled && ctx.dlss_rr.available()) {
+            ctx.settings.render_height = ctx.dlss_rr.resolve_render_height(
+                ctx.settings.render_height,
+                ctx.swapchain.extent.height).render_height;
+        }
         ImGui::Text("Render Resolution: %u x %u",
                     compute_render_width(ctx.settings.render_height,
                                          ctx.swapchain.extent.width,
@@ -521,16 +528,22 @@ namespace qualquer::renderer {
             const auto mode_idx = static_cast<uint32_t>(resolved.mode);
             ImGui::Text("Quality: %s", mode_idx < 6 ? mode_names[mode_idx] : "?");
 
-            const uint32_t rw = compute_render_width(
-                ctx.settings.render_height,
+            const uint32_t actual_rh = resolved.render_height;
+            const uint32_t actual_rw = compute_render_width(
+                actual_rh,
                 ctx.swapchain.extent.width,
                 ctx.swapchain.extent.height);
             const float ratio = static_cast<float>(ctx.swapchain.extent.height)
-                              / static_cast<float>(ctx.settings.render_height);
+                              / static_cast<float>(actual_rh);
             ImGui::Text("Render: %ux%u -> %ux%u (%.2fx)",
-                        rw, ctx.settings.render_height,
+                        actual_rw, actual_rh,
                         ctx.swapchain.extent.width, ctx.swapchain.extent.height,
                         ratio);
+
+            const uint64_t vram = dlss.vram_allocated_bytes();
+            if (vram > 0) {
+                ImGui::Text("VRAM: %.1f MB", static_cast<double>(vram) / (1024.0 * 1024.0));
+            }
         }
     }
 } // namespace qualquer::renderer

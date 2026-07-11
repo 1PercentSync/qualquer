@@ -414,13 +414,47 @@ namespace qualquer::renderer {
                                const uint32_t width,
                                const uint32_t height,
                                const uint32_t frame_index) {
+        // DLSS output buffer tracks display resolution (window resize), not
+        // render resolution. Drain both streams before reallocating — the
+        // previous frame's tonemap may still be reading the old buffer.
+        bool display_res_changed = false;
+        if (width != dlss_output_width_ || height != dlss_output_height_) {
+            CUDA_CHECK(cudaStreamSynchronize(cuda_context.compute_stream));
+            CUDA_CHECK(cudaStreamSynchronize(cuda_context.display_stream));
+            dlss_output_.resize(width, height);
+            dlss_output_width_ = width;
+            dlss_output_height_ = height;
+            display_res_changed = true;
+            spdlog::info("DLSS output buffer reallocated ({}x{} display resolution)",
+                         width, height);
+        }
+
+        // Ensure DLSS optimal settings are cached before resolving render
+        // height — resolve_render_height reads the cached min/max/optimal
+        // values.  Cache on first enable and on display resolution change.
+        if (scene.settings.dlss_enabled && dlss_rr.available()) {
+            if (!dlss_rr.feature_active() || display_res_changed) {
+                if (!dlss_rr.feature_active()) {
+                    CUDA_CHECK(cudaStreamSynchronize(cuda_context.compute_stream));
+                    CUDA_CHECK(cudaStreamSynchronize(cuda_context.display_stream));
+                }
+                dlss_rr.cache_optimal_settings(width, height);
+            }
+        }
+
         // Accumulation buffers follow the render resolution, not the display
-        // resolution. On mismatch both streams are drained first — the previous
-        // frame's raygen/tonemap may still be reading or writing the old
-        // allocations. Counts reset to 0: raygen enters overwrite mode (never
-        // reads the fresh buffers) and tonemap outputs black until valid data
-        // arrives, so the uninitialised contents are never consumed.
-        const uint32_t render_height = scene.settings.render_height;
+        // resolution. When DLSS is on, the render resolution is clamped by
+        // resolve_render_height so that buffers, raygen launch, and NGX all
+        // use the same dimensions.  On mismatch both streams are drained
+        // first — the previous frame's raygen/tonemap may still be reading or
+        // writing the old allocations. Counts reset to 0: raygen enters
+        // overwrite mode (never reads the fresh buffers) and tonemap outputs
+        // black until valid data arrives, so the uninitialised contents are
+        // never consumed.
+        uint32_t render_height = scene.settings.render_height;
+        if (scene.settings.dlss_enabled && dlss_rr.available()) {
+            render_height = dlss_rr.resolve_render_height(render_height, height).render_height;
+        }
         const uint32_t render_width = compute_render_width(render_height, width, height);
         bool render_res_changed = false;
         if (render_width != render_width_ || render_height != render_height_) {
@@ -443,38 +477,21 @@ namespace qualquer::renderer {
                          render_width, render_height);
         }
 
-        // DLSS output buffer tracks display resolution (window resize), not
-        // render resolution. Drain both streams before reallocating — the
-        // previous frame's tonemap may still be reading the old buffer.
-        bool display_res_changed = false;
-        if (width != dlss_output_width_ || height != dlss_output_height_) {
-            CUDA_CHECK(cudaStreamSynchronize(cuda_context.compute_stream));
-            CUDA_CHECK(cudaStreamSynchronize(cuda_context.display_stream));
-            dlss_output_.resize(width, height);
-            dlss_output_width_ = width;
-            dlss_output_height_ = height;
-            display_res_changed = true;
-            spdlog::info("DLSS output buffer reallocated ({}x{} display resolution)",
-                         width, height);
-        }
-
         // Recreate DLSS-RR feature when resolution changed, or create it for
-        // the first time when the user enables DLSS. Both resize blocks above
-        // drain the streams; the enable case drains here before creating.
-        const bool dlss_needs_feature = scene.settings.dlss_enabled && dlss_rr.available()
-                                        && !dlss_rr.feature_active();
-        if (render_res_changed || display_res_changed || dlss_needs_feature) {
-            if (!dlss_rr.feature_active()) {
-                // First creation or re-enable: drain streams since no resize
-                // block did it, and ensure optimal settings are cached.
-                CUDA_CHECK(cudaStreamSynchronize(cuda_context.compute_stream));
-                CUDA_CHECK(cudaStreamSynchronize(cuda_context.display_stream));
-                dlss_rr.cache_optimal_settings(width, height);
-            } else if (display_res_changed) {
-                dlss_rr.cache_optimal_settings(width, height);
+        // the first time when the user enables DLSS. Only when DLSS is
+        // enabled — resolution changes while DLSS is off must not create a
+        // feature.  Optimal settings are already cached above.
+        if (scene.settings.dlss_enabled && dlss_rr.available()) {
+            const bool needs_recreate = render_res_changed || display_res_changed
+                                        || !dlss_rr.feature_active();
+            if (needs_recreate) {
+                if (!dlss_rr.feature_active()) {
+                    CUDA_CHECK(cudaStreamSynchronize(cuda_context.compute_stream));
+                    CUDA_CHECK(cudaStreamSynchronize(cuda_context.display_stream));
+                }
+                dlss_rr.create_feature(render_width, render_height, width, height,
+                                       scene.dlss_preset, cuda_context.display_stream);
             }
-            dlss_rr.create_feature(render_width, render_height, width, height,
-                                   scene.dlss_preset, cuda_context.display_stream);
         }
         // Release feature when user disables DLSS (free VRAM immediately).
         if (!scene.settings.dlss_enabled && dlss_rr.feature_active()) {
