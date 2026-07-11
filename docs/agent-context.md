@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4.5 — 收敛质量 + DLSS-RR + 自适应
-- **进度**：Phase 4.5 Step 13 完成（DLSS SDK third_party 集成 + DlssRR 封装类 + 资源管理 + 编译验证通过）
+- **进度**：Phase 4.5 Step 14.5 第一小项完成：slider 弹回修复（StateStorage 持久化拖拽值，DLSS OFF 验证通过，DLSS ON 待崩溃修复后回测）
 
 ### 下一个任务
 
-Phase 4.5 Step 14 第一小项：Raygen 改单帧输出
+Phase 4.5 Step 14.5：NGX 崩溃诊断（日志回调 + abort 前 flush spdlog）
 
 ---
 
