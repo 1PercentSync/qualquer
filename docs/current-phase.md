@@ -620,9 +620,20 @@ ngxParams->Set(NVSDK_NGX_Parameter_FreeMemOnReleaseFeature, 1);
 
 渲染分辨率由 UI 滑块直接控制。Quality mode 自动选取：启动时用 `NGX_DLSSD_GET_OPTIMAL_SETTINGS` 查询每个 mode（DLAA / Quality / Balanced / Performance / UltraPerformance）的 optimal / min / max 渲染分辨率，缓存结果。用户调整滑块时，选取 optimal 最接近用户值的 mode；若用户值不在该 mode 的 [min, max] 内，比较相邻两个 mode 的 clamp 距离，选改变量更小的。用户值超出所有 mode 范围时，clamp 到最近端的 min/max；UI 提供 bypass 开关跳过此 clamp（允许超范围渲染分辨率）。render >= target 时选 DLAA。Render Preset 默认 E（Latest transformer model，质量最优）；SDK 推荐 Default（随 OTA 更新），UI 提供 Default/D/E 切换。
 
-**每帧执行**：填充 `NVSDK_NGX_CUDA_DLSSD_Eval_Params`，调用 `NGX_CUDA_EVALUATE_DLSSD_EXT`。Jitter offset = `-(jx - 0.5)`, `-(jy - 0.5)`（取反：投影矩阵 jitter 方向与像素偏移方向相反，两个 NVIDIA 官方参考均取反）。InMVScale = 1.0。MVJittered flag 不设（Flag=0，MV 两端均用 unjittered VP 投影，只含几何运动，与 vk_gltf_renderer 一致）。InIndicatorInvertYAxis = 1（OptiX/CUDA Y-up 坐标系，与 optix-subd / Blender Cycles 一致）。
+**每帧执行**：填充 `NVSDK_NGX_CUDA_DLSSD_Eval_Params`，调用 `NGX_CUDA_EVALUATE_DLSSD_EXT`。Jitter offset = `-(jx - 0.5)`, `-(jy - 0.5)`（取反：投影矩阵 jitter 方向与像素偏移方向相反，两个 NVIDIA 官方参考均取反）。InMVScale = 1.0。MVJittered flag 不设（Flag=0，MV 两端均用 unjittered VP 投影，只含几何运动，与 vk_gltf_renderer 一致）。InIndicatorInvertYAxis = 0（debug overlay 行序控制，不影响降噪）。
 
-**矩阵传递**：pInWorldToViewMatrix / pInViewToClipMatrix 传 `glm::value_ptr(glm::transpose(mat4))`——GLM column-major 转置后按 row-major 读取即为原始矩阵（vk_gltf_renderer `dlss_wrapper.cpp:488-491` 做法，optix-subd 的 row-major `otk::Matrix4x4` 直接传等价）。`to_float4x4()` 仅用于 LaunchParams 供 device `mul()` 使用，不用于 DLSS 矩阵传递。
+**矩阵传递**：pInWorldToViewMatrix / pInViewToClipMatrix 传 `glm::value_ptr(glm::transpose(mat4))`——GLM column-major 转置后按 row-major 读取即为原始矩阵。`to_float4x4()` 仅用于 LaunchParams 供 device `mul()` 使用，不用于 DLSS 矩阵传递。
+
+各参考项目做法：
+
+| 参考 | 做法 | 原因 |
+|------|------|------|
+| vk_gltf_renderer（`dlss_wrapper.cpp:488-491`） | `glm::value_ptr(glm::transpose(mat4))` | GLM column-major → 转置 → row-major 内存布局 |
+| optix-subd（`denoiserDlss.cu:390-391`） | `const_cast<float*>(viewMatrix.getData())` | `otk::Matrix4x4` 原生 row-major，无需转置 |
+| vk_denoise_dlssrr（`dlssrr_wrapper.cpp:379-380`） | `glm::value_ptr(mat4)` 不转置 | GLM column-major 直传 |
+| blender-dlss | 不传矩阵（用 Parameter 接口设置其他字段） | — |
+
+vk_denoise_dlssrr 与 vk_gltf_renderer 做法矛盾。跟随 vk_gltf_renderer（转置），理由：vk_gltf_renderer 是更活跃维护的项目，且与 optix-subd 的 row-major 直传语义一致。
 
 **前帧 VP 矩阵**：LaunchParams 传当前帧和前帧各一个 unjittered `VP = projection × view`（`float4x4`，row-major 供 device `mul()` 使用），MV 计算将 world pos 分别投影到两帧 VP 取差（vk_gltf_renderer `dlss_util.h:87-96` 做法）。host 端每帧末缓存当前帧 VP 作为下帧的 prevVP。
 
@@ -788,6 +799,18 @@ specular hit distance 不分配（optional 输入，DLSS-RR 传 nullptr，见 D3
 **单面 back-face pass-through**：primary ray 命中单面材质背面时，closesthit 在 aux 写入块之前 return（pass-through），bounce 0 的 aux 数据未写入。pass-through 表面不可见，其材质属性与像素最终颜色无对应关系，应在 pass-through return 前写入 sky 默认值（depth=inf, normal=0, roughness=0, diffuse albedo=0, specular albedo=0），语义为「此像素无有意义的表面信息」。
 
 **BrdfParams::E_glossy_rgb**：`init_brdf_params` 已经逐通道计算 E_glossy 用于 diffuse weight，现存入 `BrdfParams` 供 closesthit 直接读取写入 specular albedo，避免重算。
+
+#### Step 14.5 正确性修复（Step 14 代码审查发现）
+
+**InReset 语义拆分**：accumulation reset（`chain_count=0`，每次相机移动）和 DLSS `InReset`（丢弃时域历史，仅场景切换/相机瞬移）是两个独立语义。当前代码将 `needs_reset` 直接传给 `eval.InReset`，导致每帧相机移动都丢弃 DLSS-RR 时域历史——比不设更差，DLSS-RR 退化为单帧降噪器。SDK 文档："Set to 1 when scene changes completely (new level etc)"。参考项目（optix-subd、vk_gltf_renderer）均仅在显式 reset 事件时设置。
+
+**DLSS ON color 均值**：D32 规定 color 输入为"同一亚像素位置 N 个 sample 的辐射度平均"。raygen 的 `frame_radiance` 是 sample loop 的累加总和，spp > 1 时 DLSS 收到 N 倍亮度。写入前除以 `samples_per_frame`（防 0）。帧末 `accum_counts_[write_slot]` 置 1（而非当前的 `chain_count + spp`），确保切回 DLSS OFF 时 tonemap 除数匹配。
+
+**DLSS ON primary ray 提出 sample loop**：DLSS ON 时 per-frame jitter 统一，所有 sample 的 primary ray 相同，但当前在 loop 内每 sample 重算（矩阵乘法 + normalize）。自适应 spp（Step 15）会在 DLSS ON 下提高 spp，冗余计算不可忽略。将 DLSS ON 分支的 jitter + primary ray 移到 loop 外，loop body 抽为 `__forceinline__` 函数供两个分支共用。
+
+**Render preset 变化触发 feature 重建**：SDK render preset 是 feature 创建时的参数，变更需 release + recreate。当前 `submit_cuda` 仅在分辨率变化或首次 enable 时 `create_feature`，preset 变化不触发 recreate。需加 `prev_dlss_preset_` 检测。
+
+**Aux buffer ping-pong 双份**：当前 aux buffer（depth、MV、albedo 等）各只有一份。并行架构下 compute_stream 写当前帧 aux 的同时 display_stream 的 DLSS eval 读同一份 buffer，存在跨 stream 读写竞争。此外 guide 数据和 color 来自不同帧导致时域错配。改为与 color 一样的 ping-pong 双份，共用 `accum_index` 同步翻转，跨帧保护复用现有 event 链。配套新增 `DlssPrevFrame` host 缓存（上一帧的 jitter、view/projection 矩阵、frame_time），确保 evaluate 消费完整配套的 N-1 帧数据集。
 
 ### 完成标准
 

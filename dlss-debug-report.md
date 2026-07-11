@@ -110,13 +110,7 @@ return G + G * G - G * G * G;
 
 **可选加固**：`get_shading_normal` 中 z 重建（`sqrt(1-x²-y²)` 在 x²+y² > 1 时对负数开方）未审计；SceneLoader/mikktspace 对退化 UV 的 tangent 输出可考虑加载期检测。
 
-### 4. Aux buffer 需要改为 ping-pong 双份
-
-**问题**：当前 aux buffer（depth、MV、albedo 等）各只有一份。在并行架构（compute_stream + display_stream 同时工作）下，raygen 在 compute_stream 上写当前帧的 aux，同时 DLSS eval 在 display_stream 上读上一帧的 aux——两条 stream 同时访问同一份 buffer，存在跨 stream 的读写竞争。此外，guide 数据和 color 来自不同帧会导致时域错配。
-
-**修复**：aux buffer 全部改为与 color 一样的 ping-pong 双份，共用 `accum_index` 同步翻转。跨帧保护复用现有 event 链。配套新增 `DlssPrevFrame` host 缓存（上一帧的 jitter、view/projection 矩阵、frame_time），确保 evaluate 消费的是完整配套的 N-1 帧数据集。
-
-### 5. DLSS ON/OFF 模式间的 jitter 一致性
+### 4. DLSS ON/OFF 模式间的 jitter 一致性
 
 **问题**：DLSS 模式下需要全局统一 jitter（host 端 Sobol 不加 per-pixel Cranley-Patterson rotation），使所有像素共享同一个 jitter 偏移，与 `InJitterOffset` 一致。per-pixel rotation 会使 DLSS 收到的单一 jitter 值失真。DLSS OFF 模式则需要恢复 per-sample jitter 以加速收敛。
 
@@ -134,27 +128,18 @@ return G + G * G - G * G * G;
 
 实测 display_stream 和 0（null stream）都能跑。需要与 blocking 回测联动决策后写入文档。
 
-### 3. 矩阵传递约定
-
-静止相机 + DLAA（1:1 不放大）场景下，转置与否无可见差异（矩阵未被显著使用）。但两个 NVIDIA 官方参考的做法互相矛盾：
-
-- vk_gltf_renderer：`dlss_wrapper.cpp:488-491` 做了转置
-- vk_denoise_dlssrr：不转置，并附注释给出"双转置抵消"的论证
-
-SDK 约定"Row Major + left multiplication"按推导支持**不转置**。需要在相机运动 + upscale 场景做 A/B 对比后定稿，并更新 `current-phase.md` 矩阵传递节（当前文档记载的是 vk_gltf 的转置做法，与推导矛盾）。
-
-### 4. Sky depth 用 INF 还是 65504
+### 3. Sky depth 用 INF 还是 65504
 
 当前实现（D32 规格）写 IEEE float infinity。调试过程中作为 NaN 源嫌疑改成了 65504.0（FP16 max，vk_denoise_dlssrr 的做法），但**未解决方框**——真凶是负值，不是 INF。INF 产生问题的前提条件从未被验证。65504 与参考约定对齐且无成本，可选采用。定稿后更新 D32。
 
-### 5. Specular albedo guide 有效性复核
+### 4. Specular albedo guide 有效性复核
 
 方框存在期间观察到"specular albedo 置零无视觉差异"，但该观察可能被伪影掩盖。DLSS 正常工作后需要复核 specular albedo guide 的实际影响，D32 的 E_glossy 选型（vs SDK 附录的 EnvBRDFApprox）画质对比留待调优阶段。
 
-### 6. DLSS OFF 路径的 NaN 防御
+### 5. DLSS OFF 路径的 NaN 防御
 
 Separate Sum 下单个 NaN 样本会永久"卡死"该像素——NaN 加到 sum 里后 sum 永远是 NaN。负值源头修复后评估是否需要与 DLSS 路径对称的 sanitize。
 
-### 7. 并行消费路径的回归验证
+### 6. 并行消费路径的回归验证
 
 并行消费逻辑（read slot + prev 缓存）是在方框存在期间实现的，从未在"无方框"状态下验证过。落地后需专项确认无新伪影——时域一致性依赖 prev jitter/矩阵/aux 三者配套正确。
