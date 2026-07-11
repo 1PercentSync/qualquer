@@ -171,7 +171,7 @@ MUSTREAD:4
 - [x] NGX 崩溃诊断：NGX init 时提供日志回调（桥接 spdlog，`ON`，`DisableOtherLoggingSinks`）；所有 abort 宏（CUDA/OPTIX/VK/NGX）在 abort 前 flush spdlog
 - [ ] display_stream blocking 回测：负值修复落地后，若 DLSS 仍崩溃则将 display_stream 改为 blocking（去掉 `cudaStreamNonBlocking`）；若不崩溃则直接勾选
 - [ ] EvalStorage 持久化回测：NGX 日志回调落地后，若 NGX 错误仍不可见则将 evaluate() 传给 NGX 的指针目标（矩阵、tex/surf object）改为持久成员；若可见则直接勾选
-- [ ] 呈现链路计时（debug only）：CUDA timing events 测量 display_stream 耗时（DLSS evaluate + tonemap + signal）；Vulkan timestamp queries 测量 blit + ImGui 耗时；UI 显示三项：CUDA 呈现时间/占比、VK 呈现时间/占比、总呈现时间/占比
+- [x] 呈现链路计时（debug only）：CUDA timing events 测量 PT（compute_stream）和 display_stream 耗时；Vulkan timestamp queries 测量 blit + ImGui 耗时；CPU frame chrono 测量活跃工作时间；UI 显示各项 ms/占比/理想帧率，FrameStats 窗口平滑
 - [ ] 请求用户在 CLion 中编译验证（render height / exposure / FOV 滑块拖拽释放后值正常提交；相机进入单面几何体内部时无 aux data 陈旧伪影；垂直相机运动下 DLSS-RR 无 ghosting）
 
 ## Step 15：自适应 Sample 数

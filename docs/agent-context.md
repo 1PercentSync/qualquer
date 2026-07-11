@@ -11,7 +11,7 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4.5 — 收敛质量 + DLSS-RR + 自适应
-- **进度**：Phase 4.5 Step 14 UI 适配全部完成（VRAM 显示 + 分辨率 clamp + resolve 算法修正 + slider 弹回）；Step 14.5 NGX 崩溃诊断完成
+- **进度**：Phase 4.5 Step 14.5 呈现链路计时完成（PT/CUDA display/VK display/CPU frame timing，debug only）
 
 ### 下一个任务
 
