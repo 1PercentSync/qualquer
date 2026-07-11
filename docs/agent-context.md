@@ -11,7 +11,7 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4.5 — 收敛质量 + DLSS-RR + 自适应
-- **进度**：Phase 4.5 Step 14.5 SceneLoader 异步上传生命周期修复完成；`load()` 和 `load_env_map()` 在局部 source 析构前加 `cudaStreamSynchronize`
+- **进度**：Phase 4.5 Step 14.5 单面 back-face pass-through aux 默认值完成；closesthit pass-through return 前写入 depth=inf / normal=0 / roughness=0 / albedo=0
 
 ### 下一个任务
 
