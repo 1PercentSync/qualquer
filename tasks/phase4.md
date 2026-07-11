@@ -171,7 +171,7 @@ MUSTREAD:4
 - [x] 按 feature 生命周期缓存 DLSS-RR VRAM 统计，移除每帧 NGX stats 查询
 - [x] NGX 崩溃诊断：NGX init 时提供日志回调（桥接 spdlog，`ON`，`DisableOtherLoggingSinks`）；所有 abort 宏（CUDA/OPTIX/VK/NGX）在 abort 前 flush spdlog
 - [x] display stream 排序修复：保留 SER 并恢复 NGX/default-stream 所需顺序，多轮压力测试稳定且吞吐无显著回退
-- [ ] 修复 `SceneLoader` 异步上传的 host source 生命周期，确保局部 source 析构前复制完成
+- [x] 修复 `SceneLoader` 异步上传的 host source 生命周期，确保局部 source 析构前复制完成
 - [ ] 约束资产辐射度与材质输入的物理数值域
 - [ ] 保证几何与 shading frame 在退化输入下仍有效
 - [ ] 保证 BRDF 与能量模型在完整输入域内输出合法

@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4.5 — 收敛质量 + DLSS-RR + 自适应
-- **进度**：Phase 4.5 Step 14.5 raygen 重构完成；trace_sample + compute_primary_dir 提取，DLSS ON primary ray 移出 sample loop
+- **进度**：Phase 4.5 Step 14.5 SceneLoader 异步上传生命周期修复完成；`load()` 和 `load_env_map()` 在局部 source 析构前加 `cudaStreamSynchronize`
 
 ### 下一个任务
 
-Phase 4.5 Step 14.5 修复 SceneLoader 异步上传 host source 生命周期
+Phase 4.5 Step 14.5 约束资产辐射度与材质输入的物理数值域
 
 ---
 
