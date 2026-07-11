@@ -17,6 +17,9 @@
 
 namespace qualquer::optix {
 
+    /** @brief NGX project identifier (UUID format required by NGX). */
+    constexpr char kNgxProjectId[] = "d8b2224f-2576-4814-92ec-53596756923e";
+
     // NGX result string for logging. Covers the common error codes;
     // unknown codes fall back to the raw integer.
     static std::string ngx_result_string(NVSDK_NGX_Result result) {
@@ -87,7 +90,7 @@ namespace qualquer::optix {
 
         // Init NGX with project ID (no NVIDIA-issued app ID required).
         NVSDK_NGX_Result result = NVSDK_NGX_CUDA_Init_with_ProjectID(
-            "d8b2224f-2576-4814-92ec-53596756923e",
+            kNgxProjectId,
             NVSDK_NGX_ENGINE_TYPE_CUSTOM,
             "1.0.0",
             app_path.c_str()
@@ -102,7 +105,7 @@ namespace qualquer::optix {
         initialized_ = true;
 
         // Check RayReconstruction hardware/driver support.
-        constexpr NVSDK_NGX_ProjectIdDescription project_desc{"d8b2224f-2576-4814-92ec-53596756923e",
+        constexpr NVSDK_NGX_ProjectIdDescription project_desc{kNgxProjectId,
                                                            NVSDK_NGX_ENGINE_TYPE_CUSTOM, "1.0.0"};
         constexpr NVSDK_NGX_Application_Identifier app_id{
             NVSDK_NGX_Application_Identifier_Type_Project_Id, {.ProjectDesc = project_desc}};
