@@ -779,6 +779,8 @@ specular hit distance 不分配（optional 输入，DLSS-RR 传 nullptr，见 D3
 
 **LaunchParams 传递**：aux buffers 通过 `cudaSurfaceObject_t` 传入 LaunchParams（closesthit / raygen 用 `surf2Dwrite` 写入）。MV 计算需要 `view_projection` + `prev_view_projection`（unjittered，row-major `float4x4`），host 端每帧末缓存当前 VP 为下帧 prevVP。`prev_view_projection_` 初始值为 identity；首帧 MV 因此无效，由首次 DLSS evaluate 的 `InReset=1` 丢弃。
 
+**MV Y 分量符号**：raygen 的 MV 公式对 X/Y 统一使用 `(prev_ndc - curr_ndc) * 0.5 * resolution`，但 GLM `glm::perspective` 产生 NDC Y 向上，而 DLSS 屏幕空间 Y 向下（SDK §3.6），NDC 到像素的 Y 映射为 `pixel_y = (1 - ndc_y) * 0.5 * height`，因此正确的 MV Y 分量是 `(curr_ndc.y - prev_ndc.y) * 0.5 * height`，与当前代码相反。修复方式：`eval.InMVScaleY = -1.0f`（利用 SDK 提供的方向变换参数，不改 MV buffer 生成方式）；或在 raygen 中修正 Y 公式并保持 `InMVScaleY = 1.0f`。两者只能选一。
+
 **首次 evaluate gating**：DLSS evaluate 延迟一帧 gating（`dlss_active && prev_dlss_active`），首次 evaluate 传 `InReset=1`。作用：(1) 避免消费 enable 前的 Separate Sum 陈旧累积总和；(2) 丢弃首帧因 `prev_view_projection_` 为 identity 产生的错误 MV。普通相机移动不触发 reset。
 
 **写入策略**：closesthit 在首 sample 的 bounce 0 写入 depth / diffuse albedo / specular albedo / normals / roughness（`sample_index == sample_count` 门控，D37 共享 jitter → 首 sample 写一次即可）。raygen 在 sample loop 后写入 MV（hit/miss 统一）+ miss 像素的其余 aux 默认值。
