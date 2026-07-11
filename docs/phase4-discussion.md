@@ -845,3 +845,39 @@ DLSS ON 时 raygen 内 sample loop 的 subpixel jitter 从 per-sample 改为 per
 - 帧内几何/纹理 anti-aliasing 不靠 per-sample jitter → 由 DLSS-RR 跨帧时域重建处理
 
 **D4 更新**：原"raygen 内 sample 循环"机制不变（仍在 raygen 内 for loop），仅 jitter 维度分配调整。RNG dim 0-1 改为由 frame_index 驱动（per-frame），不再由 sample_index 驱动（per-sample）。
+
+---
+
+### D38. DLSS-RR CUDA stream 排序
+
+**来源**：Step 14.5 高帧率崩溃回测。
+
+**核心问题**：DLSS-RR feature 接收 display stream，但其 CUDA 路径可能仍依赖 legacy default-stream work。non-blocking display stream 上的前置等待与完成 event 不覆盖该顺序，SER 与高帧率会放大时序敏感性。
+
+**决策**：✅ **compute stream 保持 non-blocking，display stream 使用 blocking stream，保留 SER。**
+
+blocking display stream 恢复其与 legacy default stream 的顺序，不取消独立 compute stream 与 display stream 的并行。压力测试中该方案稳定，1 spp 与 32 spp 吞吐相对关闭 SER 的 non-blocking 基线均无显著回退。该结果支持 NGX/default-stream 排序缺口，但不能排除 DLSS-RR CUDA 与 SER 的底层兼容性问题；若后续再次出现偶发崩溃，切换到标准 `optixTrace` 做长期稳定性对照，再决定是否关闭 SER。
+
+---
+
+### D39. DLSS input 帧所有权与有效性
+
+**来源**：Step 14.5 双 stream 正确性审查。
+
+**核心问题**：color 使用 ping-pong，而 aux data 只有单份；并行帧中 compute 会覆盖 display 正在读取的 guide data。即使消除物理竞争，previous color 与 current aux/jitter/matrices 仍构成帧错配。基于 `prev_dlss_active` 的固定一帧延迟只能描述开关历史，不能证明 read slot 已包含完整有效输入。
+
+**决策**：✅ **color、全部 aux data 与 host metadata 采用同槽 ping-pong；evaluate 由 read slot validity 驱动。**
+
+同一 input slot 是 DLSS 一帧数据的所有权边界，producer 和 consumer 只通过 slot 与现有 event 交接，不通过额外串行化保护单份资源。feature 生命周期或历史失效使旧 slots 无效；reset 属于第一份新生成的有效输入并随 slot 传递。没有有效 temporal predecessor 的 reset input 使用零运动语义。该方案保留双 stream overlap，同时覆盖 enable、feature 重建、分辨率变化、场景切换和跳过提交等非稳态路径。
+
+---
+
+### D40. 异步上传 host source 生命周期
+
+**来源**：IBL 崩溃排查中的上传链审查。
+
+**核心问题**：异步 host-to-device copy 的 source 必须存活到 stream copy 完成。局部加载数据若在完成前析构，即使没有稳定复现症状，也违反上传接口的生命周期契约。
+
+**决策**：✅ **按 host source 所有权批次同步加载期上传。**
+
+同一所有权批次的多个 upload 共用一次对应 stream 同步，同步点位于任一局部 source 失效之前。持久成员 source 不增加同步；不使用 device-wide 同步。相比逐 upload 同步，该方案保留批内并行；相比持久 staging + event 回收，加载路径的复杂度和收益不支持额外所有权系统。

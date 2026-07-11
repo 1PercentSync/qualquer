@@ -96,7 +96,7 @@ MUSTREAD:4
 
 > 目标：DLSS-RR 集成（时域累积+去噪+放大）、采样质量提升、自适应帧率
 >
-> 决策记录见 `docs/phase4-discussion.md`（D31-D37）。
+> 决策记录见 `docs/phase4-discussion.md`（D31-D40）。
 > 设计详见 `docs/current-phase.md` Phase 4.5 节。
 >
 > 每完成一个复选框暂停等待审查。一个 Step 结束时应请求用户在 CLion 中编译验证。
@@ -161,15 +161,16 @@ MUSTREAD:4
 
 - [x] `slider_uint_on_release` / `slider_float_deferred` 弹回修复：widget active 期间将拖拽值存入 ImGui StateStorage，释放帧从 StateStorage 取回最后的拖拽值用于提交（两个函数使用同一模式，一起修复）
 - [ ] 单面 back-face pass-through aux 默认值：closesthit 中 pass-through return 前，若 `bounce == 0 && first sample`，写入 sky 默认值（depth=inf, normal=0, roughness=0, diffuse albedo=0, specular albedo=0），语义为「此像素无有意义的表面信息」
-- [ ] 首次 evaluate InReset：DLSS evaluate 延迟一帧 gating（`dlss_active && prev_dlss_active`），首次 evaluate 传 `InReset=1` 丢弃时域历史，避免首帧 `prev_view_projection_` 为 identity 产生的错误 MV 以及 enable 前的陈旧累积数据被 DLSS-RR 消费
-- [ ] Aux buffer ping-pong 双份 + `DlssPrevFrame` host 缓存
+- [ ] DLSS color、aux data 与 host metadata 同槽 ping-pong，消除跨 stream 竞争和帧错配
+- [ ] 首次 evaluate 有效性状态机：仅消费完整有效的 DLSS input slot，历史失效后的首个输入以 reset 和有效零 MV 启动
 - [ ] DLSS ON color 写均值 + `accum_counts_[write_slot]` 置 1
 - [ ] DLSS ON primary ray 提出 sample loop，loop body 抽为 `__forceinline__` 函数
 - [ ] MV Y 分量符号修正：`eval.InMVScaleY = -1.0f`
 - [ ] Render preset 变化触发 feature 重建：加 `prev_dlss_preset_` 检测
 - [ ] `cache_optimal_settings` 错误处理：当前任一 mode 查询失败会提前 return 跳过剩余 mode，改为单 mode 失败不影响其余 mode 的查询
 - [x] NGX 崩溃诊断：NGX init 时提供日志回调（桥接 spdlog，`ON`，`DisableOtherLoggingSinks`）；所有 abort 宏（CUDA/OPTIX/VK/NGX）在 abort 前 flush spdlog
-- [x] display_stream blocking 回测：保持 `compute_stream` non-blocking、将 `display_stream` 改为 blocking 并保留 SER；当前多轮压力测试稳定，且 1 spp / 32 spp 吞吐与 `optixTrace` + non-blocking 基线相当。根因候选保留 NGX/default-stream 排序缺口与 DLSS-RR CUDA/SER 底层兼容性两种可能；若后续再次出现偶发崩溃，切换到 `optixTrace` 做长期对照，以是否显著改善稳定性决定最终关闭 SER
+- [x] display stream 排序修复：保留 SER 并恢复 NGX/default-stream 所需顺序，多轮压力测试稳定且吞吐无显著回退
+- [ ] 修复 `SceneLoader` 异步上传的 host source 生命周期，确保局部 source 析构前复制完成
 - [ ] EvalStorage 持久化回测：NGX 日志回调落地后，若 NGX 错误仍不可见则将 evaluate() 传给 NGX 的指针目标（矩阵、tex/surf object）改为持久成员；若可见则直接勾选
 - [x] 呈现链路计时（debug only）：CUDA timing events 测量 PT（compute_stream）和 display_stream 耗时；Vulkan timestamp queries 测量 blit + ImGui 耗时；CPU frame chrono 测量活跃工作时间；UI 显示各项 ms/占比/理想帧率，FrameStats 窗口平滑
 - [ ] 请求用户在 CLion 中编译验证（render height / exposure / FOV 滑块拖拽释放后值正常提交；相机进入单面几何体内部时无 aux data 陈旧伪影；垂直相机运动下 DLSS-RR 无 ghosting）

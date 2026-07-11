@@ -551,7 +551,7 @@ struct SceneStats {
 > 目标：DLSS-RR 集成（时域累积+去噪+放大）、采样质量提升、自适应帧率
 >
 > 任务清单见 `tasks/phase4.md` Step 9+。
-> 决策记录见 `docs/phase4-discussion.md`（D31-D37）。
+> 决策记录见 `docs/phase4-discussion.md`（D31-D40）。
 
 ### 实现步骤
 
@@ -644,7 +644,7 @@ vk_denoise_dlssrr 与 vk_gltf_renderer 做法矛盾。跟随 vk_gltf_renderer（
 | compute_stream | raygen（单帧 noisy HDR → surf2Dwrite 到 write slot） | raygen（Separate Sum 累加 → surf2Dwrite 到 write slot） |
 | display_stream | DLSS-RR eval（读 read slot tex → 写 dlss_output surf）→ tonemap（读 dlss_output tex, 1:1, 无除法 → 写 display surf）→ signal | tonemap（读 read slot tex, resampling + 除 count → 写 display surf）→ signal |
 
-DLSS-RR 在 display_stream 上执行，与 compute_stream 的 raygen 并行。读的是上一帧的 noisy buffer（ping-pong），不 stall raygen。DLSS-RR feature 创建时传入 display_stream（`InCUStream`）。DLSS OFF 时 display_stream 不执行 DLSS-RR eval，tonemap 直接读 ping-pong 累积 buffer（与 Phase 4 行为一致，仅读写方式从线性指针改为 tex/surf）。
+DLSS-RR 在 display_stream 上执行，与 compute_stream 的 raygen 并行。`compute_stream` 使用 non-blocking stream；`display_stream` 使用 blocking stream，使 NGX CUDA 路径可能提交的 legacy default-stream work 排在 display 的前置等待与 tonemap/completion event 之间，同时不取消 compute/display overlap。DLSS-RR 读上一帧的 noisy input slot，不 stall 当前 raygen。feature 创建时传入 display_stream（`InCUStream`）。DLSS OFF 时 display_stream 不执行 evaluate，tonemap 直接读 ping-pong 累积 buffer。
 
 **中间 HDR buffer**：新增资源，输出分辨率，float4。DLSS-RR 输出目标，tonemap 输入源。同一 stream 上顺序执行无竞争。仅 DLSS ON 时使用。
 
@@ -782,17 +782,19 @@ blit / record_vulkan 全幅不变，Vulkan 侧不感知渲染分辨率。DLSS-RR
 | normals | `CudaArrayBuffer<float4>` | RGBA32F |
 | roughness | `CudaArrayBuffer<float>` | R32F |
 
-specular hit distance 不分配（optional 输入，DLSS-RR 传 nullptr，见 D32）。
+六个 aux resource 组成 `AuxBufferSet`，Renderer 持有两个 set，与 color ping-pong slot 一一对应。host 侧并行持有两个 `DlssFrameMetadata`，记录该 slot 的 jitter、view/projection、frame time、frame ID、valid 和 reset。specular hit distance 不分配（optional 输入，DLSS-RR 传 nullptr，见 D32）。
 
 **DLSS output buffer**（显示分辨率）：`CudaArrayBuffer<float4>`，DLSS-RR 写入 → tonemap 读取。跟随窗口 resize（不跟随渲染分辨率变化）。
 
-**生命周期**：init 时分配，destroy 时释放。渲染分辨率变化时 aux input buffers 与 accum_buffers 一起 drain + resize；显示分辨率变化时 DLSS output buffer 单独 drain + resize。
+**生命周期**：init 时为两个 slot 分配 color/aux resources，destroy 时释放。渲染分辨率变化时 drain 后 resize 两个 slot 并使两份 metadata invalid；显示分辨率变化时单独 drain + resize DLSS output buffer，并按 feature 重建规则使 input slots invalid。
 
-**LaunchParams 传递**：aux buffers 通过 `cudaSurfaceObject_t` 传入 LaunchParams（closesthit / raygen 用 `surf2Dwrite` 写入）。MV 计算需要 `view_projection` + `prev_view_projection`（unjittered，row-major `float4x4`），host 端每帧末缓存当前 VP 为下帧 prevVP。`prev_view_projection_` 初始值为 identity；首帧 MV 因此无效，由首次 DLSS evaluate 的 `InReset=1` 丢弃。
+**Slot 流向**：`read_slot = accum_index`，`write_slot = 1 - accum_index`。compute 向同一个 write slot 写 color、全部 aux 并填充 metadata；display 仅从同一个 read slot 组装 evaluate 输入。现有 color slot event 同时保护该 slot 的 aux，metadata 的 valid 表示该 slot 已生成完整输入，GPU 完成时序仍由 event 保证。
+
+**LaunchParams 传递**：write slot 的 aux surface objects 通过 LaunchParams 传给 closesthit/raygen；read slot 的 aux texture objects 与同槽 metadata 传给 NGX。MV 计算使用当前与前一有效输入帧的 unjittered VP。没有有效 temporal predecessor 时使用 current VP 作为 previous VP，使首个 reset input 的 MV 为零。
 
 **MV Y 分量符号**：raygen 的 MV 公式对 X/Y 统一使用 `(prev_ndc - curr_ndc) * 0.5 * resolution`，但 GLM `glm::perspective` 产生 NDC Y 向上，而 DLSS 屏幕空间 Y 向下（SDK §3.6），NDC 到像素的 Y 映射为 `pixel_y = (1 - ndc_y) * 0.5 * height`，因此正确的 MV Y 分量是 `(curr_ndc.y - prev_ndc.y) * 0.5 * height`，与当前代码相反。修复方式：`eval.InMVScaleY = -1.0f`（利用 SDK 提供的方向变换参数，不改 MV buffer 生成方式）；或在 raygen 中修正 Y 公式并保持 `InMVScaleY = 1.0f`。两者只能选一。
 
-**首次 evaluate gating**：DLSS evaluate 延迟一帧 gating（`dlss_active && prev_dlss_active`），首次 evaluate 传 `InReset=1`。作用：(1) 避免消费 enable 前的 Separate Sum 陈旧累积总和；(2) 丢弃首帧因 `prev_view_projection_` 为 identity 产生的错误 MV。普通相机移动不触发 reset。
+**首次 evaluate 状态机**：仅当 `dlss_active && metadata[read_slot].valid` 时 evaluate，否则从 read color slot 执行 fallback tonemap。feature 创建/重建、分辨率变化、场景切换及 DLSS 历史失效会使两个 input slots invalid，并设置 pending reset。第一份新生成的 write metadata 接收 reset token 后立即清除全局 pending 状态；token 随 slot 保留到实际 evaluate，避免丢失或连续重置。普通相机连续运动不使 slot invalid，也不触发 reset。
 
 **写入策略**：closesthit 在首 sample 的 bounce 0 写入 depth / diffuse albedo / specular albedo / normals / roughness（`sample_index == sample_count` 门控，D37 共享 jitter → 首 sample 写一次即可）。raygen 在 sample loop 后写入 MV（hit/miss 统一）+ miss 像素的其余 aux 默认值。
 
@@ -800,9 +802,9 @@ specular hit distance 不分配（optional 输入，DLSS-RR 传 nullptr，见 D3
 
 **BrdfParams::E_glossy_rgb**：`init_brdf_params` 已经逐通道计算 E_glossy 用于 diffuse weight，现存入 `BrdfParams` 供 closesthit 直接读取写入 specular albedo，避免重算。
 
-#### Step 14.5 正确性修复（Step 14 代码审查发现）
+#### Step 14.5 正确性修复
 
-**InReset 语义拆分**：accumulation reset（`chain_count=0`，每次相机移动）和 DLSS `InReset`（丢弃时域历史，仅场景切换/相机瞬移）是两个独立语义。当前代码将 `needs_reset` 直接传给 `eval.InReset`，导致每帧相机移动都丢弃 DLSS-RR 时域历史——比不设更差，DLSS-RR 退化为单帧降噪器。SDK 文档："Set to 1 when scene changes completely (new level etc)"。参考项目（optix-subd、vk_gltf_renderer）均仅在显式 reset 事件时设置。
+**InReset 语义拆分**：accumulation reset（`chain_count=0`）和 DLSS `InReset`（丢弃时域历史）是两个独立语义。连续相机运动和参数变化只重置累积；场景切换、相机瞬移、HDR 重载和显式 Reset 请求 DLSS history reset。SDK 文档："Set to 1 when scene changes completely (new level etc)"。参考项目（optix-subd、vk_gltf_renderer）均仅在显式 reset 事件时设置。
 
 **DLSS ON color 均值**：D32 规定 color 输入为"同一亚像素位置 N 个 sample 的辐射度平均"。raygen 的 `frame_radiance` 是 sample loop 的累加总和，spp > 1 时 DLSS 收到 N 倍亮度。写入前除以 `samples_per_frame`（防 0）。帧末 `accum_counts_[write_slot]` 置 1（而非当前的 `chain_count + spp`），确保切回 DLSS OFF 时 tonemap 除数匹配。
 
@@ -810,7 +812,9 @@ specular hit distance 不分配（optional 输入，DLSS-RR 传 nullptr，见 D3
 
 **Render preset 变化触发 feature 重建**：SDK render preset 是 feature 创建时的参数，变更需 release + recreate。当前 `submit_cuda` 仅在分辨率变化或首次 enable 时 `create_feature`，preset 变化不触发 recreate。需加 `prev_dlss_preset_` 检测。
 
-**Aux buffer ping-pong 双份**：当前 aux buffer（depth、MV、albedo 等）各只有一份。并行架构下 compute_stream 写当前帧 aux 的同时 display_stream 的 DLSS eval 读同一份 buffer，存在跨 stream 读写竞争。此外 guide 数据和 color 来自不同帧导致时域错配。改为与 color 一样的 ping-pong 双份，共用 `accum_index` 同步翻转，跨帧保护复用现有 event 链。配套新增 `DlssPrevFrame` host 缓存（上一帧的 jitter、view/projection 矩阵、frame_time），确保 evaluate 消费完整配套的 N-1 帧数据集。
+**DLSS input 同槽 ping-pong**：当前单份 aux 会被 compute 写入并被并行 display evaluate 读取，且 guide data、color 与 host 参数可能来自不同帧。按“Aux Data 资源与分配”的 slot 设计迁移为 color、全部 aux、metadata 同槽生产和消费，不通过新增 stream 同步解决竞争。
+
+**异步上传 host source 生命周期**：`CudaBuffer::upload()` 的 host source 必须存活到对应 stream copy 完成。`SceneLoader` 按 source 所有权批次组织上传；同批 upload 共用一次 `cudaStreamSynchronize(stream)`，同步点位于任何局部 source 析构或提前返回之前。持久成员 source 不增加同步，不使用 `cudaDeviceSynchronize()`；无法延长到批次同步点的内层 source 在其所有权边界单独完成复制。
 
 ### 完成标准
 
