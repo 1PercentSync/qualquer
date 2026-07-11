@@ -239,6 +239,12 @@ namespace qualquer::app {
                                              emissive_result.alias_table.size(), stream);
             }
 
+            // Ensure all async copies complete before local sources are
+            // destroyed (mesh_data vertex/index vectors, emissive_result
+            // triangles/alias_table). Persistent-member sources
+            // (gpu_materials_, texture_objects_) need no sync.
+            CUDA_CHECK(cudaStreamSynchronize(stream));
+
             return true;
         } catch (const std::exception &e) {
             spdlog::error("Scene loading failed: {}", e.what());
@@ -700,6 +706,9 @@ namespace qualquer::app {
         env_alias_table_.alloc(alias_result.entries.size());
         env_alias_table_.upload(alias_result.entries.data(),
                                 alias_result.entries.size(), stream);
+
+        // Ensure the async copy completes before alias_result is destroyed.
+        CUDA_CHECK(cudaStreamSynchronize(stream));
 
         // Commit all resources
         env_cubemap_texture_ = std::move(cubemap);
