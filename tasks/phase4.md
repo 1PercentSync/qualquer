@@ -162,6 +162,7 @@ MUSTREAD:4
 - [ ] 单面 back-face pass-through aux 默认值：closesthit 中 pass-through return 前，若 `bounce == 0 && first sample`，写入 sky 默认值（depth=inf, normal=0, roughness=0, diffuse albedo=0, specular albedo=0），语义为「此像素无有意义的表面信息」
 - [ ] 首次 evaluate InReset：DLSS evaluate 延迟一帧 gating（`dlss_active && prev_dlss_active`），首次 evaluate 传 `InReset=1` 丢弃时域历史，避免首帧 `prev_view_projection_` 为 identity 产生的错误 MV 以及 enable 前的陈旧累积数据被 DLSS-RR 消费
 - [ ] DLSS ON color 写均值：raygen DLSS 路径 `frame_radiance` 是 sample loop 总和，写入前除以 `samples_per_frame`（防 0）；帧末 `accum_counts_[write_slot]` 置 1（当前写 `chain_count + spp`，切回 DLSS OFF 时 tonemap 除数不匹配）
+- [ ] DLSS ON primary ray 提出 sample loop：DLSS ON 时 per-frame jitter 统一，所有 sample 的 primary ray 相同，当前在 loop 内每 sample 重算（矩阵乘法 + normalize）；自适应 spp（Step 15）会在 DLSS ON 下提高 spp，冗余计算不可忽略。将 DLSS ON 分支的 jitter + primary ray 移到 loop 外，loop body 抽为 `__forceinline__` 函数供两个分支共用
 - [ ] MV Y 分量符号修正：`eval.InMVScaleY = -1.0f`（设计依据见 `current-phase.md`「MV Y 分量符号」节）
 - [ ] `cache_optimal_settings` 错误处理：当前任一 mode 查询失败会提前 return 跳过剩余 mode，改为单 mode 失败不影响其余 mode 的查询
 - [ ] NGX 崩溃诊断：NGX init 时提供日志回调（桥接 spdlog，`ON`，`DisableOtherLoggingSinks`）；所有 abort 宏（CUDA/OPTIX/VK/NGX）在 abort 前 flush spdlog
