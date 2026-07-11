@@ -269,9 +269,12 @@ namespace qualquer::optix {
         eval.pInWorldToViewMatrix = view_row_major;
         eval.pInViewToClipMatrix = proj_row_major;
 
-        // ---- Coordinate system ----
-        // OptiX/CUDA Y-up. Both optix-subd and Blender Cycles set this to 1.
-        eval.InIndicatorInvertYAxis = 1;
+        // ---- Debug overlay orientation ----
+        // Controls the debug indicator's row rendering order, not DLSS
+        // processing. Our CUDA surface is top-down (row 0 = top, Vulkan blit
+        // preserves this). optix-subd/Blender set 1 because their GL interop
+        // surfaces are bottom-up; we don't need the flip.
+        eval.InIndicatorInvertYAxis = 0;
 
         // ---- Reset ----
         eval.InReset = input.reset ? 1 : 0;
