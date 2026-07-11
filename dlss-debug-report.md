@@ -110,19 +110,13 @@ return G + G * G - G * G * G;
 
 **可选加固**：`get_shading_normal` 中 z 重建（`sqrt(1-x²-y²)` 在 x²+y² > 1 时对负数开方）未审计；SceneLoader/mikktspace 对退化 UV 的 tangent 输出可考虑加载期检测。
 
-### 4. DLSS ON 时 color 输出必须写均值
-
-**问题**：D32 明确规定 DLSS 的 color 输入是"同一亚像素位置 N 个 sample 的辐射度**平均**"。如果 raygen 写的是总和而非均值，画面会亮 spp 倍。
-
-**修复**：raygen DLSS 路径在写 color 前除以 `samples_per_frame`（除数要防 0）。帧末 write-slot count 置 1（以防切回 DLSS OFF 时 tonemap 除数正确）。
-
-### 5. Aux buffer 需要改为 ping-pong 双份
+### 4. Aux buffer 需要改为 ping-pong 双份
 
 **问题**：当前 aux buffer（depth、MV、albedo 等）各只有一份。在并行架构（compute_stream + display_stream 同时工作）下，raygen 在 compute_stream 上写当前帧的 aux，同时 DLSS eval 在 display_stream 上读上一帧的 aux——两条 stream 同时访问同一份 buffer，存在跨 stream 的读写竞争。此外，guide 数据和 color 来自不同帧会导致时域错配。
 
 **修复**：aux buffer 全部改为与 color 一样的 ping-pong 双份，共用 `accum_index` 同步翻转。跨帧保护复用现有 event 链。配套新增 `DlssPrevFrame` host 缓存（上一帧的 jitter、view/projection 矩阵、frame_time），确保 evaluate 消费的是完整配套的 N-1 帧数据集。
 
-### 6. DLSS ON/OFF 模式间的 jitter 一致性
+### 5. DLSS ON/OFF 模式间的 jitter 一致性
 
 **问题**：DLSS 模式下需要全局统一 jitter（host 端 Sobol 不加 per-pixel Cranley-Patterson rotation），使所有像素共享同一个 jitter 偏移，与 `InJitterOffset` 一致。per-pixel rotation 会使 DLSS 收到的单一 jitter 值失真。DLSS OFF 模式则需要恢复 per-sample jitter 以加速收敛。
 
