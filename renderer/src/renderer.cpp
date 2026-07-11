@@ -535,15 +535,19 @@ namespace qualquer::renderer {
                          render_width, render_height);
         }
 
-        // Recreate DLSS-RR feature when resolution changed, or create it for
-        // the first time when the user enables DLSS. Only when DLSS is
-        // enabled — resolution changes while DLSS is off must not create a
-        // feature.  Optimal settings are already cached above.
+        // Recreate DLSS-RR feature when resolution changed, preset changed,
+        // or create it for the first time when the user enables DLSS. Only
+        // when DLSS is enabled — resolution changes while DLSS is off must
+        // not create a feature. Optimal settings are already cached above.
         if (scene.settings.dlss_enabled && dlss_rr.available()) {
+            const bool preset_changed = scene.dlss_preset != prev_dlss_preset_;
             const bool needs_recreate = render_res_changed || display_res_changed
+                                        || preset_changed
                                         || !dlss_rr.feature_active();
             if (needs_recreate) {
-                if (!dlss_rr.feature_active()) {
+                // Drain when no earlier resize block already did: first
+                // creation (!feature_active) or pure preset change.
+                if (!dlss_rr.feature_active() || preset_changed) {
                     CUDA_CHECK(cudaStreamSynchronize(cuda_context.compute_stream));
                     CUDA_CHECK(cudaStreamSynchronize(cuda_context.display_stream));
                 }
@@ -645,6 +649,7 @@ namespace qualquer::renderer {
         prev_samples_per_frame_ = scene.settings.samples_per_frame;
         prev_env_rotation_ = scene.settings.env_rotation;
         prev_dlss_enabled_ = scene.settings.dlss_enabled;
+        prev_dlss_preset_ = scene.dlss_preset;
 
         // Global per-frame jitter for DLSS mode (no per-pixel CP rotation).
         const float jitter_x = global_jitter(kSobolDirectionData, frame_counter_, 0);

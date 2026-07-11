@@ -156,9 +156,6 @@ namespace qualquer::renderer {
 
         /** @brief True if the user clicked the manual accumulation reset button. */
         bool accum_reset_requested = false;
-
-        /** @brief True if the DLSS render preset was changed (needs feature recreate). */
-        bool dlss_preset_changed = false;
     };
 
     /**
@@ -368,11 +365,12 @@ namespace qualquer::renderer {
          *        quality mode, resolution, and VRAM.
          *
          * The enable checkbox writes settings.dlss_enabled directly; grayed
-         * out when DLSS-RR is unavailable. Preset combo sets dlss_preset and
-         * raises dlss_preset_changed so Application recreates the feature.
+         * out when DLSS-RR is unavailable. The preset combo writes
+         * dlss_preset directly; the Renderer detects the change via
+         * prev_dlss_preset_ and recreates the DLSS feature.
          *
          * @param ctx    Provides DlssRR (availability/quality mode) and settings.
-         * @param action Receives dlss_preset_changed on preset combo change.
+         * @param action Unused (kept for interface consistency).
          */
         static void draw_dlss(const DebugUIContext &ctx, DebugUIActions &action);
     };

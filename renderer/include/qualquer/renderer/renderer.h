@@ -491,6 +491,9 @@ namespace qualquer::renderer {
         /** @brief Previous-frame dlss_enabled (accumulation-reset detection). */
         bool prev_dlss_enabled_ = false;
 
+        /** @brief Previous-frame DLSS render preset (feature-recreation detection). */
+        optix::DlssRenderPreset prev_dlss_preset_ = optix::DlssRenderPreset::E;
+
         /**
          * @brief Per-resource-slot event recorded after raygen completes.
          *

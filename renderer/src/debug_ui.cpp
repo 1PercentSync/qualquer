@@ -562,7 +562,6 @@ namespace qualquer::renderer {
 
             if (ImGui::Combo("Render Preset", &current, labels, 3)) {
                 ctx.dlss_preset = values[current];
-                action.dlss_preset_changed = true;
             }
         }
 
