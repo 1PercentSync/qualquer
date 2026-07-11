@@ -154,12 +154,12 @@ MUSTREAD:4
 - [x] Tonemap 适配：读取源改为 `cudaTextureObject_t`；DLSS ON 读 `dlss_output` tex（1:1 显示分辨率，无除法），OFF 读 accum slot tex（resampling + 除 count）；Renderer `submit_cuda` 双路径分支；DLSS ON 全局 jitter（host Sobol 无 CP rotation）、DLSS OFF 恢复 per-sample jitter
 - [x] UI 适配：DLSS-RR 面板（开/关、render preset 选择、只读显示 quality mode 名称和渲染/输出分辨率）；accumulated samples 改为 DLSS OFF 时显示
 - [x] UI 适配：VRAM 占用只读显示；`create_feature` 使用 `resolve_render_height` 返回的 clamped height；resolve 算法修正（单轮 clamp+optimal 距离）；DLSS OFF 时分辨率变化不创建 feature；optimal settings 提前 cache；slider 弹回 resolved 值
-- [ ] InReset：拆除当前 `needs_reset` → `eval.InReset` 的错误绑定（每帧 camera_changed 都设 InReset=1 会丢弃 DLSS-RR 时域历史，比不设更差），改为仅在场景切换或相机瞬移（F 键聚焦）时设置 `InReset=1`
+- [x] InReset：拆除 `needs_reset` → `eval.InReset` 绑定，改为 `reset_accumulation()` 统一触发（场景切换 / F 键瞬移 / HDR 重载 / Reset 按钮），连续相机运动和参数变化仅 reset 累积不丢弃 DLSS 历史
 - [ ] 请求用户在 CLion 中编译验证（ON 输出干净放大画面，OFF 保持原有累积行为，preset 可切换）
 
 ## Step 14.5：Step 11–14 正确性修复
 
-- [ ] `slider_uint_on_release` / `slider_float_deferred` 弹回修复：widget active 期间将拖拽值存入 ImGui StateStorage，释放帧从 StateStorage 取回最后的拖拽值用于提交（两个函数使用同一模式，一起修复）（DLSS OFF 验证通过；DLSS ON 侧待崩溃修复后回测）
+- [x] `slider_uint_on_release` / `slider_float_deferred` 弹回修复：widget active 期间将拖拽值存入 ImGui StateStorage，释放帧从 StateStorage 取回最后的拖拽值用于提交（两个函数使用同一模式，一起修复）
 - [ ] 单面 back-face pass-through aux 默认值：closesthit 中 pass-through return 前，若 `bounce == 0 && first sample`，写入 sky 默认值（depth=inf, normal=0, roughness=0, diffuse albedo=0, specular albedo=0），语义为「此像素无有意义的表面信息」
 - [ ] 首次 evaluate InReset：DLSS evaluate 延迟一帧 gating（`dlss_active && prev_dlss_active`），首次 evaluate 传 `InReset=1` 丢弃时域历史，避免首帧 `prev_view_projection_` 为 identity 产生的错误 MV 以及 enable 前的陈旧累积数据被 DLSS-RR 消费
 - [ ] Aux buffer ping-pong 双份 + `DlssPrevFrame` host 缓存

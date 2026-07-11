@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4.5 — 收敛质量 + DLSS-RR + 自适应
-- **进度**：Phase 4.5 Step 14.5 呈现链路计时完成（PT/CUDA display/VK display/CPU frame timing，debug only）
+- **进度**：Phase 4.5 Step 14 InReset 语义拆分完成；slider 弹回修复 DLSS ON 回测通过
 
 ### 下一个任务
 
-Phase 4.5 Step 14 InReset 语义拆分
+Phase 4.5 Step 14 编译验证请求
 
 ---
 
