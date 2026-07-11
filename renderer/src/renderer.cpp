@@ -280,6 +280,14 @@ namespace qualquer::renderer {
         roughness.free();
     }
 
+    void Renderer::invalidate_dlss_inputs() {
+        for (auto &metadata: dlss_frame_metadata_) {
+            metadata.valid = false;
+            metadata.reset = false;
+        }
+        dlss_reset_requested_ = true;
+    }
+
     void Renderer::init(const optix::Context &cuda_context,
                         const uint32_t width,
                         const uint32_t height,
@@ -417,6 +425,8 @@ namespace qualquer::renderer {
     void Renderer::load_scene(const optix::Context &cuda_context,
                               const std::span<const Mesh> meshes,
                               const std::span<const MeshInstance> instances) {
+        invalidate_dlss_inputs();
+
         // Runtime scene switching: tear down the previous scene's AS and
         // geometry-info buffer before rebuilding.
         accel_.destroy();
@@ -510,6 +520,7 @@ namespace qualquer::renderer {
                 buffers.resize(render_width, render_height);
             }
             accum_counts_ = {0, 0};
+            invalidate_dlss_inputs();
             render_width_ = render_width;
             render_height_ = render_height;
             render_res_changed = true;
@@ -531,6 +542,7 @@ namespace qualquer::renderer {
                 }
                 dlss_rr.create_feature(render_width, render_height, width, height,
                                        scene.dlss_preset, cuda_context.display_stream);
+                invalidate_dlss_inputs();
             }
         }
         // Release feature when user disables DLSS (free VRAM immediately).
@@ -538,6 +550,7 @@ namespace qualquer::renderer {
             CUDA_CHECK(cudaStreamSynchronize(cuda_context.compute_stream));
             CUDA_CHECK(cudaStreamSynchronize(cuda_context.display_stream));
             dlss_rr.release_feature();
+            invalidate_dlss_inputs();
         }
 
         // Dual-stream overlap: compute_stream runs raygen while display_stream
@@ -553,6 +566,7 @@ namespace qualquer::renderer {
         const uint32_t write_slot = 1 - read_slot;
         const AuxBufferSet &read_aux = aux_buffers_[read_slot];
         AuxBufferSet &write_aux = aux_buffers_[write_slot];
+        const DlssFrameMetadata &read_metadata = dlss_frame_metadata_[read_slot];
 
         // --- compute_stream: wait write-slot consumption → raygen → record ---
         // The write slot's color and guides share this ownership boundary.
@@ -585,9 +599,7 @@ namespace qualquer::renderer {
             scene.settings.env_rotation != prev_env_rotation_ ||
             scene.settings.dlss_enabled != prev_dlss_enabled_;
         const bool needs_reset = camera_changed || settings_changed || reset_requested_;
-        const bool dlss_reset = dlss_reset_requested_;
         reset_requested_ = false;
-        dlss_reset_requested_ = false;
         // DLSS ON: always overwrite (single-frame output, no accumulation).
         // DLSS OFF: normal Separate Sum chain.
         const uint32_t chain_count = (needs_reset || dlss_active)
@@ -596,6 +608,13 @@ namespace qualquer::renderer {
         const uint32_t effective_spp = scene.settings.accumulation_enabled
                                            ? scene.settings.samples_per_frame
                                            : 0;
+        const bool produces_dlss_input = dlss_active
+                                         && effective_spp > 0
+                                         && accel_.tlas_handle() != 0;
+        const bool slot_reset = produces_dlss_input && dlss_reset_requested_;
+        if (produces_dlss_input) {
+            dlss_reset_requested_ = false;
+        }
 
         prev_inv_view_ = scene.camera.inv_view;
         prev_inv_projection_ = scene.camera.inv_projection;
@@ -610,6 +629,14 @@ namespace qualquer::renderer {
 
         // Unjittered VP for motion vector computation (row-major for device mul()).
         const float4x4 current_vp = to_float4x4(scene.camera.projection * scene.camera.view);
+        const bool has_temporal_predecessor = dlss_active
+                                              && read_metadata.valid
+                                              && !slot_reset;
+        const float4x4 dlss_previous_vp = has_temporal_predecessor
+                                              ? to_float4x4(
+                                                    read_metadata.projection_matrix
+                                                    * read_metadata.view_matrix)
+                                              : current_vp;
 
         dlss_frame_metadata_[write_slot] = {
             .jitter_x = jitter_x,
@@ -618,7 +645,8 @@ namespace qualquer::renderer {
             .projection_matrix = scene.camera.projection,
             .frame_time_ms = scene.frame_time_ms,
             .frame_id = frame_counter_,
-            .reset = dlss_reset,
+            .reset = slot_reset,
+            .valid = produces_dlss_input,
         };
 
         LaunchParams params{
@@ -666,7 +694,9 @@ namespace qualquer::renderer {
             .aux_roughness = write_aux.roughness.surf_object(),
             // Unjittered VP matrices for motion vector computation.
             .view_projection = current_vp,
-            .prev_view_projection = prev_view_projection_,
+            .prev_view_projection = dlss_active
+                                        ? dlss_previous_vp
+                                        : prev_view_projection_,
             // sobol_directions filled below via memcpy (array can't be
             // initialized from another array in a designated initializer).
         };
@@ -747,12 +777,11 @@ namespace qualquer::renderer {
             event_display_start_[timing_slot], cuda_context.display_stream));
 #endif
 
-        if (dlss_active) {
-            // DLSS ON: evaluate reads the previous frame's noisy buffer (read
+        if (dlss_active && read_metadata.valid) {
+            // DLSS ON: evaluate reads the previous valid noisy input (read
             // slot) and writes the denoised+upscaled result to dlss_output.
             // Then tonemap reads dlss_output at display resolution (1:1, no
             // resampling, no Separate Sum division — sample_count=1).
-            const DlssFrameMetadata &read_metadata = dlss_frame_metadata_[read_slot];
             const optix::DlssRR::EvalInput eval_input{
                 .color_tex = accum_buffers_[read_slot].tex_object(),
                 .output_surf = dlss_output_.surf_object(),
@@ -781,8 +810,8 @@ namespace qualquer::renderer {
                            exposure_linear,
                            cuda_context.display_stream);
         } else {
-            // DLSS OFF: tonemap reads the ping-pong read slot directly,
-            // resamples if render != display, divides by sample count.
+            // DLSS OFF or invalid read slot: tonemap the read color directly.
+            // A zero count produces black without touching uninitialized data.
             launch_tonemap(accum_buffers_[read_slot].tex_object(),
                            cuda_context.display_surface,
                            render_width, render_height,
@@ -1060,6 +1089,6 @@ namespace qualquer::renderer {
 
     void Renderer::reset_accumulation() {
         reset_requested_ = true;
-        dlss_reset_requested_ = true;
+        invalidate_dlss_inputs();
     }
 } // namespace qualquer::renderer

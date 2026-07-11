@@ -256,8 +256,8 @@ namespace qualquer::renderer {
          *        and discards DLSS-RR temporal history.
          *
          * Sets deferred flags consumed by submit_cuda: chain_count=0 triggers
-         * accumulation overwrite, and the next write slot carries a DLSS
-         * history-reset token in its metadata.
+         * accumulation overwrite, and the next complete DLSS input carries a
+         * history-reset token in its slot metadata.
          * Used for scene switch, camera teleport, env map reload, manual Reset.
          * Continuous camera motion and parameter changes trigger accumulation
          * reset through camera_changed/settings_changed in submit_cuda, which
@@ -328,7 +328,13 @@ namespace qualquer::renderer {
 
             /** @brief Whether evaluation of this input discards DLSS history. */
             bool reset = false;
+
+            /** @brief Whether this slot contains a complete DLSS input frame. */
+            bool valid = false;
         };
+
+        /** @brief Invalidates both DLSS input slots and requests history reset. */
+        void invalidate_dlss_inputs();
 
         /** @brief OptiX pipeline (module, program groups, linked handle). */
         optix::Pipeline pipeline_;
@@ -437,8 +443,8 @@ namespace qualquer::renderer {
         /**
          * @brief Deferred DLSS history reset flag set by reset_accumulation().
          *
-         * The next write slot receives the token; evaluation consumes it
-         * together with that slot's color, guides, and camera metadata.
+         * The next complete DLSS input slot receives the token; evaluation
+         * consumes it together with that slot's color, guides, and metadata.
          */
         bool dlss_reset_requested_ = false;
 
