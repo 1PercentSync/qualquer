@@ -834,9 +834,9 @@ DLSS-RR Integration Guide §3.5 将 blue noise 归入"to be avoided"列表。推
 
 **核心问题**：多 spp 时每个 sample 有不同 subpixel jitter，导致 primary ray 不同 → aux data（depth、normals、albedo 等）在 sample 间不一致。DLSS-RR 每帧只接收一组 aux data 和一个 jitter offset。
 
-**决策**：✅ **帧内 sample 共享 jitter，仅跨帧变化 jitter**。
+**决策**：✅ **DLSS ON：帧内 sample 共享 jitter，仅跨帧变化 jitter。DLSS OFF：per-sample jitter**。
 
-raygen 内 sample loop 的 subpixel jitter 从 per-sample 改为 per-frame：所有 sample 使用同一 jitter（由 frame_index 决定），BRDF/NEE 等维度（dim 2+）仍然 per-sample 不同。
+DLSS ON 时 raygen 内 sample loop 的 subpixel jitter 从 per-sample 改为 per-frame：所有 sample 使用同一 jitter（由 host 端 Sobol 无 per-pixel CP rotation 计算，与 `InJitterOffset` 一致），BRDF/NEE 等维度（dim 2+）仍然 per-sample 不同。DLSS OFF 时恢复 per-sample jitter（per-pixel Sobol + CP rotation），每 sample 不同的 primary ray 加速 Monte Carlo 收敛。
 
 - 同一帧所有 sample 的 primary ray 相同 → aux data 完全一致，写一次即可
 - color 是同一亚像素位置 N 个 sample 的辐射度平均（更干净的点采样，非 box filter）

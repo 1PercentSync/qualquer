@@ -716,7 +716,7 @@ __forceinline__ __device__ float sobol_rng(uint32_t pixel_index, uint32_t sequen
 
 **Cranley-Patterson rotation 使用加法而非 XOR**：加法位移（mod 2³²）保持 Sobol 序列的低差异性（discrepancy bound 不变），XOR 会破坏分层结构。Golden-ratio temporal offset 使用整数乘法 `frame_index * 2654435769u`（2654435769 = round(φ × 2³²)），这是 golden ratio 准随机序列在 [0, 2³²) 上的正确整数等价形式，比 `__float_as_uint(frame_index * φ)` 的 IEEE 754 位模式重解释在数学上更正确、在 GPU 上更高效（一条 `imul` vs float 乘法 + bit cast）。
 
-维度分配基本不变：per-bounce base = 2 + bounce × 12。**dim 0-1（subpixel jitter）改为 per-frame**（D37：由 frame_index 驱动，帧内所有 sample 共享同一 jitter，跨帧变化保留 DLSS-RR 时域超分辨率）。dim 2+ 仍 per-sample。
+维度分配基本不变：per-bounce base = 2 + bounce × 12。**dim 0-1（subpixel jitter）**：DLSS ON 时 per-frame（D37：host 端 Sobol 无 per-pixel CP rotation，帧内所有 sample 共享同一 jitter，与 `InJitterOffset` 一致）；DLSS OFF 时 per-sample（per-pixel Sobol + CP rotation，加速 Monte Carlo 收敛）。dim 2+ 仍 per-sample。
 
 #### Render Resolution Decoupling
 

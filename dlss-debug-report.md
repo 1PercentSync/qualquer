@@ -110,10 +110,6 @@ return G + G * G - G * G * G;
 
 **可选加固**：`get_shading_normal` 中 z 重建（`sqrt(1-x²-y²)` 在 x²+y² > 1 时对负数开方）未审计；SceneLoader/mikktspace 对退化 UV 的 tangent 输出可考虑加载期检测。
 
-### 4. DLSS ON/OFF 模式间的 jitter 一致性
-
-**问题**：DLSS 模式下需要全局统一 jitter（host 端 Sobol 不加 per-pixel Cranley-Patterson rotation），使所有像素共享同一个 jitter 偏移，与 `InJitterOffset` 一致。per-pixel rotation 会使 DLSS 收到的单一 jitter 值失真。DLSS OFF 模式则需要恢复 per-sample jitter 以加速收敛。
-
 ---
 
 ## 待定事项
