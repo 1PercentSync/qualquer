@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4.5 — 收敛质量 + DLSS-RR + 自适应
-- **进度**：Phase 4.5 Step 14.5 DLSS-RR VRAM 统计缓存完成；首次 evaluate 后查询并缓存，移除每帧 NGX stats 查询
+- **进度**：Phase 4.5 Step 14.5 raygen 重构完成；trace_sample + compute_primary_dir 提取，DLSS ON primary ray 移出 sample loop
 
 ### 下一个任务
 
-Phase 4.5 Step 14.5 DLSS ON primary ray 提出 sample loop
+Phase 4.5 Step 14.5 修复 SceneLoader 异步上传 host source 生命周期
 
 ---
 
