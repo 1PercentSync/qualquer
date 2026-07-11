@@ -285,10 +285,14 @@ namespace qualquer::optix {
         eval.InJitterOffsetY = -(input.jitter_y - 0.5f);
 
         // ---- Motion vector scale ----
-        // Our MVs are already in pixel space (current-prev VP projection diff
-        // scaled by resolution). No additional scaling needed.
+        // Our MVs are in pixel space: (prev_ndc - curr_ndc) * 0.5 * resolution.
+        // GLM perspective produces NDC Y-up, but DLSS screen space is Y-down
+        // (SDK §3.6). The NDC-to-pixel Y mapping is pixel_y = (1 - ndc_y) * 0.5
+        // * height, so the correct pixel-space MV Y is (curr_ndc.y - prev_ndc.y)
+        // * 0.5 * height — opposite sign to our formula. InMVScaleY = -1 lets
+        // the SDK flip it without changing the MV buffer generation.
         eval.InMVScaleX = 1.0f;
-        eval.InMVScaleY = 1.0f;
+        eval.InMVScaleY = -1.0f;
 
         // ---- Render subrect (full frame, no subrect offset) ----
         eval.InRenderSubrectDimensions = {input.render_width, input.render_height};
