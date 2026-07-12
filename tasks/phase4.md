@@ -178,7 +178,7 @@ MUSTREAD:4
 - [x] 重构：SceneRenderInput 场景资源打包——`launch_params.h` 新增 `EnvLightData` / `EmissiveLightData` POD 结构体，SceneLoader 返回、SceneRenderInput 持有、LaunchParams 内嵌，替代 10 个散装字段
 - [x] 重构：`env_rotation_sin/cos` 移入 `EnvLightData`——rotation 只和 env 相关，miss shader 和 NEE 统一从 `params.env` 读取，LaunchParams 减少两个散装字段
 - [x] 重构：device 侧 env helper 签名打包——`env_pdf` 和 `sample_env_alias_table` 改为接收 `const EnvLightData&` 替代散装参数，消除调用点逐字段解包
-- [ ] 重构（草案，执行前需讨论）：DlssRR 所有权移入 Renderer——`dlss_rr_` 从 Application 移入 Renderer 成员（init 时从 Context 取 device_id 初始化），`dlss_preset` 移入 RenderSettings，submit_cuda 不再接收 `DlssRR&` 参数，Renderer 暴露 `const DlssRR& dlss() const` 供 DebugUIContext 借用
+- [x] 重构：DlssRR 所有权移入 Renderer——`dlss_rr_` 从 Application 移入 Renderer 成员（init 时从 Context 取 device_id 初始化），`dlss_preset` 移入 RenderSettings，submit_cuda 不再接收 `DlssRR&` 参数，Renderer 暴露 `const DlssRR& dlss() const` 供 DebugUIContext 借用
 - [ ] 重构（草案，执行前需讨论）：LaunchParams sobol 外移验证——将 `sobol_directions[4096]` 改为 global memory 指针（LaunchParams 内 8 bytes 替代 16384 bytes），benchmark 对比 1spp/32spp 吞吐确认无回退后合入
 - [ ] 约束资产辐射度与材质输入的物理数值域
 - [ ] 保证几何与 shading frame 在退化输入下仍有效
