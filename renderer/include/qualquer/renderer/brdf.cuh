@@ -718,10 +718,14 @@ __forceinline__ __device__ BrdfParams init_brdf_params(
         turquin_compensation(p.F0.y, E_ss_val),
         turquin_compensation(p.F0.z, E_ss_val));
 
+    // Clamp E_glossy to [0,1]: the 39-coefficient rational polynomial can
+    // overshoot at domain boundaries due to fitting error. Unclamped values
+    // cause negative diffuse_weight (E_glossy > 1) or energy over-budget
+    // (E_glossy < 0), and corrupt the DLSS-RR specular albedo aux buffer.
     p.E_glossy_rgb = make_float3(
-        E_glossy(p.F0.x, roughness, p.NdotV),
-        E_glossy(p.F0.y, roughness, p.NdotV),
-        E_glossy(p.F0.z, roughness, p.NdotV));
+        fminf(fmaxf(E_glossy(p.F0.x, roughness, p.NdotV), 0.0f), 1.0f),
+        fminf(fmaxf(E_glossy(p.F0.y, roughness, p.NdotV), 0.0f), 1.0f),
+        fminf(fmaxf(E_glossy(p.F0.z, roughness, p.NdotV), 0.0f), 1.0f));
 
     if (metallic < 1.0f) {
         const float3 one = make_float3(1.0f, 1.0f, 1.0f);
