@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4.5 — 收敛质量 + DLSS-RR + 自适应
-- **进度**：Phase 4.5 Step 14.5 结构重构 5/7 完成（FrameSlot、closesthit 瘦身、累积 reset 重分类、SceneRenderInput 打包、env rotation 移入 EnvLightData）
+- **进度**：Phase 4.5 Step 14.5 结构重构 6/7 完成（FrameSlot、closesthit 瘦身、累积 reset 重分类、SceneRenderInput 打包、env rotation 移入 EnvLightData、env helper 签名打包）
 
 ### 下一个任务
 
-Phase 4.5 Step 14.5 重构：device 侧 env helper 签名打包
+Phase 4.5 Step 14.5 重构：DlssRR 所有权移入 Renderer
 
 ---
 
