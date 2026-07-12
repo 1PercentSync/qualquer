@@ -102,39 +102,21 @@ namespace qualquer::app {
          */
         [[nodiscard]] const renderer::AABB &scene_bounds() const;
 
-        // ---- Environment map accessors ----
+        /**
+         * @brief Packed environment-map light resources for SceneRenderInput / LaunchParams.
+         *
+         * Device pointers borrow from owned CudaTexture / CudaBuffer members;
+         * valid until destroy_env_map() or destroy().
+         */
+        [[nodiscard]] renderer::EnvLightData env_light() const;
 
-        /** @brief Env cubemap texture object (0 when no env map is loaded). */
-        [[nodiscard]] cudaTextureObject_t env_cubemap() const;
-
-        /** @brief Device alias table entries (null when no env map is loaded). */
-        [[nodiscard]] const optix::CudaBuffer<renderer::EnvAliasEntry> &env_alias_table_buffer() const;
-
-        /** @brief Alias table entry count (equirect width × height; 0 when unloaded). */
-        [[nodiscard]] uint32_t env_alias_count() const;
-
-        /** @brief Equirect source width (alias table column count). */
-        [[nodiscard]] uint32_t env_alias_width() const;
-
-        /** @brief Equirect source height (alias table row count). */
-        [[nodiscard]] uint32_t env_alias_height() const;
-
-        /** @brief Sin-weighted total luminance across the environment map. */
-        [[nodiscard]] float env_total_luminance() const;
-
-        // ---- Emissive triangle accessors ----
-
-        /** @brief Device emissive triangle array (null when no emissive geometry). */
-        [[nodiscard]] const optix::CudaBuffer<renderer::EmissiveTriangle> &emissive_triangles_buffer() const;
-
-        /** @brief Device alias table over emissive triangles (null when no emissive geometry). */
-        [[nodiscard]] const optix::CudaBuffer<renderer::AliasEntry> &emissive_alias_table_buffer() const;
-
-        /** @brief Number of emissive triangles (0 when no emissive geometry). */
-        [[nodiscard]] uint32_t emissive_count() const;
-
-        /** @brief Total radiant power across all emissive triangles (0 when none). */
-        [[nodiscard]] float emissive_total_power() const;
+        /**
+         * @brief Packed emissive-triangle light resources for SceneRenderInput / LaunchParams.
+         *
+         * Device pointers borrow from owned CudaBuffer members; valid until the
+         * next load() or destroy().
+         */
+        [[nodiscard]] renderer::EmissiveLightData emissive_light() const;
 
     private:
         // ---- Loaded scene data ----

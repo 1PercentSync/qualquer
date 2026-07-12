@@ -289,8 +289,10 @@ namespace qualquer::renderer {
     void Renderer::FrameSlot::resize(const uint32_t width, const uint32_t height) {
         color.resize(width, height);
         aux.resize(width, height);
-        // Resized content is undefined; do not claim prior accumulation.
+        // Resized content is undefined; do not claim prior accumulation
+        // or valid DLSS input status.
         sample_count = 0;
+        dlss_metadata = {};
     }
 
     void Renderer::FrameSlot::free() {
@@ -713,17 +715,9 @@ namespace qualquer::renderer {
             // pair so device code avoids a per-hit sincosf.
             .env_rotation_sin = std::sin(scene.settings.env_rotation),
             .env_rotation_cos = std::cos(scene.settings.env_rotation),
-            // Env light resources (from SceneLoader via SceneRenderInput).
-            .env_cubemap = scene.env_cubemap,
-            .env_alias_table = scene.env_alias_table,
-            .env_alias_count = scene.env_alias_count,
-            .env_alias_width = scene.env_alias_width,
-            .env_alias_height = scene.env_alias_height,
-            .env_total_luminance = scene.env_total_luminance,
-            .emissive_triangles = scene.emissive_triangles,
-            .emissive_alias_table = scene.emissive_alias_table,
-            .emissive_count = scene.emissive_count,
-            .emissive_total_power = scene.emissive_total_power,
+            // Scene light resources (packed by SceneLoader via SceneRenderInput).
+            .env = scene.env,
+            .emissive = scene.emissive,
             // Aux surfaces belong to the same write slot as color_output.
             .aux_depth = write.aux.depth.surf_object(),
             .aux_motion_vectors = write.aux.motion_vectors.surf_object(),

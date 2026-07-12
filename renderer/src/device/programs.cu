@@ -371,12 +371,12 @@ __global__ void __miss__env() { // NOLINT(*-reserved-identifier)
     using namespace qualquer::renderer;
 
     float3 env_color = make_float3(0.0f, 0.0f, 0.0f);
-    if (params.env_cubemap != 0) {
+    if (params.env.cubemap != 0) {
         const float3 world_dir = optixGetWorldRayDirection();
         // Forward IBL rotation: world space → env space.
         const float3 dir = rotate_y_dir(world_dir,
                                         params.env_rotation_sin, params.env_rotation_cos);
-        const auto texel = texCubemap<float4>(params.env_cubemap, dir.x, dir.y, dir.z);
+        const auto texel = texCubemap<float4>(params.env.cubemap, dir.x, dir.y, dir.z);
         env_color = make_float3(texel.x, texel.y, texel.z);
     }
 
@@ -503,14 +503,14 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
     // strategies, weight by power_heuristic(brdf_pdf, light_pdf).
     // Bounce > 0 without emissive NEE: weight 1.0 — no competing strategy.
     const uint32_t bounce = payload_get_bounce();
-    if (bounce > 0 && params.emissive_count > 0) {
+    if (bounce > 0 && params.emissive.count > 0) {
         const float emi_lum = 0.2126f * mat.emissive_factor.x
             + 0.7152f * mat.emissive_factor.y + 0.0722f * mat.emissive_factor.z;
         if (emi_lum > 0.0f) {
             const float cos_theta_l = fabsf(dot(N_face, ray_dir));
             const float hit_dist = optixGetRayTmax();
             const float light_pdf = emissive_light_pdf(
-                emi_lum, hit_dist, cos_theta_l, params.emissive_total_power);
+                emi_lum, hit_dist, cos_theta_l, params.emissive.total_power);
             const float last_brdf_pdf = payload_get_last_brdf_pdf();
             const float mis_w = mis_power_heuristic(last_brdf_pdf, light_pdf);
             emissive = emissive * mis_w;
@@ -599,11 +599,11 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
     // contribution by this weight. Without NEE it is 1.0; with env NEE it is
     // power_heuristic(brdf_pdf, env_pdf(brdf_dir)) to avoid double-counting.
     float env_mis_w = 1.0f;
-    if (bs.pdf_combined > 0.0f && params.env_alias_table != nullptr) {
+    if (bs.pdf_combined > 0.0f && params.env.alias_table != nullptr) {
         const float pdf_env_at_brdf = env_pdf(
-            params.env_alias_table,
-            params.env_alias_width, params.env_alias_height,
-            params.env_total_luminance,
+            params.env.alias_table,
+            params.env.alias_width, params.env.alias_height,
+            params.env.total_luminance,
             params.env_rotation_sin, params.env_rotation_cos, bs.next_dir);
         env_mis_w = mis_power_heuristic(bs.pdf_combined, pdf_env_at_brdf);
     }

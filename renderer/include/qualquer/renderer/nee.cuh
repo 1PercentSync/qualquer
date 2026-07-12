@@ -256,7 +256,7 @@ __forceinline__ __device__ float3 evaluate_env_nee(
         const uint32_t sample_index,
         const uint32_t dim_base) {
 
-    if (params.env_cubemap == 0 || params.env_alias_table == nullptr) {
+    if (params.env.cubemap == 0 || params.env.alias_table == nullptr) {
         return make_float3(0.0f, 0.0f, 0.0f);
     }
 
@@ -274,8 +274,8 @@ __forceinline__ __device__ float3 evaluate_env_nee(
                                    dim_base + kBounceOffsetEnvNee + 3);
 
     const float3 L = sample_env_alias_table(
-        params.env_alias_table, params.env_alias_count,
-        params.env_alias_width, params.env_alias_height,
+        params.env.alias_table, params.env.alias_count,
+        params.env.alias_width, params.env.alias_height,
         params.env_rotation_sin, params.env_rotation_cos,
         env_r1, env_r2, env_r3, env_r4);
     const float NdotL = dot(N_shading, L);
@@ -294,16 +294,16 @@ __forceinline__ __device__ float3 evaluate_env_nee(
     const float3 env_L = rotate_y_dir(
         L, params.env_rotation_sin, params.env_rotation_cos);
     const auto env_texel = texCubemap<float4>(
-        params.env_cubemap, env_L.x, env_L.y, env_L.z);
+        params.env.cubemap, env_L.x, env_L.y, env_L.z);
     const float3 env_color = make_float3(env_texel.x, env_texel.y, env_texel.z);
 
     const float3 brdf_val = brdf_eval(bp, L, NdotL);
     const float brdf_pdf_e = brdf_pdf(bp, L);
 
     const float pdf_light = env_pdf(
-        params.env_alias_table,
-        params.env_alias_width, params.env_alias_height,
-        params.env_total_luminance,
+        params.env.alias_table,
+        params.env.alias_width, params.env.alias_height,
+        params.env.total_luminance,
         params.env_rotation_sin, params.env_rotation_cos, L);
     const float mis_w = mis_power_heuristic(pdf_light, brdf_pdf_e);
     const float st_factor = shadow_terminator_factor(N_face, N_shading, L);
@@ -333,7 +333,7 @@ __forceinline__ __device__ float3 evaluate_emissive_nee(
         const uint32_t sample_index,
         const uint32_t dim_base) {
 
-    if (params.emissive_count == 0 || params.emissive_triangles == nullptr) {
+    if (params.emissive.count == 0 || params.emissive.triangles == nullptr) {
         return make_float3(0.0f, 0.0f, 0.0f);
     }
 
@@ -351,8 +351,8 @@ __forceinline__ __device__ float3 evaluate_emissive_nee(
                                    dim_base + kBounceOffsetEmissiveNee + 3);
 
     const uint32_t tri_idx = sample_emissive_alias_table(
-        params.emissive_alias_table, params.emissive_count, emi_r1, emi_r2);
-    const EmissiveTriangle &tri = params.emissive_triangles[tri_idx];
+        params.emissive.alias_table, params.emissive.count, emi_r1, emi_r2);
+    const EmissiveTriangle &tri = params.emissive.triangles[tri_idx];
 
     const float3 light_bary = triangle_barycentric(emi_r3, emi_r4);
     const float3 light_pos = tri.v0 * light_bary.x + tri.v1 * light_bary.y
@@ -403,7 +403,7 @@ __forceinline__ __device__ float3 evaluate_emissive_nee(
     const float emission_lum = 0.2126f * tri.emission.x
         + 0.7152f * tri.emission.y + 0.0722f * tri.emission.z;
     const float light_pdf_emi = emissive_light_pdf(
-        emission_lum, dist, cos_theta_light, params.emissive_total_power);
+        emission_lum, dist, cos_theta_light, params.emissive.total_power);
 
     const float brdf_pdf_emi = brdf_pdf(bp, L);
     const float mis_w_emi = mis_power_heuristic(light_pdf_emi, brdf_pdf_emi);

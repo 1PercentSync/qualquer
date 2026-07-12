@@ -96,6 +96,58 @@ struct EmissiveTriangle {
 static_assert(sizeof(EmissiveTriangle) == 96);
 
 /**
+ * @brief Environment-map light resources for miss sampling and env NEE.
+ *
+ * Host/device POD (same nature as AliasEntry / EmissiveTriangle). Owned by
+ * SceneLoader; borrowed by SceneRenderInput and embedded in LaunchParams so
+ * env resources are packed once instead of mirrored field-by-field.
+ */
+struct EnvLightData {
+    /** @brief Cubemap texture sampled on miss and for environment NEE (0 = unloaded). */
+    cudaTextureObject_t cubemap;
+
+    /** @brief Device alias table over the equirect (one entry per pixel; null when unloaded). */
+    const EnvAliasEntry *alias_table;
+
+    /** @brief Number of entries in alias_table. */
+    uint32_t alias_count;
+
+    /** @brief Alias-table width (equirect width). */
+    uint32_t alias_width;
+
+    /** @brief Alias-table height (equirect height). */
+    uint32_t alias_height;
+
+    /** @brief Total luminance across the environment map (alias-table normalization). */
+    float total_luminance;
+};
+
+static_assert(sizeof(EnvLightData) == 32);
+
+/**
+ * @brief Emissive-triangle light resources for NEE.
+ *
+ * Host/device POD. Owned by SceneLoader; borrowed by SceneRenderInput and
+ * embedded in LaunchParams so emissive resources are packed once instead of
+ * mirrored field-by-field.
+ */
+struct EmissiveLightData {
+    /** @brief Device array of emissive triangles (null when none). */
+    const EmissiveTriangle *triangles;
+
+    /** @brief Alias table over emissive triangles (one entry per triangle; null when none). */
+    const AliasEntry *alias_table;
+
+    /** @brief Number of emissive triangles. */
+    uint32_t count;
+
+    /** @brief Total radiant power across all emissive triangles. */
+    float total_power;
+};
+
+static_assert(sizeof(EmissiveLightData) == 24);
+
+/**
  * @brief Per-frame parameters uploaded to the OptiX device constant buffer.
  *
  * Shared between host (renderer.cpp) and device (programs.cu): the same
@@ -198,39 +250,13 @@ struct LaunchParams {
     /** @brief Cosine of the IBL Y-axis rotation angle (see env_rotation_sin). */
     float env_rotation_cos;
 
-    // ---- Environment light ----
+    // ---- Scene light resources (packed; see EnvLightData / EmissiveLightData) ----
 
-    /** @brief Cubemap texture sampled on miss and for environment NEE. */
-    cudaTextureObject_t env_cubemap;
+    /** @brief Environment-map light resources (cubemap + alias table). */
+    EnvLightData env;
 
-    /** @brief Device alias table over the equirect (one entry per pixel). */
-    const EnvAliasEntry *env_alias_table;
-
-    /** @brief Number of entries in env_alias_table. */
-    uint32_t env_alias_count;
-
-    /** @brief Alias-table width (equirect width). */
-    uint32_t env_alias_width;
-
-    /** @brief Alias-table height (equirect height). */
-    uint32_t env_alias_height;
-
-    /** @brief Total luminance across the environment map (alias-table normalization). */
-    float env_total_luminance;
-
-    // ---- Emissive triangles ----
-
-    /** @brief Device array of emissive triangles. */
-    const EmissiveTriangle *emissive_triangles;
-
-    /** @brief Alias table over emissive triangles (one entry per triangle). */
-    const AliasEntry *emissive_alias_table;
-
-    /** @brief Number of emissive triangles. */
-    uint32_t emissive_count;
-
-    /** @brief Total radiant power across all emissive triangles. */
-    float emissive_total_power;
+    /** @brief Emissive-triangle light resources (triangles + alias table). */
+    EmissiveLightData emissive;
 
     // ---- Aux G-buffer surfaces (closesthit/raygen write via surf2Dwrite) ----
 

@@ -106,39 +106,21 @@ namespace qualquer::renderer {
         /** @brief Device texture-object array (indexed via Material tex fields). */
         const optix::CudaBuffer<cudaTextureObject_t> &texture_objects;
 
-        // ---- Environment map (from SceneLoader) ----
+        /**
+         * @brief Environment-map light resources from SceneLoader.
+         *
+         * Device pointers are borrowed for the duration of submit_cuda; the
+         * owning CudaBuffer / CudaTexture remain in SceneLoader.
+         */
+        EnvLightData env{};
 
-        /** @brief Env cubemap texture object (0 = no env map loaded). */
-        cudaTextureObject_t env_cubemap = 0;
-
-        /** @brief Device alias table (null when no env map loaded). */
-        const EnvAliasEntry *env_alias_table = nullptr;
-
-        /** @brief Alias table entry count (0 when no env map loaded). */
-        uint32_t env_alias_count = 0;
-
-        /** @brief Alias table width (equirect source width). */
-        uint32_t env_alias_width = 0;
-
-        /** @brief Alias table height (equirect source height). */
-        uint32_t env_alias_height = 0;
-
-        /** @brief Sin-weighted total luminance across the environment map. */
-        float env_total_luminance = 0.0f;
-
-        // ---- Emissive triangles (from SceneLoader) ----
-
-        /** @brief Device emissive triangle array (null when no emissive geometry). */
-        const EmissiveTriangle *emissive_triangles = nullptr;
-
-        /** @brief Device alias table over emissive triangles (null when no emissive geometry). */
-        const AliasEntry *emissive_alias_table = nullptr;
-
-        /** @brief Number of emissive triangles (0 when no emissive geometry). */
-        uint32_t emissive_count = 0;
-
-        /** @brief Total radiant power across all emissive triangles. */
-        float emissive_total_power = 0.0f;
+        /**
+         * @brief Emissive-triangle light resources from SceneLoader.
+         *
+         * Device pointers are borrowed for the duration of submit_cuda; the
+         * owning CudaBuffers remain in SceneLoader.
+         */
+        EmissiveLightData emissive{};
 
         /** @brief Frame delta time in milliseconds (for DLSS InFrameTimeDeltaInMsec). */
         float frame_time_ms = 0.0f;
@@ -364,10 +346,11 @@ namespace qualquer::renderer {
             void alloc(uint32_t width, uint32_t height);
 
             /**
-             * @brief Resizes color and guide resources and zeros sample_count.
+             * @brief Resizes color and guide resources, zeros sample_count,
+             *        and clears DLSS metadata.
              *
-             * Resized content is undefined; sample_count must not claim prior
-             * accumulation. DLSS metadata is left to invalidate().
+             * Resized content is undefined; neither sample_count nor metadata
+             * may claim prior accumulation or valid DLSS input status.
              */
             void resize(uint32_t width, uint32_t height);
 

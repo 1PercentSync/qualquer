@@ -783,43 +783,23 @@ namespace qualquer::app {
         return scene_bounds_;
     }
 
-    cudaTextureObject_t SceneLoader::env_cubemap() const {
-        return env_cubemap_texture_.texture_object;
+    renderer::EnvLightData SceneLoader::env_light() const {
+        return renderer::EnvLightData{
+            .cubemap = env_cubemap_texture_.texture_object,
+            .alias_table = env_alias_table_.data(),
+            .alias_count = static_cast<uint32_t>(env_alias_table_.count()),
+            .alias_width = env_equirect_width_,
+            .alias_height = env_equirect_height_,
+            .total_luminance = env_total_luminance_,
+        };
     }
 
-    const optix::CudaBuffer<renderer::EnvAliasEntry> &SceneLoader::env_alias_table_buffer() const {
-        return env_alias_table_;
-    }
-
-    uint32_t SceneLoader::env_alias_count() const {
-        return static_cast<uint32_t>(env_alias_table_.count());
-    }
-
-    uint32_t SceneLoader::env_alias_width() const {
-        return env_equirect_width_;
-    }
-
-    uint32_t SceneLoader::env_alias_height() const {
-        return env_equirect_height_;
-    }
-
-    float SceneLoader::env_total_luminance() const {
-        return env_total_luminance_;
-    }
-
-    const optix::CudaBuffer<renderer::EmissiveTriangle> &SceneLoader::emissive_triangles_buffer() const {
-        return emissive_triangles_;
-    }
-
-    const optix::CudaBuffer<renderer::AliasEntry> &SceneLoader::emissive_alias_table_buffer() const {
-        return emissive_alias_table_;
-    }
-
-    uint32_t SceneLoader::emissive_count() const {
-        return static_cast<uint32_t>(emissive_triangles_.count());
-    }
-
-    float SceneLoader::emissive_total_power() const {
-        return emissive_total_power_;
+    renderer::EmissiveLightData SceneLoader::emissive_light() const {
+        return renderer::EmissiveLightData{
+            .triangles = emissive_triangles_.data(),
+            .alias_table = emissive_alias_table_.data(),
+            .count = static_cast<uint32_t>(emissive_triangles_.count()),
+            .total_power = emissive_total_power_,
+        };
     }
 } // namespace qualquer::app
