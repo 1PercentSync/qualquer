@@ -331,6 +331,77 @@ namespace qualquer::renderer {
         };
 
         /**
+         * @brief One ping-pong resource slot: color, guides, sample count, DLSS
+         *        metadata, and the production/consumption CUDA events that fence them.
+         *
+         * Keeping these six previously parallel arrays under one owner makes it
+         * impossible to resize color without resizing guides, or to evaluate DLSS
+         * with metadata from a different frame than the textures.
+         */
+        struct FrameSlot {
+            /** @brief Allocates color and guide resources at the given resolution. */
+            void alloc(uint32_t width, uint32_t height);
+
+            /**
+             * @brief Resizes color and guide resources and zeros sample_count.
+             *
+             * Resized content is undefined; sample_count must not claim prior
+             * accumulation. DLSS metadata is left to invalidate().
+             */
+            void resize(uint32_t width, uint32_t height);
+
+            /** @brief Releases color and guide resources. */
+            void free();
+
+            /**
+             * @brief Marks DLSS metadata as not containing a valid input frame.
+             *
+             * Does not touch sample_count or GPU resources.
+             */
+            void invalidate();
+
+            /**
+             * @brief Creates production/consumption sync events and records them once
+             *        so the first waits pass without reading unrecorded events.
+             */
+            void create_events(cudaStream_t stream);
+
+            /** @brief Destroys production/consumption sync events. */
+            void destroy_events();
+
+            /** @brief HDR color buffer (RGBA32F, CUDA array + tex/surf). */
+            optix::CudaArrayBuffer<float4> color;
+
+            /** @brief Six DLSS guide resources matching color's resolution. */
+            AuxBufferSet aux;
+
+            /**
+             * @brief Normalization count paired with color.
+             *
+             * DLSS OFF stores a Separate Sum and its accumulated sample count.
+             * DLSS ON stores a per-frame mean and therefore uses count 1.
+             */
+            uint32_t sample_count = 0;
+
+            /** @brief Host inputs produced with this slot's color/aux. */
+            DlssFrameMetadata dlss_metadata{};
+
+            /**
+             * @brief Recorded after raygen produces this slot's color and guides.
+             *
+             * Display waits on this before consuming the slot.
+             */
+            cudaEvent_t production_event = nullptr;
+
+            /**
+             * @brief Recorded after display finishes consuming this slot.
+             *
+             * Compute waits on this before overwriting the slot.
+             */
+            cudaEvent_t consumption_event = nullptr;
+        };
+
+        /**
          * @brief Invalidates DLSS input slots and requests history reset.
          *
          * Marks both slots as not containing a valid DLSS input and sets a
@@ -367,16 +438,13 @@ namespace qualquer::renderer {
         optix::CudaBuffer<GPUGeometryInfo> geometry_info_buffer_;
 
         /**
-         * @brief Ping-pong HDR color buffers (RGBA32F, CUDA array + tex/surf).
+         * @brief Ping-pong resource slots (color + guides + count + metadata + events).
          *
-         * A produced frame reads buffer [accum_index_] via texture object and
-         * writes [1 - accum_index_] via surface object, then flips the index.
-         * A paused frame keeps the index unchanged. DLSS-RR reads the read slot
-         * via CUtexObject*; raygen writes via surf2Dwrite. CUDA arrays are
-         * required for DLSS CUDA API
-         * resource consumption (see current-phase.md "Ping-pong Buffer 类型迁移").
+         * A produced frame reads slot [accum_index_] and writes [1 - accum_index_],
+         * then flips the index. A paused frame keeps the index unchanged. CUDA
+         * arrays are required for DLSS CUDA API resource consumption.
          */
-        std::array<optix::CudaArrayBuffer<float4>, 2> accum_buffers_;
+        std::array<FrameSlot, 2> frame_slots_;
 
         /** @brief Device-side launch-params buffer (one LaunchParams). */
         optix::CudaBuffer<LaunchParams> params_buffer_;
@@ -405,25 +473,8 @@ namespace qualquer::renderer {
          */
         uint32_t frame_counter_ = 0;
 
-        /**
-         * @brief Per-slot normalization count paired with accum_buffers_.
-         *
-         * DLSS OFF stores a Separate Sum and its accumulated sample count.
-         * DLSS ON stores a per-frame mean and therefore uses count 1. On reset
-         * the read slot stays valid until a produced frame overwrites it.
-         */
-        std::array<uint32_t, 2> accum_counts_ = {0, 0};
-
         /** @brief Actual TLAS instance count after same-node primitive folding. */
         uint32_t tlas_instance_count_ = 0;
-
-        // ---- Aux G-buffer channels (render resolution, for DLSS-RR input) ----
-
-        /** @brief Per-color-slot DLSS guide resources. */
-        std::array<AuxBufferSet, 2> aux_buffers_;
-
-        /** @brief Per-color-slot host inputs consumed by DLSS evaluation. */
-        std::array<DlssFrameMetadata, 2> dlss_frame_metadata_{};
 
         // ---- DLSS-RR output (display resolution) ----
 
@@ -450,7 +501,7 @@ namespace qualquer::renderer {
          * @brief Deferred accumulation reset flag set by reset_accumulation().
          *
          * Consumed by submit_cuda on the next frame: forces chain_count to 0
-         * (same path as camera-change reset) without clearing accum_counts_,
+         * (same path as camera-change reset) without clearing FrameSlot::sample_count,
          * so the read slot keeps a valid count and tonemap avoids a black frame.
          */
         bool reset_requested_ = false;
@@ -493,22 +544,6 @@ namespace qualquer::renderer {
 
         /** @brief Previous-frame DLSS render preset (feature-recreation detection). */
         optix::DlssRenderPreset prev_dlss_preset_ = optix::DlssRenderPreset::E;
-
-        /**
-         * @brief Per-resource-slot event recorded after raygen completes.
-         *
-         * Display waits on the read slot's event before consuming its color and
-         * guide resources.
-         */
-        std::array<cudaEvent_t, 2> event_raygen_done_{};
-
-        /**
-         * @brief Per-resource-slot event recorded after display consumption completes.
-         *
-         * Compute waits on the write slot's event before overwriting its color and
-         * guide resources.
-         */
-        std::array<cudaEvent_t, 2> event_tonemap_done_{};
 
 #ifndef NDEBUG
         /** @brief Timing event recorded before display_stream work (DLSS + tonemap). */
