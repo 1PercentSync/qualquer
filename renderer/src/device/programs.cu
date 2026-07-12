@@ -600,11 +600,7 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
     // power_heuristic(brdf_pdf, env_pdf(brdf_dir)) to avoid double-counting.
     float env_mis_w = 1.0f;
     if (bs.pdf_combined > 0.0f && params.env.alias_table != nullptr) {
-        const float pdf_env_at_brdf = env_pdf(
-            params.env.alias_table,
-            params.env.alias_width, params.env.alias_height,
-            params.env.total_luminance,
-            params.env.rotation_sin, params.env.rotation_cos, bs.next_dir);
+        const float pdf_env_at_brdf = env_pdf(params.env, bs.next_dir);
         env_mis_w = mis_power_heuristic(bs.pdf_combined, pdf_env_at_brdf);
     }
 

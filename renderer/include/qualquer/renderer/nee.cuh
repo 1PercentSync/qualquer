@@ -34,39 +34,31 @@ namespace qualquer::renderer {
  * the returned direction is transformed to world space by the inverse IBL
  * rotation.
  *
- * @param alias_table   Device alias table entries (one per equirect pixel).
- * @param entry_count   Total entries (width × height).
- * @param width         Equirect source width.
- * @param height        Equirect source height.
- * @param sin_r         Sine of the IBL Y-axis rotation (host-precomputed).
- * @param cos_r         Cosine of the IBL Y-axis rotation (host-precomputed).
- * @param r1            Uniform random [0,1) — bin selection.
- * @param r2            Uniform random [0,1) — accept/reject.
- * @param r3            Uniform random [0,1) — horizontal sub-pixel jitter.
- * @param r4            Uniform random [0,1) — vertical sub-pixel jitter.
+ * @param env  Packed env light data (alias table, dimensions, rotation).
+ * @param r1   Uniform random [0,1) — bin selection.
+ * @param r2   Uniform random [0,1) — accept/reject.
+ * @param r3   Uniform random [0,1) — horizontal sub-pixel jitter.
+ * @param r4   Uniform random [0,1) — vertical sub-pixel jitter.
  * @return Sampled world-space direction (normalized).
  */
 __forceinline__ __device__ float3 sample_env_alias_table(
-        const EnvAliasEntry *alias_table,
-        const uint32_t entry_count,
-        const uint32_t width, const uint32_t height,
-        const float sin_r, const float cos_r,
+        const EnvLightData &env,
         const float r1, const float r2, const float r3, const float r4) {
 
-    if (entry_count == 0) {
+    if (env.alias_count == 0) {
         return make_float3(0.0f, 1.0f, 0.0f);
     }
 
-    const uint32_t idx = min(static_cast<uint32_t>(r1 * static_cast<float>(entry_count)),
-                             entry_count - 1);
-    const EnvAliasEntry &e = alias_table[idx];
+    const uint32_t idx = min(static_cast<uint32_t>(r1 * static_cast<float>(env.alias_count)),
+                             env.alias_count - 1);
+    const EnvAliasEntry &e = env.alias_table[idx];
     const uint32_t pixel = (r2 < e.prob) ? idx : e.alias;
 
     // Pixel → equirect UV (jittered within pixel).
-    const uint32_t px = pixel % width;
-    const uint32_t py = pixel / width;
-    const float u = (static_cast<float>(px) + r3) / static_cast<float>(width);
-    const float v = (static_cast<float>(py) + r4) / static_cast<float>(height);
+    const uint32_t px = pixel % env.alias_width;
+    const uint32_t py = pixel / env.alias_width;
+    const float u = (static_cast<float>(px) + r3) / static_cast<float>(env.alias_width);
+    const float v = (static_cast<float>(py) + r4) / static_cast<float>(env.alias_height);
 
     // Equirect UV → direction in env space (matches equirect_to_cubemap.cu convention).
     const float phi   = (u - 0.5f) * kTwoPi;
@@ -78,7 +70,7 @@ __forceinline__ __device__ float3 sample_env_alias_table(
                                        cos_theta * __sinf(phi));
 
     // Inverse IBL rotation: env space → world space.
-    return rotate_y_dir(env_dir, -sin_r, cos_r);
+    return rotate_y_dir(env_dir, -env.rotation_sin, env.rotation_cos);
 }
 
 /**
@@ -91,28 +83,20 @@ __forceinline__ __device__ float3 sample_env_alias_table(
  *
  * pdf = luminance × W × H / (total_luminance × 2π²)
  *
- * @param alias_table      Device alias table entries.
- * @param width            Equirect source width.
- * @param height           Equirect source height.
- * @param total_luminance  Sum of all pixel weights (luminance × sin_theta).
- * @param sin_r            Sine of the IBL Y-axis rotation (host-precomputed).
- * @param cos_r            Cosine of the IBL Y-axis rotation (host-precomputed).
- * @param dir              World-space direction (normalized).
+ * @param env  Packed env light data (alias table, dimensions, total luminance, rotation).
+ * @param dir  World-space direction (normalized).
  * @return Solid-angle PDF (>= 1e-7).
  */
 __forceinline__ __device__ float env_pdf(
-        const EnvAliasEntry *alias_table,
-        const uint32_t width, const uint32_t height,
-        const float total_luminance,
-        const float sin_r, const float cos_r,
+        const EnvLightData &env,
         const float3 dir) {
 
-    if (total_luminance <= 0.0f) {
+    if (env.total_luminance <= 0.0f) {
         return 1e-7f;
     }
 
     // Forward IBL rotation: world space → env space.
-    const float3 env_dir = rotate_y_dir(dir, sin_r, cos_r);
+    const float3 env_dir = rotate_y_dir(dir, env.rotation_sin, env.rotation_cos);
 
     // Direction → equirect UV (inverse of the sampling mapping).
     const float phi   = atan2f(env_dir.z, env_dir.x);
@@ -121,14 +105,16 @@ __forceinline__ __device__ float env_pdf(
     const float v = 0.5f - theta * kInvPi;
 
     // UV → nearest pixel index.
-    const uint32_t px = min(static_cast<uint32_t>(u * static_cast<float>(width)),  width  - 1);
-    const uint32_t py = min(static_cast<uint32_t>(v * static_cast<float>(height)), height - 1);
-    const uint32_t pixel = py * width + px;
+    const uint32_t px = min(static_cast<uint32_t>(u * static_cast<float>(env.alias_width)),
+                            env.alias_width - 1);
+    const uint32_t py = min(static_cast<uint32_t>(v * static_cast<float>(env.alias_height)),
+                            env.alias_height - 1);
+    const uint32_t pixel = py * env.alias_width + px;
 
-    const float lum = alias_table[pixel].luminance;
+    const float lum = env.alias_table[pixel].luminance;
 
-    return fmaxf(lum * static_cast<float>(width) * static_cast<float>(height)
-                 / (total_luminance * kTwoPi * kPi), 1e-7f);
+    return fmaxf(lum * static_cast<float>(env.alias_width) * static_cast<float>(env.alias_height)
+                 / (env.total_luminance * kTwoPi * kPi), 1e-7f);
 }
 
 // ---- Shadow ray tracing -----------------------------------------------------
@@ -274,10 +260,7 @@ __forceinline__ __device__ float3 evaluate_env_nee(
                                    dim_base + kBounceOffsetEnvNee + 3);
 
     const float3 L = sample_env_alias_table(
-        params.env.alias_table, params.env.alias_count,
-        params.env.alias_width, params.env.alias_height,
-        params.env.rotation_sin, params.env.rotation_cos,
-        env_r1, env_r2, env_r3, env_r4);
+        params.env, env_r1, env_r2, env_r3, env_r4);
     const float NdotL = dot(N_shading, L);
 
     if (NdotL <= 0.0f) {
@@ -300,11 +283,7 @@ __forceinline__ __device__ float3 evaluate_env_nee(
     const float3 brdf_val = brdf_eval(bp, L, NdotL);
     const float brdf_pdf_e = brdf_pdf(bp, L);
 
-    const float pdf_light = env_pdf(
-        params.env.alias_table,
-        params.env.alias_width, params.env.alias_height,
-        params.env.total_luminance,
-        params.env.rotation_sin, params.env.rotation_cos, L);
+    const float pdf_light = env_pdf(params.env, L);
     const float mis_w = mis_power_heuristic(pdf_light, brdf_pdf_e);
     const float st_factor = shadow_terminator_factor(N_face, N_shading, L);
 
