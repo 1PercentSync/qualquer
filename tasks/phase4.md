@@ -184,7 +184,7 @@ MUSTREAD:4
 - [x] 保证 BRDF 与能量模型在完整输入域内输出合法：E_glossy 有理多项式输出 clamp 到 [0,1]（域边界拟合误差可产出越界值，导致负 diffuse_weight / DLSS specular albedo 越界）；其余函数（D_GGX、V_Smith、F_Schlick、VNDF 采样/PDF、EON diffuse、CLTC、E_ss、turquin_compensation、combined PDF）经完整输入域审计确认在已校验输入下输出有限合法
 - [x] 保证 importance distribution 的构建、采样与 PDF 一致且有效：env alias table（采样/PDF 旋转对称、UV 映射互逆、sin(θ) 正确消去）、emissive alias table（面积消去、area→solid-angle Jacobian、双面 cos 语义一致）、VNDF specular（采样/PDF 同一公式、下半球拒绝）、EON/CLTC diffuse（混合权重 P_u/P_c 一致、CLTC 下半球采样经 EON 参考实现确认为可忽略正偏差）、combined multi-lobe PDF（三调用点一致）——全部一致，无需修改
 - [x] 保证直接光照与 path estimator 的 contribution、概率及权重合法：shadow_terminator_factor 恢复 Chiang 2019 Eq.1 min(1,ratio) + NgdotNs≤0 早期返回；mis_power_heuristic 改比值形式避免 pdf² 溢出；evaluate_emissive_nee 增 dist²≤0 守卫 + 双面 cos 逻辑重构防 NaN 穿透；closesthit emissive MIS 仅在 last_brdf_pdf>0 时应用（pass-through 后无竞争策略）
-- [ ] 保证时域投影与 DLSS guide data 有限、同帧且语义有效
+- [x] 保证时域投影与 DLSS guide data 有限、同帧且语义有效：MV 投影 clip.w 退化守卫（sky 方向垂直于前帧相机前方 / hit 穿越前帧近平面时 clip.w→0 导致除零 NaN，守卫写零 MV 回退 DLSS 内部启发式）；aux 值域（depth/albedo/normal/roughness）、host 端 evaluate 传递（jitter/矩阵/reset/MV scale）、时域 slot 一致性（FrameSlot 结构打包 color+aux+metadata 同帧、production/consumption event 保护、invalidation 路径覆盖分辨率变化/场景切换/暂停期间相机变化）经审计确认合法
 - [x] 呈现链路计时（debug only）：CUDA timing events 测量 PT（compute_stream）和 display_stream 耗时；Vulkan timestamp queries 测量 blit + ImGui 耗时；CPU frame chrono 测量活跃工作时间；UI 显示各项 ms/占比/理想帧率，FrameStats 窗口平滑
 - [ ] 请求用户在 CLion 中编译验证（render height / exposure / FOV 滑块拖拽释放后值正常提交；相机进入单面几何体内部时无 aux data 陈旧伪影；垂直相机运动下 DLSS-RR 无 ghosting）
 
