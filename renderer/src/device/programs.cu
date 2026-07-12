@@ -504,8 +504,8 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
     // Bounce > 0 without emissive NEE: weight 1.0 — no competing strategy.
     const uint32_t bounce = payload_get_bounce();
     if (bounce > 0 && params.emissive.count > 0) {
-        const float emi_lum = 0.2126f * mat.emissive_factor.x
-            + 0.7152f * mat.emissive_factor.y + 0.0722f * mat.emissive_factor.z;
+        const float emi_lum = luminance(make_float3(
+            mat.emissive_factor.x, mat.emissive_factor.y, mat.emissive_factor.z));
         if (emi_lum > 0.0f) {
             const float cos_theta_l = fabsf(dot(N_face, ray_dir));
             const float hit_dist = optixGetRayTmax();

@@ -88,6 +88,11 @@ __forceinline__ __device__ float3 reflect(const float3 I, const float3 N) {
     return I - N * (2.0f * dot(I, N));
 }
 
+/// BT.709 luminance of a linear RGB color.
+__forceinline__ __device__ float luminance(const float3 c) {
+    return 0.2126f * c.x + 0.7152f * c.y + 0.0722f * c.z;
+}
+
 /// Rotates a direction around the Y axis by (sin_r, cos_r).
 __forceinline__ __device__ float3 rotate_y_dir(const float3 d,
                                                const float sin_r, const float cos_r) {

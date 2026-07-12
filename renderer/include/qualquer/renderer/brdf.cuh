@@ -631,7 +631,7 @@ __forceinline__ __device__ void build_orthonormal_basis(const float3 N,
 __forceinline__ __device__ float specular_probability(const float NdotV,
                                                       const float3 F0) {
     const float3 F = F_Schlick(NdotV, F0);
-    const float spec_weight = F.x * 0.2126f + F.y * 0.7152f + F.z * 0.0722f;
+    const float spec_weight = luminance(F);
     return fmaxf(fminf(spec_weight, 0.99f), 0.01f);
 }
 

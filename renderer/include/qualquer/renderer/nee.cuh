@@ -400,8 +400,7 @@ __forceinline__ __device__ float3 evaluate_emissive_nee(
 
     const float3 brdf_val_emi = brdf_eval(bp, L, NdotL_emi);
 
-    const float emission_lum = 0.2126f * tri.emission.x
-        + 0.7152f * tri.emission.y + 0.0722f * tri.emission.z;
+    const float emission_lum = luminance(tri.emission);
     const float light_pdf_emi = emissive_light_pdf(
         emission_lum, dist, cos_theta_light, params.emissive.total_power);
 
