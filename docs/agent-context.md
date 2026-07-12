@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4.5 — 收敛质量 + DLSS-RR + 自适应
-- **进度**：Phase 4.5 Step 14.5 数值正确性修复中（资产输入校验 + 几何/shading frame 退化防御 + BRDF/能量模型输出合法性 + importance distribution 一致性审计完成）
+- **进度**：Phase 4.5 Step 14.5 数值正确性修复中（资产输入校验 + 几何/shading frame 退化防御 + BRDF/能量模型输出合法性 + importance distribution 一致性审计 + 直接光照/path estimator 数值合法性完成）
 
 ### 下一个任务
 
-Phase 4.5 Step 14.5 保证直接光照与 path estimator 的 contribution、概率及权重合法
+Phase 4.5 Step 14.5 保证时域投影与 DLSS guide data 有限、同帧且语义有效
 
 ---
 
