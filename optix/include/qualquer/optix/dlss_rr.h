@@ -65,9 +65,9 @@ namespace qualquer::optix {
      * lifecycle (create / release). The CUDA API variant is used exclusively;
      * no Vulkan dependency.
      *
-     * Ownership: the application holds a single instance. NGX init/shutdown
-     * bracket the entire application lifetime. Feature create/release happen
-     * on resolution changes.
+     * Ownership: Renderer holds a single instance. NGX init/shutdown bracket
+     * the renderer lifetime. Feature create/release/evaluate are driven from
+     * Renderer::submit_cuda on enable, resolution, and preset changes.
      */
     class DlssRR {
     public:

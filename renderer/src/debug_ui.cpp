@@ -555,13 +555,13 @@ namespace qualquer::renderer {
 
             int current = 0;
             for (int i = 0; i < 3; ++i) {
-                if (values[i] == ctx.dlss_preset) {
+                if (values[i] == ctx.settings.dlss_preset) {
                     current = i;
                 }
             }
 
             if (ImGui::Combo("Render Preset", &current, labels, 3)) {
-                ctx.dlss_preset = values[current];
+                ctx.settings.dlss_preset = values[current];
             }
         }
 

@@ -13,7 +13,6 @@
 #include <qualquer/app/config.h>
 #include <qualquer/app/scene_loader.h>
 #include <qualquer/optix/context.h>
-#include <qualquer/optix/dlss_rr.h>
 #include <qualquer/renderer/camera.h>
 #include <qualquer/renderer/debug_ui.h>
 #include <qualquer/renderer/render_settings.h>
@@ -170,13 +169,7 @@ namespace qualquer::app {
         /** @brief ImGui integration (context, backends, UI rendering). */
         vulkan::ImGuiBackend imgui_backend_;
 
-        /** @brief DLSS Ray Reconstruction lifecycle (NGX init/feature management). */
-        optix::DlssRR dlss_rr_;
-
-        /** @brief Active DLSS render preset (UI-driven, recreates feature on change). */
-        optix::DlssRenderPreset dlss_preset_ = optix::DlssRenderPreset::E;
-
-        /** @brief Single-frame render content (CUDA submit + Vulkan recording). */
+        /** @brief Single-frame render content (CUDA submit + Vulkan recording + DLSS-RR). */
         renderer::Renderer renderer_;
 
         /** @brief Debug panel (frame stats, GPU info, present-mode/log-level controls). */

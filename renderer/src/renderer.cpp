@@ -342,6 +342,11 @@ namespace qualquer::renderer {
                         const uint32_t width,
                         const uint32_t height,
                         const std::string &optixir_path) {
+        // NGX lifecycle brackets the OptiX/CUDA resources that feed DLSS-RR.
+        // Init before the pipeline so a failed availability probe still leaves
+        // the renderer usable (feature create is deferred to submit_cuda).
+        dlss_rr_.init(cuda_context.device_id());
+
         // The launch-params constant name ("params") and its size are device-side
         // facts this layer cannot take from the renderer header (single-direction
         // dependency).
@@ -416,7 +421,8 @@ namespace qualquer::renderer {
         // idempotent (null-reset), so a repeat call is a no-op. State members
         // (accum_index_, frame_counter_, FrameSlot::sample_count) are intentionally
         // not reset here — release is the sole responsibility; a subsequent init
-        // resets them.
+        // resets them. DLSS-RR is last among render resources so feature release
+        // and NGX shutdown happen after any stream work that referenced them.
         pipeline_.destroy();
         sbt_raygen_.free();
         sbt_miss_.free();
@@ -440,6 +446,7 @@ namespace qualquer::renderer {
             }
         }
 #endif
+        dlss_rr_.destroy();
     }
 
     void Renderer::load_scene(const optix::Context &cuda_context,
@@ -482,7 +489,6 @@ namespace qualquer::renderer {
     }
 
     void Renderer::submit_cuda(const optix::Context &cuda_context,
-                               optix::DlssRR &dlss_rr,
                                const SceneRenderInput &scene,
                                const uint32_t width,
                                const uint32_t height,
@@ -506,13 +512,13 @@ namespace qualquer::renderer {
         // Ensure DLSS optimal settings are cached before resolving render
         // height — resolve_render_height reads the cached min/max/optimal
         // values.  Cache on first enable and on display resolution change.
-        if (scene.settings.dlss_enabled && dlss_rr.available()) {
-            if (!dlss_rr.feature_active() || display_res_changed) {
-                if (!dlss_rr.feature_active()) {
+        if (scene.settings.dlss_enabled && dlss_rr_.available()) {
+            if (!dlss_rr_.feature_active() || display_res_changed) {
+                if (!dlss_rr_.feature_active()) {
                     CUDA_CHECK(cudaStreamSynchronize(cuda_context.compute_stream));
                     CUDA_CHECK(cudaStreamSynchronize(cuda_context.display_stream));
                 }
-                dlss_rr.cache_optimal_settings(width, height);
+                dlss_rr_.cache_optimal_settings(width, height);
             }
         }
 
@@ -526,8 +532,8 @@ namespace qualquer::renderer {
         // black until valid data arrives, so the uninitialised contents are
         // never consumed.
         uint32_t render_height = scene.settings.render_height;
-        if (scene.settings.dlss_enabled && dlss_rr.available()) {
-            render_height = dlss_rr.resolve_render_height(render_height, height).render_height;
+        if (scene.settings.dlss_enabled && dlss_rr_.available()) {
+            render_height = dlss_rr_.resolve_render_height(render_height, height).render_height;
         }
         const uint32_t render_width = compute_render_width(render_height, width, height);
         bool render_res_changed = false;
@@ -550,28 +556,29 @@ namespace qualquer::renderer {
         // or create it for the first time when the user enables DLSS. Only
         // when DLSS is enabled — resolution changes while DLSS is off must
         // not create a feature. Optimal settings are already cached above.
-        if (scene.settings.dlss_enabled && dlss_rr.available()) {
-            const bool preset_changed = scene.dlss_preset != prev_dlss_preset_;
+        if (scene.settings.dlss_enabled && dlss_rr_.available()) {
+            const bool preset_changed = scene.settings.dlss_preset != prev_dlss_preset_;
             const bool needs_recreate = render_res_changed || display_res_changed
                                         || preset_changed
-                                        || !dlss_rr.feature_active();
+                                        || !dlss_rr_.feature_active();
             if (needs_recreate) {
                 // Drain when no earlier resize block already did: first
                 // creation (!feature_active) or pure preset change.
-                if (!dlss_rr.feature_active() || preset_changed) {
+                if (!dlss_rr_.feature_active() || preset_changed) {
                     CUDA_CHECK(cudaStreamSynchronize(cuda_context.compute_stream));
                     CUDA_CHECK(cudaStreamSynchronize(cuda_context.display_stream));
                 }
-                dlss_rr.create_feature(render_width, render_height, width, height,
-                                       scene.dlss_preset, cuda_context.display_stream);
+                dlss_rr_.create_feature(render_width, render_height, width, height,
+                                        scene.settings.dlss_preset,
+                                        cuda_context.display_stream);
                 invalidate_dlss_state();
             }
         }
         // Release feature when user disables DLSS (free VRAM immediately).
-        if (!scene.settings.dlss_enabled && dlss_rr.feature_active()) {
+        if (!scene.settings.dlss_enabled && dlss_rr_.feature_active()) {
             CUDA_CHECK(cudaStreamSynchronize(cuda_context.compute_stream));
             CUDA_CHECK(cudaStreamSynchronize(cuda_context.display_stream));
-            dlss_rr.release_feature();
+            dlss_rr_.release_feature();
             invalidate_dlss_state();
         }
 
@@ -612,7 +619,7 @@ namespace qualquer::renderer {
         const float exposure_linear = std::pow(2.0f, scene.settings.exposure_ev);
 
         // Runtime DLSS flag: user wants it AND feature is actually created.
-        const bool dlss_active = scene.settings.dlss_enabled && dlss_rr.feature_active();
+        const bool dlss_active = scene.settings.dlss_enabled && dlss_rr_.feature_active();
 
         const CameraKey camera_key{
             .inv_view = scene.camera.inv_view,
@@ -661,7 +668,7 @@ namespace qualquer::renderer {
         prev_camera_ = camera_key;
         prev_env_rotation_ = scene.settings.env_rotation;
         prev_dlss_enabled_ = scene.settings.dlss_enabled;
-        prev_dlss_preset_ = scene.dlss_preset;
+        prev_dlss_preset_ = scene.settings.dlss_preset;
 
         // Global per-frame jitter for DLSS mode (no per-pixel CP rotation).
         const float jitter_x = global_jitter(kSobolDirectionData, frame_counter_, 0);
@@ -839,7 +846,7 @@ namespace qualquer::renderer {
                 .reset = read.dlss_metadata.reset,
                 .frame_time_ms = read.dlss_metadata.frame_time_ms,
             };
-            dlss_rr.evaluate(eval_input);
+            dlss_rr_.evaluate(eval_input);
             dlss_output_valid_ = true;
 
             launch_tonemap(dlss_output_.tex_object(),

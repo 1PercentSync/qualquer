@@ -7,6 +7,8 @@
 
 #include <cstdint>
 
+#include <qualquer/optix/dlss_rr.h>
+
 namespace qualquer::renderer {
     /**
      * @brief User-adjustable path-tracing parameters.
@@ -15,7 +17,8 @@ namespace qualquer::renderer {
      * config.json). Passed to the renderer each frame via SceneRenderInput.
      * Content-defining fields (env_rotation, dlss_enabled) trigger accumulation
      * reset when they change; quality/throughput knobs (max_bounces,
-     * samples_per_frame) do not.
+     * samples_per_frame) do not. dlss_preset triggers feature recreation
+     * (not accumulation reset) when it changes.
      *
      * exposure_ev is stored in EV stops for the UI slider; Application
      * converts to a linear multiplier (pow(2, ev)) before passing to
@@ -52,8 +55,16 @@ namespace qualquer::renderer {
         /** @brief DLSS-RR enabled. When true and the feature is active, raygen
          *  outputs single-frame noisy HDR and DLSS-RR handles temporal
          *  accumulation + denoising + upscaling. When false, Separate Sum
-         *  accumulation is used (Phase 4 fallback). */
+         *  accumulation is used. */
         bool dlss_enabled = false;
+
+        /**
+         * @brief DLSS-RR render preset (neural network model selection).
+         *
+         * A user-adjustable knob alongside max_bounces/spp. Renderer detects
+         * changes via prev_dlss_preset_ and recreates the DLSS feature.
+         */
+        optix::DlssRenderPreset dlss_preset = optix::DlssRenderPreset::E;
     };
 
     /**

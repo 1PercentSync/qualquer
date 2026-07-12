@@ -124,9 +124,6 @@ namespace qualquer::renderer {
 
         /** @brief Frame delta time in milliseconds (for DLSS InFrameTimeDeltaInMsec). */
         float frame_time_ms = 0.0f;
-
-        /** @brief DLSS render preset for feature recreation on resolution change. */
-        optix::DlssRenderPreset dlss_preset = optix::DlssRenderPreset::E;
     };
 
     /**
@@ -135,19 +132,23 @@ namespace qualquer::renderer {
      * Encapsulates what one frame draws — the CUDA write into the display buffer,
      * the Vulkan blit to the swapchain image, and the ImGui overlay — so the
      * Application keeps only the frame-loop timing skeleton. Owns the OptiX
-     * pipeline, SBT record buffers, ping-pong HDR accumulation buffers, and the
-     * device-side launch-params buffer; the frame counter driving temporal
-     * animation is likewise owned state.
+     * pipeline, SBT record buffers, ping-pong HDR accumulation buffers, the
+     * device-side launch-params buffer, and the DLSS-RR feature lifecycle; the
+     * frame counter driving temporal animation is likewise owned state.
      */
     class Renderer {
     public:
         /**
          * @brief Creates all OptiX render resources sized for the given output.
          *
+         * Initializes DLSS-RR (NGX SDK) from the CUDA device selected by
+         * cuda_context, then builds the OptiX pipeline and frame resources.
+         *
          * @param cuda_context CUDA context owning the stream and device context the
          *                      pipeline builds against; the stream sequences SBT
          *                      uploads and accumulation-buffer clears before the first
-         *                      frame's optixLaunch on the same stream.
+         *                      frame's optixLaunch on the same stream. Its device_id
+         *                      also seeds DlssRR::init.
          * @param width          Initial render resolution width in pixels
          *                       (accumulation buffer size).
          * @param height         Initial render resolution height in pixels.
@@ -201,17 +202,15 @@ namespace qualquer::renderer {
          * The render resolution derives from scene.settings.render_height and the
          * display aspect ratio; when it differs from the current accumulation-buffer
          * allocation, both streams are drained and the buffers are reallocated
-         * (sample counts reset to 0).
+         * (sample counts reset to 0). DLSS-RR feature create/evaluate/release is
+         * driven from the owned dlss_rr_ member (settings.dlss_enabled / dlss_preset).
          * @param cuda_context CUDA context (surface, streams, external semaphores).
-         * @param dlss_rr      DLSS-RR feature (owned by the caller; create/evaluate/release
-         *                     driven on this path while feature_active).
          * @param scene        Camera and scene data (materials, texture objects).
          * @param width        Display buffer width in pixels.
          * @param height       Display buffer height in pixels.
          * @param frame_index  Current frame-in-flight slot, indexing external_semaphores.
          */
         void submit_cuda(const optix::Context &cuda_context,
-                         optix::DlssRR &dlss_rr,
                          const SceneRenderInput &scene,
                          uint32_t width,
                          uint32_t height,
@@ -234,6 +233,14 @@ namespace qualquer::renderer {
 
         /** @brief Actual TLAS instance count after group folding (set by load_scene). */
         [[nodiscard]] uint32_t tlas_instance_count() const;
+
+        /**
+         * @brief DLSS-RR wrapper owned by this renderer (read-only borrow).
+         *
+         * DebugUIContext uses this for availability / quality / VRAM queries,
+         * matching the existing const vulkan::Context& borrow pattern.
+         */
+        [[nodiscard]] const optix::DlssRR &dlss() const { return dlss_rr_; }
 
         /**
          * @brief Forces the next frame to overwrite instead of accumulating,
@@ -480,7 +487,16 @@ namespace qualquer::renderer {
         /** @brief Actual TLAS instance count after same-node primitive folding. */
         uint32_t tlas_instance_count_ = 0;
 
-        // ---- DLSS-RR output (display resolution) ----
+        // ---- DLSS-RR (owned lifecycle + display-resolution output) ----
+
+        /**
+         * @brief DLSS Ray Reconstruction feature (NGX lifecycle + create/evaluate).
+         *
+         * Owned here because submit_cuda manages the full feature lifecycle
+         * (create/release/recreate/evaluate). Initialized in init() from the
+         * CUDA device id; destroyed in destroy().
+         */
+        optix::DlssRR dlss_rr_;
 
         /**
          * @brief Intermediate HDR buffer at output resolution (RGBA32F).

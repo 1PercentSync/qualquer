@@ -88,10 +88,7 @@ namespace qualquer::app {
         // adjusts it thereafter, decoupled from window resizes.
         render_settings_.render_height = swapchain_.extent.height;
 
-        // --- DLSS Ray Reconstruction ---
-        dlss_rr_.init(cuda_context_.device_id());
-
-        // --- Renderer (pipeline + accumulation buffers) ---
+        // --- Renderer (pipeline + accumulation buffers + DLSS-RR) ---
         renderer_.init(cuda_context_,
                        swapchain_.extent.width,
                        swapchain_.extent.height,
@@ -178,7 +175,6 @@ namespace qualquer::app {
             // waits on acquire — submission order decides when the engine starts, hence
             // whether the acquire wait overlaps CUDA compute (async submit alone does not).
             renderer_.submit_cuda(cuda_context_,
-                                  dlss_rr_,
                                   renderer::SceneRenderInput{
                                       .camera = camera_,
                                       .settings = render_settings_,
@@ -187,7 +183,6 @@ namespace qualquer::app {
                                       .env = scene_loader_.env_light(),
                                       .emissive = scene_loader_.emissive_light(),
                                       .frame_time_ms = ImGui::GetIO().DeltaTime * 1000.0f,
-                                      .dlss_preset = dlss_preset_,
                                   },
                                   swapchain_.extent.width,
                                   swapchain_.extent.height,
@@ -212,8 +207,7 @@ namespace qualquer::app {
                 .camera = camera_,
                 .accumulated_samples = renderer_.accumulated_samples(),
                 .scene_stats = scene_stats_,
-                .dlss_rr = dlss_rr_,
-                .dlss_preset = dlss_preset_,
+                .dlss_rr = renderer_.dlss(),
 #ifndef NDEBUG
                 .pt_ms = renderer_.pt_ms(),
                 .cuda_display_ms = renderer_.cuda_display_ms(),
@@ -691,11 +685,9 @@ namespace qualquer::app {
         CUDA_CHECK(cudaStreamSynchronize(cuda_context_.compute_stream));
 
         imgui_backend_.destroy();
-        // Renderer's OptiX pipeline and CUDA buffers are torn down before the CUDA
-        // context they were created against.
+        // Renderer's OptiX pipeline, CUDA buffers, and DLSS-RR are torn down
+        // before the CUDA context they were created against.
         renderer_.destroy();
-        // DLSS-RR feature release + NGX shutdown before CUDA context teardown.
-        dlss_rr_.destroy();
         // Scene resources (mesh/material/texture buffers + scene textures) follow
         // the renderer: its acceleration structures referenced these device
         // pointers. Default textures likewise precede the CUDA context they were

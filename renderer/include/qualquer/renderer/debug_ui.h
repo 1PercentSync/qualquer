@@ -16,7 +16,6 @@
 
 namespace qualquer::optix {
     class DlssRR;
-    enum class DlssRenderPreset : uint32_t;
 }
 
 namespace qualquer::renderer {
@@ -93,11 +92,13 @@ namespace qualquer::renderer {
 
         // ---- DLSS-RR ----
 
-        /** @brief DLSS-RR wrapper (read-only for availability/feature queries). */
+        /**
+         * @brief DLSS-RR wrapper (read-only for availability/feature queries).
+         *
+         * Borrowed from Renderer::dlss(); preset write-back goes through
+         * settings.dlss_preset (same ownership as other UI knobs).
+         */
         const optix::DlssRR &dlss_rr;
-
-        /** @brief Current DLSS render preset (mutable for combo write-back). */
-        optix::DlssRenderPreset &dlss_preset;
 
 #ifndef NDEBUG
         // ---- Pipeline timing (debug only) ----
@@ -366,7 +367,7 @@ namespace qualquer::renderer {
          *
          * The enable checkbox writes settings.dlss_enabled directly; grayed
          * out when DLSS-RR is unavailable. The preset combo writes
-         * dlss_preset directly; the Renderer detects the change via
+         * settings.dlss_preset directly; the Renderer detects the change via
          * prev_dlss_preset_ and recreates the DLSS feature.
          *
          * @param ctx    Provides DlssRR (availability/quality mode) and settings.
