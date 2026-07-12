@@ -342,13 +342,24 @@ __global__ void __raygen__rg() { // NOLINT(*-reserved-identifier)
         const float4 homo = make_float4(pos.x, pos.y, pos.z, hw);
         const float4 curr_clip = mul(params.view_projection, homo);
         const float4 prev_clip = mul(params.prev_view_projection, homo);
-        const float2 curr_ndc = make_float2(curr_clip.x / curr_clip.w,
-                                            curr_clip.y / curr_clip.w);
-        const float2 prev_ndc = make_float2(prev_clip.x / prev_clip.w,
-                                            prev_clip.y / prev_clip.w);
-        const float2 mv = make_float2(
-            (prev_ndc.x - curr_ndc.x) * 0.5f * resolution.x,
-            (prev_ndc.y - curr_ndc.y) * 0.5f * resolution.y);
+
+        // Guard against degenerate perspective division. clip.w ≈ 0 when
+        // the projected point/direction lies near the camera plane: sky
+        // direction perpendicular to the previous camera forward (fast
+        // rotation), or a hit point crossing the previous near plane (fast
+        // translation). The MV is undefined in these cases; zero tells
+        // DLSS-RR "static pixel", falling back to its internal heuristics.
+        constexpr float kClipWMin = 1e-4f;
+        float2 mv = make_float2(0.0f, 0.0f);
+        if (fabsf(curr_clip.w) >= kClipWMin && fabsf(prev_clip.w) >= kClipWMin) {
+            const float2 curr_ndc = make_float2(curr_clip.x / curr_clip.w,
+                                                curr_clip.y / curr_clip.w);
+            const float2 prev_ndc = make_float2(prev_clip.x / prev_clip.w,
+                                                prev_clip.y / prev_clip.w);
+            mv = make_float2(
+                (prev_ndc.x - curr_ndc.x) * 0.5f * resolution.x,
+                (prev_ndc.y - curr_ndc.y) * 0.5f * resolution.y);
+        }
         surf2Dwrite(mv, params.aux_motion_vectors,
                     sx * static_cast<int>(sizeof(float2)), sy);
     }
