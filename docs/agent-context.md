@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4.5 — 收敛质量 + DLSS-RR + 自适应
-- **进度**：Phase 4.5 Step 14.5 第 1 小项完成：资产辐射度与材质输入物理数值域约束（HDR 像素 sanitize、glTF 材质因子 schema clamp、顶点属性校验）
+- **进度**：Phase 4.5 Step 14.5 数值正确性修复中（资产输入校验 + 几何/shading frame 退化防御完成）
 
 ### 下一个任务
 
-Phase 4.5 Step 14.5 保证几何与 shading frame 在退化输入下仍有效
+Phase 4.5 Step 14.5 保证 BRDF 与能量模型在完整输入域内输出合法
 
 ---
 

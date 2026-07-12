@@ -180,7 +180,7 @@ MUSTREAD:4
 - [x] 重构：device 侧 env helper 签名打包——`env_pdf` 和 `sample_env_alias_table` 改为接收 `const EnvLightData&` 替代散装参数，消除调用点逐字段解包
 - [x] 重构：DlssRR 所有权移入 Renderer——`dlss_rr_` 从 Application 移入 Renderer 成员（init 时从 Context 取 device_id 初始化），`dlss_preset` 移入 RenderSettings，submit_cuda 不再接收 `DlssRR&` 参数，Renderer 暴露 `const DlssRR& dlss() const` 供 DebugUIContext 借用
 - [x] 约束资产辐射度与材质输入的物理数值域：HDR 像素 sanitize（NaN/Inf/负 → 0）、glTF 材质因子 clamp 到 schema 范围、顶点属性校验（position/normal/color sanitize，tangent 不合法时 MikkTSpace 重新生成）；alias table 输入由上游修复间接覆盖
-- [ ] 保证几何与 shading frame 在退化输入下仍有效
+- [x] 保证几何与 shading frame 在退化输入下仍有效：N_interp 插值归零时 fallback 到 N_face；T_world 移除 premature normalize 让 get_shading_normal 已有 guard 正确处理零长 tangent；其余中间量（N_face、get_shading_normal 输出、build_orthonormal_basis、ensure_normal_consistency、offset_ray_origin）经审计确认在已校验输入下不可能退化
 - [ ] 保证 BRDF 与能量模型在完整输入域内输出合法
 - [ ] 保证 importance distribution 的构建、采样与 PDF 一致且有效
 - [ ] 保证直接光照与 path estimator 的 contribution、概率及权重合法
