@@ -175,7 +175,7 @@ MUSTREAD:4
 - [x] 重构：FrameSlot 封装——将 `accum_buffers_`、`aux_buffers_`、`accum_counts_`、`dlss_frame_metadata_`、`event_raygen_done_`、`event_tonemap_done_` 六组平行 `std::array<X,2>` 合并为 `std::array<FrameSlot, 2>`，FrameSlot 持有 alloc/resize/free/invalidate/create_events/destroy_events 方法
 - [x] 重构：closesthit 瘦身——`brdf.cuh` 新增 `brdf_pdf(BrdfParams, L)` 消除 3 处 NEE/MIS PDF 重复；`nee.cuh` 新增 `evaluate_env_nee` / `evaluate_emissive_nee` 两个独立内联函数将 ~140 行 NEE 逻辑提出 closesthit；device helper `write_aux_no_surface(sx, sy, diffuse_albedo)` 参数化 diffuse_albedo 消除 pass-through 与 raygen sky 的 aux 默认值写入重复
 - [x] 重构：累积 reset 检测重分类——从检测中移除 `max_bounces` / `samples_per_frame`（质量/吞吐旋钮，不改变积分对象，自适应会每帧变化）；camera 打包为 `CameraKey`（`inv_view` + `inv_projection`，C++20 defaulted `==`），`env_rotation` / `dlss_enabled` 保持独立 prev_ 成员；暂停期间仅 camera 变化触发 `invalidate_dlss_history`，content 变化不触发
-- [ ] 重构（草案，执行前需讨论）：SceneRenderInput 场景资源打包——`launch_params.h` 新增 `EnvLightData` / `EmissiveLightData` POD 结构体，SceneLoader 返回、SceneRenderInput 持有、LaunchParams 内嵌，替代 14 个散装字段
+- [ ] 重构（草案，执行前需讨论）：SceneRenderInput 场景资源打包——`launch_params.h` 新增 `EnvLightData` / `EmissiveLightData` POD 结构体，SceneLoader 返回、SceneRenderInput 持有、LaunchParams 内嵌，替代 10 个散装字段
 - [ ] 重构（草案，执行前需讨论）：DlssRR 所有权移入 Renderer——`dlss_rr_` 从 Application 移入 Renderer 成员（init 时从 Context 取 device_id 初始化），`dlss_preset` 移入 RenderSettings，submit_cuda 不再接收 `DlssRR&` 参数，Renderer 暴露 `const DlssRR& dlss() const` 供 DebugUIContext 借用
 - [ ] 重构（草案，执行前需讨论）：LaunchParams sobol 外移验证——将 `sobol_directions[4096]` 改为 global memory 指针（LaunchParams 内 8 bytes 替代 16384 bytes），benchmark 对比 1spp/32spp 吞吐确认无回退后合入
 - [ ] 约束资产辐射度与材质输入的物理数值域
