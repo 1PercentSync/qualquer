@@ -639,7 +639,7 @@ __forceinline__ __device__ float specular_probability(const float NdotV,
 
 /**
  * @brief Per-shading-point BRDF parameters, computed once and shared by
- *        brdf_eval and brdf_sample.
+ *        brdf_eval, brdf_sample, and brdf_pdf.
  *
  * Packs geometry (V/N/T/B), material (F0, diffuse_rho, alpha, r), and
  * precomputed energy compensation (turquin_comp, diffuse_weight, p_spec) so
@@ -768,6 +768,30 @@ __forceinline__ __device__ float3 brdf_eval(const BrdfParams &params,
         * f_EON(params.base_color, params.r, L_ts, V_ts);
 
     return spec + diff;
+}
+
+// ---- BRDF PDF (NEE MIS) -----------------------------------------------------
+
+/**
+ * @brief Combined multi-lobe BRDF PDF at a fixed light direction (NEE MIS).
+ *
+ * Mirrors the PDF construction inside brdf_sample so light-strategy and
+ * BRDF-strategy MIS weights stay consistent across call sites.
+ *
+ * @param params BRDF parameter bundle (from init_brdf_params).
+ * @param L      Light direction (world, normalized, facing surface).
+ * @return Combined solid-angle PDF.
+ */
+__forceinline__ __device__ float brdf_pdf(const BrdfParams &params,
+                                          const float3 L) {
+    const float3 V_ts = world_to_tangent(params.T, params.B, params.N, params.V);
+    const float3 L_ts = world_to_tangent(params.T, params.B, params.N, L);
+
+    const float3 H_ts = normalize(V_ts + L_ts);
+    const float NdotH = fmaxf(H_ts.z, 0.0f);
+    const float pdf_spec = pdf_ggx_vndf(NdotH, params.NdotV, params.alpha);
+    const float pdf_diff = pdf_EON(V_ts, L_ts, params.r);
+    return combined_lobe_pdf(pdf_spec, pdf_diff, params.p_spec);
 }
 
 // ---- BRDF sample (bounce) ---------------------------------------------------

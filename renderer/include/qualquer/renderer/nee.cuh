@@ -10,8 +10,16 @@
 #include <cuda_runtime.h>
 #include <optix_device.h>
 
+#include <qualquer/renderer/brdf.cuh>
 #include <qualquer/renderer/launch_params.h>
 #include <qualquer/renderer/math_utils.cuh>
+#include <qualquer/renderer/pt_common.cuh>
+#include <qualquer/renderer/rng.cuh>
+
+// Defined in programs.cu; NEE evaluators read scene/light resources from it.
+extern "C" {
+extern __constant__ qualquer::renderer::LaunchParams params;
+}
 
 namespace qualquer::renderer {
 
@@ -218,6 +226,191 @@ __forceinline__ __device__ float emissive_light_pdf(
     }
     const float pdf_area = emission_luminance / total_power;
     return fmaxf(pdf_area * dist * dist / cos_theta_light, 1e-7f);
+}
+
+// ---- Full NEE evaluations (env / emissive) ----------------------------------
+//
+// Env and emissive stay as two functions: their resource parameter sets differ
+// enough that a single entry would force a dishonest or bloated signature.
+// Both read scene resources from the programs.cu LaunchParams constant and take
+// only shading-point inputs as explicit arguments.
+
+/**
+ * @brief Environment NEE: alias-sample a direction, shadow-test, BRDF eval, MIS.
+ *
+ * @param bp           Shading-point BRDF parameters (from init_brdf_params).
+ * @param offset_pos   Ray origin offset from the hit surface.
+ * @param N_face       Geometric face normal (for shadow-terminator correction).
+ * @param N_shading    Shading normal (must match bp.N).
+ * @param pixel_index  Linear pixel index for RNG.
+ * @param sample_index Cumulative sample index for RNG.
+ * @param dim_base     Per-bounce RNG dimension base (from bounce_dim_base).
+ * @return NEE radiance contribution (not yet multiplied by path throughput).
+ */
+__forceinline__ __device__ float3 evaluate_env_nee(
+        const BrdfParams &bp,
+        const float3 offset_pos,
+        const float3 N_face,
+        const float3 N_shading,
+        const uint32_t pixel_index,
+        const uint32_t sample_index,
+        const uint32_t dim_base) {
+
+    if (params.env_cubemap == 0 || params.env_alias_table == nullptr) {
+        return make_float3(0.0f, 0.0f, 0.0f);
+    }
+
+    const float env_r1 = sobol_rng(params.sobol_directions, pixel_index,
+                                   sample_index, params.frame_index,
+                                   dim_base + kBounceOffsetEnvNee);
+    const float env_r2 = sobol_rng(params.sobol_directions, pixel_index,
+                                   sample_index, params.frame_index,
+                                   dim_base + kBounceOffsetEnvNee + 1);
+    const float env_r3 = sobol_rng(params.sobol_directions, pixel_index,
+                                   sample_index, params.frame_index,
+                                   dim_base + kBounceOffsetEnvNee + 2);
+    const float env_r4 = sobol_rng(params.sobol_directions, pixel_index,
+                                   sample_index, params.frame_index,
+                                   dim_base + kBounceOffsetEnvNee + 3);
+
+    const float3 L = sample_env_alias_table(
+        params.env_alias_table, params.env_alias_count,
+        params.env_alias_width, params.env_alias_height,
+        params.env_rotation_sin, params.env_rotation_cos,
+        env_r1, env_r2, env_r3, env_r4);
+    const float NdotL = dot(N_shading, L);
+
+    if (NdotL <= 0.0f) {
+        return make_float3(0.0f, 0.0f, 0.0f);
+    }
+
+    const uint32_t visible = trace_shadow_ray(
+        params.traversable, offset_pos, L, 1e16f);
+    if (!visible) {
+        return make_float3(0.0f, 0.0f, 0.0f);
+    }
+
+    // L is world space; rotate to env space for cubemap lookup.
+    const float3 env_L = rotate_y_dir(
+        L, params.env_rotation_sin, params.env_rotation_cos);
+    const auto env_texel = texCubemap<float4>(
+        params.env_cubemap, env_L.x, env_L.y, env_L.z);
+    const float3 env_color = make_float3(env_texel.x, env_texel.y, env_texel.z);
+
+    const float3 brdf_val = brdf_eval(bp, L, NdotL);
+    const float brdf_pdf_e = brdf_pdf(bp, L);
+
+    const float pdf_light = env_pdf(
+        params.env_alias_table,
+        params.env_alias_width, params.env_alias_height,
+        params.env_total_luminance,
+        params.env_rotation_sin, params.env_rotation_cos, L);
+    const float mis_w = mis_power_heuristic(pdf_light, brdf_pdf_e);
+    const float st_factor = shadow_terminator_factor(N_face, N_shading, L);
+
+    return env_color * brdf_val * NdotL * mis_w * st_factor
+        / fmaxf(pdf_light, 1e-7f);
+}
+
+/**
+ * @brief Emissive-triangle NEE: alias-sample a triangle, shadow-test, BRDF eval, MIS.
+ *
+ * @param bp           Shading-point BRDF parameters (from init_brdf_params).
+ * @param offset_pos   Ray origin offset from the hit surface.
+ * @param N_face       Geometric face normal (for shadow-terminator correction).
+ * @param N_shading    Shading normal (must match bp.N).
+ * @param pixel_index  Linear pixel index for RNG.
+ * @param sample_index Cumulative sample index for RNG.
+ * @param dim_base     Per-bounce RNG dimension base (from bounce_dim_base).
+ * @return NEE radiance contribution (not yet multiplied by path throughput).
+ */
+__forceinline__ __device__ float3 evaluate_emissive_nee(
+        const BrdfParams &bp,
+        const float3 offset_pos,
+        const float3 N_face,
+        const float3 N_shading,
+        const uint32_t pixel_index,
+        const uint32_t sample_index,
+        const uint32_t dim_base) {
+
+    if (params.emissive_count == 0 || params.emissive_triangles == nullptr) {
+        return make_float3(0.0f, 0.0f, 0.0f);
+    }
+
+    const float emi_r1 = sobol_rng(params.sobol_directions, pixel_index,
+                                   sample_index, params.frame_index,
+                                   dim_base + kBounceOffsetEmissiveNee);
+    const float emi_r2 = sobol_rng(params.sobol_directions, pixel_index,
+                                   sample_index, params.frame_index,
+                                   dim_base + kBounceOffsetEmissiveNee + 1);
+    const float emi_r3 = sobol_rng(params.sobol_directions, pixel_index,
+                                   sample_index, params.frame_index,
+                                   dim_base + kBounceOffsetEmissiveNee + 2);
+    const float emi_r4 = sobol_rng(params.sobol_directions, pixel_index,
+                                   sample_index, params.frame_index,
+                                   dim_base + kBounceOffsetEmissiveNee + 3);
+
+    const uint32_t tri_idx = sample_emissive_alias_table(
+        params.emissive_alias_table, params.emissive_count, emi_r1, emi_r2);
+    const EmissiveTriangle &tri = params.emissive_triangles[tri_idx];
+
+    const float3 light_bary = triangle_barycentric(emi_r3, emi_r4);
+    const float3 light_pos = tri.v0 * light_bary.x + tri.v1 * light_bary.y
+                           + tri.v2 * light_bary.z;
+
+    const float3 to_light = light_pos - offset_pos;
+    const float dist2 = dot(to_light, to_light);
+    const float dist = sqrtf(dist2);
+    const float3 L = to_light * (1.0f / dist);
+
+    const float3 light_edge1 = tri.v1 - tri.v0;
+    const float3 light_edge2 = tri.v2 - tri.v0;
+    const float3 light_normal = normalize(cross(light_edge1, light_edge2));
+    float cos_theta_light = dot(light_normal, -L);
+
+    // Double-sided handling: follow material double_sided flag.
+    // Material layout is completed in programs.cu before this header is included.
+    const Material &light_mat = params.materials[tri.material_index];
+    bool light_visible = cos_theta_light > 0.0f;
+    if (!light_visible && light_mat.double_sided == 1u) {
+        cos_theta_light = -cos_theta_light;
+        light_visible = true;
+    }
+
+    const float NdotL_emi = dot(N_shading, L);
+    if (!light_visible || NdotL_emi <= 0.0f) {
+        return make_float3(0.0f, 0.0f, 0.0f);
+    }
+
+    // tMax shortened to avoid hitting the target triangle itself.
+    const uint32_t visible = trace_shadow_ray(
+        params.traversable, offset_pos, L, dist * (1.0f - 1e-4f));
+    if (!visible) {
+        return make_float3(0.0f, 0.0f, 0.0f);
+    }
+
+    const float2 light_uv = tri.uv0 * light_bary.x + tri.uv1 * light_bary.y
+                          + tri.uv2 * light_bary.z;
+    const auto le_texel = tex2D<float4>(
+        params.texture_objects[light_mat.emissive_tex], light_uv.x, light_uv.y);
+    const float3 Le = make_float3(
+        le_texel.x * light_mat.emissive_factor.x,
+        le_texel.y * light_mat.emissive_factor.y,
+        le_texel.z * light_mat.emissive_factor.z);
+
+    const float3 brdf_val_emi = brdf_eval(bp, L, NdotL_emi);
+
+    const float emission_lum = 0.2126f * tri.emission.x
+        + 0.7152f * tri.emission.y + 0.0722f * tri.emission.z;
+    const float light_pdf_emi = emissive_light_pdf(
+        emission_lum, dist, cos_theta_light, params.emissive_total_power);
+
+    const float brdf_pdf_emi = brdf_pdf(bp, L);
+    const float mis_w_emi = mis_power_heuristic(light_pdf_emi, brdf_pdf_emi);
+    const float st_factor_emi = shadow_terminator_factor(N_face, N_shading, L);
+
+    return Le * brdf_val_emi * NdotL_emi * mis_w_emi * st_factor_emi
+        / fmaxf(light_pdf_emi, 1e-7f);
 }
 
 } // namespace qualquer::renderer

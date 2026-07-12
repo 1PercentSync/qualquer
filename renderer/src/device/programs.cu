@@ -56,6 +56,27 @@ namespace qualquer::renderer {
 extern "C" {
 __constant__ qualquer::renderer::LaunchParams params;
 
+/// Writes "no surface" aux G-buffer defaults (sky / single-sided pass-through).
+///
+/// depth=inf, specular albedo=0, normals=0, roughness=0; only diffuse_albedo is
+/// parameterized so sky can pass tonemapped env color while pass-through passes
+/// black — both mean "no meaningful surface" to DLSS-RR.
+__forceinline__ __device__ void write_aux_no_surface(
+    const int sx, const int sy, const float4 diffuse_albedo
+) {
+    const float inf = __int_as_float(0x7f800000);
+    surf2Dwrite(inf, params.aux_depth,
+                sx * static_cast<int>(sizeof(float)), sy);
+    surf2Dwrite(diffuse_albedo, params.aux_diffuse_albedo,
+                sx * static_cast<int>(sizeof(float4)), sy);
+    surf2Dwrite(make_float4(0.0f, 0.0f, 0.0f, 0.0f), params.aux_specular_albedo,
+                sx * static_cast<int>(sizeof(float4)), sy);
+    surf2Dwrite(make_float4(0.0f, 0.0f, 0.0f, 0.0f), params.aux_normals,
+                sx * static_cast<int>(sizeof(float4)), sy);
+    surf2Dwrite(0.0f, params.aux_roughness,
+                sx * static_cast<int>(sizeof(float)), sy);
+}
+
 /// Traces one path from a primary ray, returning per-sample radiance.
 /// When capture_primary is true (first sample), writes primary hit/miss
 /// info into the output parameters for MV and sky aux-default computation.
@@ -333,24 +354,13 @@ __global__ void __raygen__rg() { // NOLINT(*-reserved-identifier)
     }
 
     // Sky pixels: closesthit never ran, so write aux defaults.
+    // Tonemapped sky radiance as diffuse albedo guide (HDR compressed to
+    // [0,1] so DLSS-RR preserves sky detail without denoising it).
     if (!primary_is_hit) {
-        const float inf = __int_as_float(0x7f800000);
-        surf2Dwrite(inf, params.aux_depth,
-                    sx * static_cast<int>(sizeof(float)), sy);
-
-        // Tonemapped sky radiance as diffuse albedo guide (HDR compressed
-        // to [0,1] so DLSS-RR preserves sky detail without denoising it).
         const float3 sky_albedo = pbr_neutral_tonemap(primary_sky_color);
-        surf2Dwrite(make_float4(sky_albedo.x, sky_albedo.y, sky_albedo.z, 1.0f),
-                    params.aux_diffuse_albedo,
-                    sx * static_cast<int>(sizeof(float4)), sy);
-
-        surf2Dwrite(make_float4(0.0f, 0.0f, 0.0f, 0.0f), params.aux_specular_albedo,
-                    sx * static_cast<int>(sizeof(float4)), sy);
-        surf2Dwrite(make_float4(0.0f, 0.0f, 0.0f, 0.0f), params.aux_normals,
-                    sx * static_cast<int>(sizeof(float4)), sy);
-        surf2Dwrite(0.0f, params.aux_roughness,
-                    sx * static_cast<int>(sizeof(float)), sy);
+        write_aux_no_surface(
+            sx, sy,
+            make_float4(sky_albedo.x, sky_albedo.y, sky_albedo.z, 1.0f));
     }
 }
 
@@ -439,23 +449,8 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
         if (payload_get_bounce() == 0
             && payload_get_sample_index() == params.sample_count) {
             const uint3 li = optixGetLaunchIndex();
-            const int sx = static_cast<int>(li.x);
-            const int sy = static_cast<int>(li.y);
-            const float inf = __int_as_float(0x7f800000);
-
-            surf2Dwrite(inf, params.aux_depth,
-                        sx * static_cast<int>(sizeof(float)), sy);
-            surf2Dwrite(make_float4(0.0f, 0.0f, 0.0f, 0.0f),
-                        params.aux_diffuse_albedo,
-                        sx * static_cast<int>(sizeof(float4)), sy);
-            surf2Dwrite(make_float4(0.0f, 0.0f, 0.0f, 0.0f),
-                        params.aux_specular_albedo,
-                        sx * static_cast<int>(sizeof(float4)), sy);
-            surf2Dwrite(make_float4(0.0f, 0.0f, 0.0f, 0.0f),
-                        params.aux_normals,
-                        sx * static_cast<int>(sizeof(float4)), sy);
-            surf2Dwrite(0.0f, params.aux_roughness,
-                        sx * static_cast<int>(sizeof(float)), sy);
+            write_aux_no_surface(static_cast<int>(li.x), static_cast<int>(li.y),
+                                 make_float4(0.0f, 0.0f, 0.0f, 0.0f));
         }
 
         payload_set_next_origin(pass_origin);
@@ -592,155 +587,12 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
 
     const BrdfSample bs = brdf_sample(bp, u_lobe, u0, u1);
 
-    // ---- NEE: Environment light (alias table importance sampling + MIS) ----
-    float3 nee_radiance = make_float3(0.0f, 0.0f, 0.0f);
-
-    if (params.env_cubemap != 0 && params.env_alias_table != nullptr) {
-        const float env_r1 = sobol_rng(params.sobol_directions, pixel_index,
-                                       sample_index, params.frame_index, dim_base + kBounceOffsetEnvNee);
-        const float env_r2 = sobol_rng(params.sobol_directions, pixel_index,
-                                       sample_index, params.frame_index, dim_base + kBounceOffsetEnvNee + 1);
-        const float env_r3 = sobol_rng(params.sobol_directions, pixel_index,
-                                       sample_index, params.frame_index, dim_base + kBounceOffsetEnvNee + 2);
-        const float env_r4 = sobol_rng(params.sobol_directions, pixel_index,
-                                       sample_index, params.frame_index, dim_base + kBounceOffsetEnvNee + 3);
-
-        const float3 L = sample_env_alias_table(
-            params.env_alias_table, params.env_alias_count,
-            params.env_alias_width, params.env_alias_height,
-            params.env_rotation_sin, params.env_rotation_cos,
-            env_r1, env_r2, env_r3, env_r4);
-        const float NdotL = dot(N_shading, L);
-
-        if (NdotL > 0.0f) {
-            const uint32_t visible = trace_shadow_ray(
-                params.traversable, offset_pos, L, 1e16f);
-
-            if (visible) {
-                // Environment radiance at the sampled direction.
-                // L is in world space; rotate to env space for cubemap lookup.
-                const float3 env_L = rotate_y_dir(
-                    L, params.env_rotation_sin, params.env_rotation_cos);
-                const auto env_texel = texCubemap<float4>(
-                    params.env_cubemap, env_L.x, env_L.y, env_L.z);
-                const float3 env_color = make_float3(
-                    env_texel.x, env_texel.y, env_texel.z);
-
-                // Evaluate BRDF at the light direction.
-                const float3 brdf_val = brdf_eval(bp, L, NdotL);
-
-                // Combined multi-lobe BRDF PDF at the light direction.
-                const float3 H = normalize(bp.V + L);
-                const float NdotH_e = fmaxf(dot(N_shading, H), 0.0f);
-                const float pdf_spec_e = pdf_ggx_vndf(NdotH_e, bp.NdotV, bp.alpha);
-                const float3 V_ts = world_to_tangent(bp.T, bp.B, bp.N, bp.V);
-                const float3 L_ts = world_to_tangent(bp.T, bp.B, bp.N, L);
-                const float pdf_diff_e = pdf_EON(V_ts, L_ts, bp.r);
-                const float brdf_pdf_e = combined_lobe_pdf(pdf_spec_e, pdf_diff_e, bp.p_spec);
-
-                // Light-strategy MIS weight.
-                const float pdf_light = env_pdf(
-                    params.env_alias_table,
-                    params.env_alias_width, params.env_alias_height,
-                    params.env_total_luminance,
-                    params.env_rotation_sin, params.env_rotation_cos, L);
-                const float mis_w = mis_power_heuristic(pdf_light, brdf_pdf_e);
-
-                const float st_factor = shadow_terminator_factor(
-                    N_face, N_shading, L);
-                nee_radiance = env_color * brdf_val * NdotL * mis_w * st_factor
-                    / fmaxf(pdf_light, 1e-7f);
-            }
-        }
-    }
-
-    // ---- NEE: Emissive area lights (alias table importance sampling + MIS) ----
-    if (params.emissive_count > 0 && params.emissive_triangles != nullptr) {
-        const float emi_r1 = sobol_rng(params.sobol_directions, pixel_index,
-                                       sample_index, params.frame_index, dim_base + kBounceOffsetEmissiveNee);
-        const float emi_r2 = sobol_rng(params.sobol_directions, pixel_index,
-                                       sample_index, params.frame_index, dim_base + kBounceOffsetEmissiveNee + 1);
-        const float emi_r3 = sobol_rng(params.sobol_directions, pixel_index,
-                                       sample_index, params.frame_index, dim_base + kBounceOffsetEmissiveNee + 2);
-        const float emi_r4 = sobol_rng(params.sobol_directions, pixel_index,
-                                       sample_index, params.frame_index, dim_base + kBounceOffsetEmissiveNee + 3);
-
-        // Select emissive triangle from power-weighted alias table.
-        const uint32_t tri_idx = sample_emissive_alias_table(
-            params.emissive_alias_table, params.emissive_count, emi_r1, emi_r2);
-        const EmissiveTriangle &tri = params.emissive_triangles[tri_idx];
-
-        // Uniform sample point on triangle.
-        const float3 light_bary = triangle_barycentric(emi_r3, emi_r4);
-        const float3 light_pos = tri.v0 * light_bary.x + tri.v1 * light_bary.y + tri.v2 * light_bary.z;
-
-        // Direction and distance to the light sample.
-        const float3 to_light = light_pos - offset_pos;
-        const float dist2 = dot(to_light, to_light);
-        const float dist = sqrtf(dist2);
-        const float3 L = to_light * (1.0f / dist);
-
-        // Light triangle geometric normal.
-        const float3 light_edge1 = tri.v1 - tri.v0;
-        const float3 light_edge2 = tri.v2 - tri.v0;
-        const float3 light_normal = normalize(cross(light_edge1, light_edge2));
-        float cos_theta_light = dot(light_normal, -L);
-
-        // Double-sided handling: follow material double_sided flag.
-        const Material &light_mat = params.materials[tri.material_index];
-        bool light_visible = cos_theta_light > 0.0f;
-        if (!light_visible && light_mat.double_sided == 1u) {
-            cos_theta_light = -cos_theta_light;
-            light_visible = true;
-        }
-
-        const float NdotL_emi = dot(N_shading, L);
-
-        if (light_visible && NdotL_emi > 0.0f) {
-            // Shadow ray (tMax shortened to avoid hitting the target triangle).
-            const uint32_t visible = trace_shadow_ray(
-                params.traversable, offset_pos, L, dist * (1.0f - 1e-4f));
-
-            if (visible) {
-                // Emissive radiance at the sample point (textured emission).
-                const float2 light_uv = tri.uv0 * light_bary.x + tri.uv1 * light_bary.y
-                                       + tri.uv2 * light_bary.z;
-                const auto le_texel = tex2D<float4>(
-                    tex[light_mat.emissive_tex], light_uv.x, light_uv.y);
-                const float3 Le = make_float3(
-                    le_texel.x * light_mat.emissive_factor.x,
-                    le_texel.y * light_mat.emissive_factor.y,
-                    le_texel.z * light_mat.emissive_factor.z);
-
-                // Evaluate BRDF at the light direction.
-                const float3 brdf_val_emi = brdf_eval(bp, L, NdotL_emi);
-
-                // Light PDF (solid-angle).
-                const float emission_lum = 0.2126f * tri.emission.x
-                    + 0.7152f * tri.emission.y + 0.0722f * tri.emission.z;
-                const float light_pdf_emi = emissive_light_pdf(
-                    emission_lum, dist, cos_theta_light, params.emissive_total_power);
-
-                // Combined multi-lobe BRDF PDF at the light direction.
-                const float3 H_emi = normalize(bp.V + L);
-                const float NdotH_emi = fmaxf(dot(N_shading, H_emi), 0.0f);
-                const float pdf_spec_emi = pdf_ggx_vndf(NdotH_emi, bp.NdotV, bp.alpha);
-                const float3 V_ts_emi = world_to_tangent(bp.T, bp.B, bp.N, bp.V);
-                const float3 L_ts_emi = world_to_tangent(bp.T, bp.B, bp.N, L);
-                const float pdf_diff_emi = pdf_EON(V_ts_emi, L_ts_emi, bp.r);
-                const float brdf_pdf_emi = combined_lobe_pdf(
-                    pdf_spec_emi, pdf_diff_emi, bp.p_spec);
-
-                // MIS weight (light sampling strategy).
-                const float mis_w_emi = mis_power_heuristic(light_pdf_emi, brdf_pdf_emi);
-
-                const float st_factor_emi = shadow_terminator_factor(
-                    N_face, N_shading, L);
-                nee_radiance = nee_radiance + Le * brdf_val_emi * NdotL_emi
-                    * mis_w_emi * st_factor_emi / fmaxf(light_pdf_emi, 1e-7f);
-            }
-        }
-    }
+    // ---- NEE: environment + emissive (full evaluation lives in nee.cuh) ----
+    const float3 nee_radiance =
+        evaluate_env_nee(bp, offset_pos, N_face, N_shading,
+                         pixel_index, sample_index, dim_base)
+        + evaluate_emissive_nee(bp, offset_pos, N_face, N_shading,
+                                pixel_index, sample_index, dim_base);
 
     // ---- Env MIS weight for BRDF-sampled direction ----
     // When the BRDF ray misses (hits environment), the raygen loop scales its
