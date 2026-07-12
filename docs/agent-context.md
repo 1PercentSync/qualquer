@@ -15,7 +15,7 @@
 
 ### 下一个任务
 
-Phase 4.5 Step 14.5 重构：AccumKey 结构化 reset 检测
+Phase 4.5 Step 14.5 重构：累积 reset 检测重分类
 
 ---
 
