@@ -12,8 +12,10 @@ namespace qualquer::renderer {
      * @brief User-adjustable path-tracing parameters.
      *
      * Owned by Application as a runtime-only live state (not persisted to
-     * config.json). Passed to the renderer each frame via SceneRenderInput;
-     * the renderer detects changes and resets accumulation automatically.
+     * config.json). Passed to the renderer each frame via SceneRenderInput.
+     * Content-defining fields (env_rotation, dlss_enabled) trigger accumulation
+     * reset when they change; quality/throughput knobs (max_bounces,
+     * samples_per_frame) do not.
      *
      * exposure_ev is stored in EV stops for the UI slider; Application
      * converts to a linear multiplier (pow(2, ev)) before passing to

@@ -261,13 +261,32 @@ namespace qualquer::renderer {
          * accumulation overwrite, and the next complete DLSS input carries a
          * history-reset token in its slot metadata.
          * Used for scene switch, camera teleport, env map reload, manual Reset.
-         * Continuous camera motion and parameter changes trigger accumulation
-         * reset through camera_changed/settings_changed in submit_cuda, which
-         * intentionally does NOT discard DLSS history.
+         * Continuous camera motion and content changes (env rotation, DLSS
+         * toggle) trigger accumulation reset through camera_changed /
+         * content_changed in submit_cuda, which intentionally does NOT discard
+         * DLSS history. Quality/throughput knobs (max_bounces, samples_per_frame)
+         * do not reset accumulation.
          */
         void reset_accumulation();
 
     private:
+        /**
+         * @brief Camera matrices that define the primary-ray integral domain.
+         *
+         * Packed for a single defaulted equality check so accumulation reset
+         * detection compares the full camera key without parallel prev_ members.
+         */
+        struct CameraKey {
+            /** @brief Inverse view matrix (view → world). */
+            glm::mat4 inv_view{1.0f};
+
+            /** @brief Inverse projection matrix (clip → view). */
+            glm::mat4 inv_projection{1.0f};
+
+            /** @brief Memberwise exact float comparison of both matrices. */
+            bool operator==(const CameraKey &) const = default;
+        };
+
         /**
          * @brief Six render-resolution guide resources belonging to one color slot.
          *
@@ -517,31 +536,27 @@ namespace qualquer::renderer {
         bool dlss_reset_requested_ = false;
 
         /**
-         * @brief Previous-frame inverse view matrix (accumulation-reset detection).
+         * @brief Previous-frame camera key (accumulation-reset detection).
          *
-         * Exact byte-compare against the current frame's inv_view; any change
-         * (camera move) zeros chain_count so raygen overwrites.
+         * Any change in inv_view or inv_projection zeros chain_count so raygen
+         * overwrites. During pause, a camera change also invalidates DLSS history.
          */
-        glm::mat4 prev_inv_view_{1.0f};
+        CameraKey prev_camera_{};
 
         /**
-         * @brief Previous-frame inverse projection matrix (accumulation-reset detection).
+         * @brief Previous-frame env_rotation (content-change reset detection).
          *
-         * Exact byte-compare against the current frame's inv_projection; any change
-         * (fov/aspect/near/far) zeros chain_count so raygen overwrites.
+         * Content changes reset accumulation but do not invalidate DLSS history
+         * during pause (continuous lighting change; DLSS adapts temporally).
          */
-        glm::mat4 prev_inv_projection_{1.0f};
-
-        /** @brief Previous-frame max_bounces (accumulation-reset detection). */
-        uint32_t prev_max_bounces_ = 16;
-
-        /** @brief Previous-frame samples_per_frame (accumulation-reset detection). */
-        uint32_t prev_samples_per_frame_ = 1;
-
-        /** @brief Previous-frame env_rotation (accumulation-reset detection). */
         float prev_env_rotation_ = 0.0f;
 
-        /** @brief Previous-frame dlss_enabled (accumulation-reset detection). */
+        /**
+         * @brief Previous-frame dlss_enabled (content-change reset detection).
+         *
+         * Toggle still resets Separate Sum chain when leaving/entering DLSS;
+         * feature-lifecycle invalidation is handled on the create/release path.
+         */
         bool prev_dlss_enabled_ = false;
 
         /** @brief Previous-frame DLSS render preset (feature-recreation detection). */

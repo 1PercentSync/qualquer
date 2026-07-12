@@ -598,9 +598,11 @@ namespace qualquer::renderer {
                 cuda_context.compute_stream, write.consumption_event));
         }
 
-        // Accumulation reset: any change in camera matrices or render settings
-        // breaks the chain — chain_count drops to 0 so raygen overwrites instead
-        // of accumulating. No buffer clearing: the read slot keeps its valid
+        // Accumulation reset: camera-key or content changes break the chain —
+        // chain_count drops to 0 so raygen overwrites instead of accumulating.
+        // Quality/throughput knobs (max_bounces, samples_per_frame) are excluded:
+        // they do not change the integral domain, and adaptive control may vary
+        // them every frame. No buffer clearing: the read slot keeps its valid
         // count for tonemap; the write slot's count is set at frame end.
         //
         // Accumulation pause (accumulation_enabled=false): no input is
@@ -610,28 +612,32 @@ namespace qualquer::renderer {
         // Runtime DLSS flag: user wants it AND feature is actually created.
         const bool dlss_active = scene.settings.dlss_enabled && dlss_rr.feature_active();
 
-        const bool camera_changed =
-            scene.camera.inv_view != prev_inv_view_ ||
-            scene.camera.inv_projection != prev_inv_projection_;
+        const CameraKey camera_key{
+            .inv_view = scene.camera.inv_view,
+            .inv_projection = scene.camera.inv_projection,
+        };
+        const bool camera_changed = camera_key != prev_camera_;
         // render_height is intentionally absent: a render-resolution change
         // triggers FrameSlot::resize above, which zeros sample_count —
         // chain_count becomes 0 through that path, not through needs_reset.
-        const bool settings_changed =
-            scene.settings.max_bounces != prev_max_bounces_ ||
-            scene.settings.samples_per_frame != prev_samples_per_frame_ ||
+        // max_bounces / samples_per_frame are intentionally absent: quality /
+        // throughput knobs that do not redefine the integral object.
+        const bool content_changed =
             scene.settings.env_rotation != prev_env_rotation_ ||
             scene.settings.dlss_enabled != prev_dlss_enabled_;
-        const bool needs_reset = camera_changed || settings_changed || reset_requested_;
+        const bool needs_reset = camera_changed || content_changed || reset_requested_;
         if (has_new_samples) {
             reset_requested_ = false;
-        } else if (camera_changed || settings_changed) {
+        } else if (camera_changed || content_changed) {
             // Preserve automatic reset causes until a frame is actually produced.
             reset_requested_ = true;
             // Camera/projection change during pause is a temporal discontinuity:
             // the old DLSS input slots no longer match the new viewpoint. Mark
             // them invalid and request history reset so the first resumed frame
-            // starts a fresh temporal sequence. The cached DLSS output stays
-            // displayable as a frozen frame until new data arrives.
+            // starts a fresh temporal sequence. Content changes (env rotation,
+            // dlss toggle) only set reset_requested_ — they do not invalidate
+            // DLSS history here. The cached DLSS output stays displayable as a
+            // frozen frame until new data arrives.
             if (dlss_active && camera_changed) {
                 invalidate_dlss_history();
             }
@@ -650,10 +656,7 @@ namespace qualquer::renderer {
             dlss_reset_requested_ = false;
         }
 
-        prev_inv_view_ = scene.camera.inv_view;
-        prev_inv_projection_ = scene.camera.inv_projection;
-        prev_max_bounces_ = scene.settings.max_bounces;
-        prev_samples_per_frame_ = scene.settings.samples_per_frame;
+        prev_camera_ = camera_key;
         prev_env_rotation_ = scene.settings.env_rotation;
         prev_dlss_enabled_ = scene.settings.dlss_enabled;
         prev_dlss_preset_ = scene.dlss_preset;
