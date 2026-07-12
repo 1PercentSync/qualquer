@@ -70,6 +70,29 @@ namespace qualquer::app {
             spdlog::error("Failed to load HDR image '{}': {}", name, stbi_failure_reason());
             return {};
         }
+
+        // Sanitize: radiance is physically non-negative and finite.
+        // NaN/Inf indicate data corruption (RGBE cannot encode them);
+        // negative values have no physical meaning. Replace with 0 (black,
+        // "no radiance") so downstream consumers (cubemap conversion, alias
+        // table) receive only valid inputs.
+        const auto pixel_count = static_cast<uint64_t>(w) * h;
+        const uint64_t channel_count = pixel_count * 3;
+        uint64_t sanitized = 0;
+        for (uint64_t i = 0; i < channel_count; ++i) {
+            if (!std::isfinite(raw[i]) || raw[i] < 0.0f) {
+                raw[i] = 0.0f;
+                ++sanitized;
+            }
+        }
+        if (sanitized > 0) {
+            spdlog::warn("HDR '{}': sanitized {} non-finite/negative channels "
+                         "({:.2f}% of {}x{} pixels)",
+                         name, sanitized,
+                         static_cast<double>(sanitized) / static_cast<double>(channel_count) * 100.0,
+                         w, h);
+        }
+
         spdlog::info("Loaded HDR environment map '{}' ({}x{})", name, w, h);
         return {
             .pixels = {raw, stbi_image_free},
