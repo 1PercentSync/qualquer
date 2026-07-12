@@ -56,7 +56,7 @@ namespace qualquer::renderer {
      */
     struct RenderInput {
         /** @brief Command buffer to record into (already begun by the caller). */
-        VkCommandBuffer cmd;
+        VkCommandBuffer cmd = VK_NULL_HANDLE;
 
         /** @brief CUDA context: surface, stream, external semaphores. */
         optix::Context &cuda_context;
@@ -68,10 +68,10 @@ namespace qualquer::renderer {
         vulkan::Swapchain &swapchain;
 
         /** @brief Index of the acquired swapchain image for this frame. */
-        uint32_t image_index;
+        uint32_t image_index = 0;
 
         /** @brief Graphics queue family index for display buffer ownership transfers. */
-        uint32_t graphics_queue_family;
+        uint32_t graphics_queue_family = 0;
 
         /** @brief ImGui backend for overlay recording. */
         vulkan::ImGuiBackend &imgui;
@@ -109,36 +109,36 @@ namespace qualquer::renderer {
         // ---- Environment map (from SceneLoader) ----
 
         /** @brief Env cubemap texture object (0 = no env map loaded). */
-        cudaTextureObject_t env_cubemap;
+        cudaTextureObject_t env_cubemap = 0;
 
         /** @brief Device alias table (null when no env map loaded). */
-        const EnvAliasEntry *env_alias_table;
+        const EnvAliasEntry *env_alias_table = nullptr;
 
         /** @brief Alias table entry count (0 when no env map loaded). */
-        uint32_t env_alias_count;
+        uint32_t env_alias_count = 0;
 
         /** @brief Alias table width (equirect source width). */
-        uint32_t env_alias_width;
+        uint32_t env_alias_width = 0;
 
         /** @brief Alias table height (equirect source height). */
-        uint32_t env_alias_height;
+        uint32_t env_alias_height = 0;
 
         /** @brief Sin-weighted total luminance across the environment map. */
-        float env_total_luminance;
+        float env_total_luminance = 0.0f;
 
         // ---- Emissive triangles (from SceneLoader) ----
 
         /** @brief Device emissive triangle array (null when no emissive geometry). */
-        const EmissiveTriangle *emissive_triangles;
+        const EmissiveTriangle *emissive_triangles = nullptr;
 
         /** @brief Device alias table over emissive triangles (null when no emissive geometry). */
-        const AliasEntry *emissive_alias_table;
+        const AliasEntry *emissive_alias_table = nullptr;
 
         /** @brief Number of emissive triangles (0 when no emissive geometry). */
-        uint32_t emissive_count;
+        uint32_t emissive_count = 0;
 
         /** @brief Total radiant power across all emissive triangles. */
-        float emissive_total_power;
+        float emissive_total_power = 0.0f;
 
         /** @brief Frame delta time in milliseconds (for DLSS InFrameTimeDeltaInMsec). */
         float frame_time_ms = 0.0f;
@@ -221,6 +221,8 @@ namespace qualquer::renderer {
          * allocation, both streams are drained and the buffers are reallocated
          * (sample counts reset to 0).
          * @param cuda_context CUDA context (surface, streams, external semaphores).
+         * @param dlss_rr      DLSS-RR feature (owned by the caller; create/evaluate/release
+         *                     driven on this path while feature_active).
          * @param scene        Camera and scene data (materials, texture objects).
          * @param width        Display buffer width in pixels.
          * @param height       Display buffer height in pixels.

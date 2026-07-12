@@ -8,7 +8,6 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
-#include <cstring>
 #include <vector>
 
 #include <glm/glm.hpp>
@@ -306,7 +305,8 @@ namespace qualquer::renderer {
         dlss_metadata.reset = false;
     }
 
-    void Renderer::FrameSlot::create_events(const cudaStream_t stream) {
+    // ReSharper disable once CppParameterMayBeConst
+    void Renderer::FrameSlot::create_events(cudaStream_t stream) {
         CUDA_CHECK(cudaEventCreateWithFlags(&production_event, cudaEventDisableTiming));
         CUDA_CHECK(cudaEventRecord(production_event, stream));
         CUDA_CHECK(cudaEventCreateWithFlags(&consumption_event, cudaEventDisableTiming));
