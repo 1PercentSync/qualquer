@@ -824,9 +824,13 @@ blit / record_vulkan 全幅不变，Vulkan 侧不感知渲染分辨率。DLSS-RR
 
 Step 11–14 实现过程中 Renderer 膨胀到 38 个成员、submit_cuda 超过 430 行、closesthit 超过 400 行。以下重构在正确性修复之后、Step 15 之前执行，防止后续特性（自适应 spp、Ray Cone、M2 ReSTIR）进一步恶化结构。各项方案为初步草案，执行前逐项与用户讨论确认。
 
-**FrameSlot 封装**：ping-pong 管理涉及 6 组平行 `std::array<X, 2>`（color buffer、AuxBufferSet、sample count、DlssFrameMetadata、production event、consumption event），任一组遗漏同步就产生帧错配 bug（Step 14.5 已有 5 个此类 fix）。合并为 `std::array<FrameSlot, 2>`，FrameSlot 持有 alloc/resize/free/invalidate，从结构上消除这类 bug。
+**FrameSlot 封装**（已完成）：ping-pong 管理涉及 6 组平行 `std::array<X, 2>`（color buffer、AuxBufferSet、sample count、DlssFrameMetadata、production event、consumption event），任一组遗漏同步就产生帧错配 bug（Step 14.5 已有 5 个此类 fix）。合并为 `std::array<FrameSlot, 2>`，FrameSlot 持有 alloc/resize/free/invalidate/create_events/destroy_events，从结构上消除这类 bug。
 
-**closesthit 瘦身**：NEE 组装逻辑占 closesthit 40% 行数（~140/400），与交点处理（几何查询、材质采样、BRDF 采样、payload 写回）正交。提取到 `nee.cuh` 的 `evaluate_env_nee` / `evaluate_emissive_nee` 内联函数后，closesthit 从 ~400 行降到 ~200 行。同步提取 `brdf_pdf(BrdfParams, L, NdotL)` 消除 3 处 NEE/MIS 的 combined PDF 重复计算（与 `combined_lobe_pdf` 独立函数的设计理由一致——多处调用同一函数保证 MIS 一致性），以及 `write_aux_no_surface(sx, sy)` 消除 pass-through 与 raygen sky 的 aux 默认值写入重复。
+**closesthit 瘦身**：NEE 组装逻辑占 closesthit 40% 行数（~140/400），与交点处理（几何查询、材质采样、BRDF 采样、payload 写回）正交。三个子步骤：
+
+1. `brdf.cuh` 新增 `brdf_pdf(BrdfParams, L, NdotL) → float`，与 `brdf_eval` / `brdf_sample` 形成三件套。消除 env NEE、emissive NEE、env MIS weight 三处各 ~8 行的 combined PDF 组装重复（与 `combined_lobe_pdf` 独立函数的设计理由一致——多处调用同一函数保证 MIS 一致性）。
+2. `nee.cuh` 新增 `evaluate_env_nee` / `evaluate_emissive_nee` 两个独立内联函数（不合并为单函数——env 和 emissive 的资源参数集差异大，合并会导致参数列表过长或函数签名不诚实），各自封装从 alias table 采样到 MIS weight 的全流程，返回 `float3 nee_radiance`。通过 `extern "C" __constant__ params` 访问 LaunchParams（与 nee.cuh 现有 helper 同模式），只需显式传着色点相关参数（BrdfParams、offset_pos、N_face、N_shading、pixel_index、sample_index、dim_base）。closesthit NEE 从 ~140 行变两行调用 + 一行累加。
+3. device helper `write_aux_no_surface(sx, sy, float4 diffuse_albedo)` 参数化 diffuse_albedo（pass-through 传 `{0,0,0,0}`，sky 传 tonemapped sky color），消除 pass-through 与 raygen sky 两处各 ~20 行的 aux 默认值写入重复。
 
 **AccumKey 结构化 reset 检测**：当前 7 个 `prev_*` 字段逐字段比较和赋值，每新增一个影响累积的参数就要加一个 prev_ 成员和一行比较。打包为 POD 结构体后用 `memcmp` 比较、单行赋值。
 
