@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4.5 — 收敛质量 + DLSS-RR + 自适应
-- **进度**：Phase 4.5 Step 14.5 closesthit 瘦身完成；`brdf_pdf` + `evaluate_env_nee` / `evaluate_emissive_nee` + `write_aux_no_surface` 提取，closesthit 从 ~400 行降到 ~250 行
+- **进度**：Phase 4.5 Step 14.5 累积 reset 重分类完成；max_bounces/spp 从检测中移除，camera 打包为 CameraKey，7 个 prev_ → 4 个
 
 ### 下一个任务
 
-Phase 4.5 Step 14.5 重构：累积 reset 检测重分类
+Phase 4.5 Step 14.5 重构：SceneRenderInput 场景资源打包
 
 ---
 
