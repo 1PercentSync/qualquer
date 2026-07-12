@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4.5 — 收敛质量 + DLSS-RR + 自适应
-- **进度**：Phase 4.5 Step 14.5 结构重构任务已规划（FrameSlot 封装、closesthit 瘦身、AccumKey、SceneRenderInput 打包、DlssRR 所有权、sobol 外移验证），插入正确性修复之后
+- **进度**：Phase 4.5 Step 14.5 FrameSlot 封装完成；6 组平行 `std::array<X,2>` 合并为 `std::array<FrameSlot, 2>`
 
 ### 下一个任务
 
-Phase 4.5 Step 14.5 重构：FrameSlot 封装
+Phase 4.5 Step 14.5 重构：closesthit 瘦身
 
 ---
 
