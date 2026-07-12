@@ -18,7 +18,9 @@
 #include <fastgltf/types.hpp>
 #include <spdlog/spdlog.h>
 
+#include <algorithm>
 #include <cassert>
+#include <cmath>
 #include <filesystem>
 #include <limits>
 #include <map>
@@ -51,6 +53,17 @@ namespace qualquer::app {
             static_assert(sizeof(result) == sizeof(m), "Matrix size mismatch");
             std::memcpy(&result, &m, sizeof(result));
             return result;
+        }
+
+        /// Clamps a float to [lo, hi] per glTF schema; non-finite values
+        /// (NaN / Inf from malformed assets) fall back to the schema default.
+        float spec_clamp(const float v, const float lo, const float hi, const float fallback) {
+            return std::isfinite(v) ? std::clamp(v, lo, hi) : fallback;
+        }
+
+        /// Ensures a float is finite; non-finite values fall back to the default.
+        float ensure_finite(const float v, const float fallback) {
+            return std::isfinite(v) ? v : fallback;
         }
 
         renderer::AlphaMode convert_alpha_mode(const fastgltf::AlphaMode mode) {
@@ -533,19 +546,25 @@ namespace qualquer::app {
             // ReSharper disable once CppUseStructuredBinding
             const auto &pbr = mat.pbrData;
 
+            // Clamp material factors to glTF 2.0 schema ranges.
+            // Non-finite values fall back to the schema default.
             data.base_color_factor = {
-                pbr.baseColorFactor[0], pbr.baseColorFactor[1],
-                pbr.baseColorFactor[2], pbr.baseColorFactor[3]
+                spec_clamp(pbr.baseColorFactor[0], 0.0f, 1.0f, 1.0f),
+                spec_clamp(pbr.baseColorFactor[1], 0.0f, 1.0f, 1.0f),
+                spec_clamp(pbr.baseColorFactor[2], 0.0f, 1.0f, 1.0f),
+                spec_clamp(pbr.baseColorFactor[3], 0.0f, 1.0f, 1.0f),
             };
             data.emissive_factor = {
-                mat.emissiveFactor[0], mat.emissiveFactor[1],
-                mat.emissiveFactor[2], 0.0f
+                spec_clamp(mat.emissiveFactor[0], 0.0f, 1.0f, 0.0f),
+                spec_clamp(mat.emissiveFactor[1], 0.0f, 1.0f, 0.0f),
+                spec_clamp(mat.emissiveFactor[2], 0.0f, 1.0f, 0.0f),
+                0.0f
             };
-            data.metallic_factor = pbr.metallicFactor;
-            data.roughness_factor = pbr.roughnessFactor;
+            data.metallic_factor = spec_clamp(pbr.metallicFactor, 0.0f, 1.0f, 1.0f);
+            data.roughness_factor = spec_clamp(pbr.roughnessFactor, 0.0f, 1.0f, 1.0f);
             data.normal_scale = mat.normalTexture.has_value()
-                                    ? mat.normalTexture->scale : 1.0f;
-            data.alpha_cutoff = mat.alphaCutoff;
+                                    ? ensure_finite(mat.normalTexture->scale, 1.0f) : 1.0f;
+            data.alpha_cutoff = std::max(ensure_finite(mat.alphaCutoff, 0.5f), 0.0f);
             data.alpha_mode = static_cast<uint32_t>(convert_alpha_mode(mat.alphaMode));
             data.double_sided = mat.doubleSided ? 1u : 0u;
 
