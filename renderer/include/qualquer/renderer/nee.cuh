@@ -341,9 +341,8 @@ __forceinline__ __device__ float3 evaluate_emissive_nee(
     const float dist2 = dot(to_light, to_light);
 
     // Guard against zero or underflowed distance (overlapping geometry,
-    // precision collapse). 1/0 → Inf → L = NaN, which would bypass
-    // downstream comparisons via IEEE 754 NaN semantics.
-    if (!(dist2 > 0.0f)) {
+    // precision collapse). 1/0 → Inf → L = (0,0,0)*Inf = NaN.
+    if (dist2 <= 0.0f) {
         return make_float3(0.0f, 0.0f, 0.0f);
     }
 
@@ -356,18 +355,17 @@ __forceinline__ __device__ float3 evaluate_emissive_nee(
     float cos_theta_light = dot(light_normal, -L);
 
     // Double-sided: take absolute cosine so both faces are treated as
-    // front-facing. Using fabsf + a single !(x > 0) guard is NaN-safe:
-    // fabsf(NaN) = NaN, !(NaN > 0) = true → rejected.
+    // front-facing (light emits from both sides of the triangle).
     const Material &light_mat = params.materials[tri.material_index];
     if (light_mat.double_sided == 1u) {
         cos_theta_light = fabsf(cos_theta_light);
     }
-    if (!(cos_theta_light > 0.0f)) {
+    if (cos_theta_light <= 0.0f) {
         return make_float3(0.0f, 0.0f, 0.0f);
     }
 
     const float NdotL_emi = dot(N_shading, L);
-    if (!(NdotL_emi > 0.0f)) {
+    if (NdotL_emi <= 0.0f) {
         return make_float3(0.0f, 0.0f, 0.0f);
     }
 
