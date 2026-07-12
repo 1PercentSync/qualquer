@@ -113,14 +113,23 @@ __forceinline__ __device__ float3 ensure_normal_consistency(const float3 n_shadi
 /**
  * @brief Power heuristic for multiple importance sampling (beta = 2).
  *
+ * Uses the ratio form 1/(1 + (b/a)²) instead of a²/(a² + b²) to avoid
+ * overflow when PDFs are large (e.g. emissive solid-angle PDF with
+ * dist²/cos at extreme geometry). The ratio r = b/a stays bounded or
+ * overflows to Inf, and 1/(1+Inf) = 0 is the correct answer (pdf_a
+ * negligible).
+ *
  * @param pdf_a PDF of the strategy being weighted.
  * @param pdf_b PDF of the competing strategy.
  * @return MIS weight for strategy A in [0, 1].
  */
 __forceinline__ __device__ float mis_power_heuristic(const float pdf_a,
                                                      const float pdf_b) {
-    const float a2 = pdf_a * pdf_a;
-    return a2 / (a2 + pdf_b * pdf_b);
+    if (pdf_a <= 0.0f) {
+        return 0.0f;
+    }
+    const float r = pdf_b / pdf_a;
+    return 1.0f / (1.0f + r * r);
 }
 
 // ---- Shadow terminator correction (Chiang et al. 2019) ---------------------
@@ -156,10 +165,18 @@ __forceinline__ __device__ float shadow_terminator_factor(const float3 N_geo,
         return 1.0f;
     }
 
-    // G ∈ (0, 1): Chiang 2019 Eq. 1 — geometric-to-shading cosine ratio,
-    // normalized by the alignment between geometric and shading normals.
-    // NgdotNs > 0 is guaranteed by ensure_normal_consistency upstream.
-    const float G = NgdotL / (NdotL * dot(N_geo, N_shading));
+    // ensure_normal_consistency guarantees dot(N_shading, N_interp) >= 0,
+    // but shadow terminator uses N_face (geometric), not N_interp. When
+    // normal mapping pushes N_shading far from N_face, NgdotNs can be <= 0.
+    // The Chiang formula's geometric derivation requires NgdotNs > 0; when
+    // violated, skip the correction entirely.
+    const float NgdotNs = dot(N_geo, N_shading);
+    if (NgdotNs <= 0.0f) {
+        return 1.0f;
+    }
+
+    // Chiang 2019 Eq. 1: min(1, ratio) before Hermite smoothing.
+    const float G = fminf(NgdotL / (NdotL * NgdotNs), 1.0f);
 
     // Smooth polynomial: G + G² − G³ = G(1 + G(1 − G)).
     // Monotonic 0→1, derivative at G=1 is 0 (smooth arrival).

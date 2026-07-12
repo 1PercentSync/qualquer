@@ -525,13 +525,19 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
         const float emi_lum = luminance(make_float3(
             mat.emissive_factor.x, mat.emissive_factor.y, mat.emissive_factor.z));
         if (emi_lum > 0.0f) {
-            const float cos_theta_l = fabsf(dot(N_face, ray_dir));
-            const float hit_dist = optixGetRayTmax();
-            const float light_pdf = emissive_light_pdf(
-                emi_lum, hit_dist, cos_theta_l, params.emissive.total_power);
             const float last_brdf_pdf = payload_get_last_brdf_pdf();
-            const float mis_w = mis_power_heuristic(last_brdf_pdf, light_pdf);
-            emissive = emissive * mis_w;
+            // MIS only when a competing BRDF strategy exists. last_brdf_pdf == 0
+            // means no real BRDF sample preceded this bounce (camera ray followed
+            // by one or more single-sided pass-throughs); the emissive contribution
+            // keeps full weight as if directly visible.
+            if (last_brdf_pdf > 0.0f) {
+                const float cos_theta_l = fabsf(dot(N_face, ray_dir));
+                const float hit_dist = optixGetRayTmax();
+                const float light_pdf = emissive_light_pdf(
+                    emi_lum, hit_dist, cos_theta_l, params.emissive.total_power);
+                const float mis_w = mis_power_heuristic(last_brdf_pdf, light_pdf);
+                emissive = emissive * mis_w;
+            }
         }
     }
 
