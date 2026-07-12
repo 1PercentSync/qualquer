@@ -302,9 +302,13 @@ namespace qualquer::app {
                 {
                     size_t i = 0;
                     for (auto p : fastgltf::iterateAccessor<fastgltf::math::fvec3>(gltf, pos_accessor)) {
-                        vertices[i].position = {p.x(), p.y(), p.z()};
-                        local_min = glm::min(local_min, vertices[i].position);
-                        local_max = glm::max(local_max, vertices[i].position);
+                        glm::vec3 pos{p.x(), p.y(), p.z()};
+                        if (!std::isfinite(pos.x) || !std::isfinite(pos.y) || !std::isfinite(pos.z)) {
+                            pos = {0.0f, 0.0f, 0.0f};
+                        }
+                        vertices[i].position = pos;
+                        local_min = glm::min(local_min, pos);
+                        local_max = glm::max(local_max, pos);
                         ++i;
                     }
                 }
@@ -317,7 +321,13 @@ namespace qualquer::app {
                     const auto &accessor = gltf.accessors[it->accessorIndex];
                     size_t i = 0;
                     for (auto n : fastgltf::iterateAccessor<fastgltf::math::fvec3>(gltf, accessor)) {
-                        vertices[i].normal = {n.x(), n.y(), n.z()};
+                        glm::vec3 normal{n.x(), n.y(), n.z()};
+                        if (!std::isfinite(normal.x) || !std::isfinite(normal.y)
+                            || !std::isfinite(normal.z)
+                            || glm::dot(normal, normal) < 1e-12f) {
+                            normal = {0.0f, 0.0f, 1.0f};
+                        }
+                        vertices[i].normal = normal;
                         ++i;
                     }
                 } else {
@@ -346,12 +356,26 @@ namespace qualquer::app {
                     size_t i = 0;
                     if (accessor.type == fastgltf::AccessorType::Vec4) {
                         for (auto c : fastgltf::iterateAccessor<fastgltf::math::fvec4>(gltf, accessor)) {
-                            vertices[i].color = {c.x(), c.y(), c.z(), c.w()};
+                            glm::vec4 color{c.x(), c.y(), c.z(), c.w()};
+                            if (!std::isfinite(color.x) || !std::isfinite(color.y)
+                                || !std::isfinite(color.z) || !std::isfinite(color.w)) {
+                                color = {1.0f, 1.0f, 1.0f, 1.0f};
+                            } else {
+                                color = glm::max(color, glm::vec4(0.0f));
+                            }
+                            vertices[i].color = color;
                             ++i;
                         }
                     } else {
                         for (auto c : fastgltf::iterateAccessor<fastgltf::math::fvec3>(gltf, accessor)) {
-                            vertices[i].color = {c.x(), c.y(), c.z(), 1.0f};
+                            glm::vec3 rgb{c.x(), c.y(), c.z()};
+                            if (!std::isfinite(rgb.x) || !std::isfinite(rgb.y)
+                                || !std::isfinite(rgb.z)) {
+                                rgb = {1.0f, 1.0f, 1.0f};
+                            } else {
+                                rgb = glm::max(rgb, glm::vec3(0.0f));
+                            }
+                            vertices[i].color = {rgb.x, rgb.y, rgb.z, 1.0f};
                             ++i;
                         }
                     }
@@ -362,6 +386,9 @@ namespace qualquer::app {
                 }
 
                 // TANGENT (optional)
+                // Invalid tangents (non-finite or zero-length xyz) are treated
+                // as missing so MikkTSpace can regenerate them from valid
+                // position/normal/UV data.
                 bool has_tangent = false;
                 if (const auto it = primitive.findAttribute("TANGENT");
                     it != primitive.attributes.end()) {
@@ -369,7 +396,15 @@ namespace qualquer::app {
                     const auto &accessor = gltf.accessors[it->accessorIndex];
                     size_t i = 0;
                     for (auto t : fastgltf::iterateAccessor<fastgltf::math::fvec4>(gltf, accessor)) {
-                        vertices[i].tangent = {t.x(), t.y(), t.z(), t.w()};
+                        glm::vec4 tan{t.x(), t.y(), t.z(), t.w()};
+                        const glm::vec3 xyz{tan.x, tan.y, tan.z};
+                        if (!std::isfinite(tan.x) || !std::isfinite(tan.y)
+                            || !std::isfinite(tan.z) || !std::isfinite(tan.w)
+                            || glm::dot(xyz, xyz) < 1e-12f) {
+                            has_tangent = false;
+                            break;
+                        }
+                        vertices[i].tangent = tan;
                         ++i;
                     }
                 }
@@ -389,7 +424,8 @@ namespace qualquer::app {
                     }
                 }
 
-                // Generate tangents via MikkTSpace if missing (needs normal + uv0)
+                // Generate tangents via MikkTSpace if missing or invalid
+                // (needs normal + uv0).
                 if (!has_tangent && has_normals && has_uv0) {
                     generate_tangents(vertices, indices);
                 }
