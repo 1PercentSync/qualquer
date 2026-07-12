@@ -98,9 +98,11 @@ static_assert(sizeof(EmissiveTriangle) == 96);
 /**
  * @brief Environment-map light resources for miss sampling and env NEE.
  *
- * Host/device POD (same nature as AliasEntry / EmissiveTriangle). Owned by
- * SceneLoader; borrowed by SceneRenderInput and embedded in LaunchParams so
- * env resources are packed once instead of mirrored field-by-field.
+ * Host/device POD (same nature as AliasEntry / EmissiveTriangle). Scene-owned
+ * fields (cubemap, alias table) come from SceneLoader via SceneRenderInput;
+ * rotation_sin/cos are launch-time values filled by the renderer from
+ * RenderSettings::env_rotation so miss and NEE both read orientation from
+ * the same packed env block.
  */
 struct EnvLightData {
     /** @brief Cubemap texture sampled on miss and for environment NEE (0 = unloaded). */
@@ -120,9 +122,23 @@ struct EnvLightData {
 
     /** @brief Total luminance across the environment map (alias-table normalization). */
     float total_luminance;
+
+    /**
+     * @brief Sine of the IBL Y-axis rotation angle.
+     *
+     * Host-precomputed once per launch from RenderSettings::env_rotation so
+     * device code can rotate ray directions for cubemap lookup and NEE without
+     * a per-hit sincosf (whose Payne-Hanek reduction pulls in double math).
+     * SceneLoader leaves this at 0; the renderer overwrites it when packing
+     * LaunchParams.
+     */
+    float rotation_sin;
+
+    /** @brief Cosine of the IBL Y-axis rotation angle (see rotation_sin). */
+    float rotation_cos;
 };
 
-static_assert(sizeof(EnvLightData) == 32);
+static_assert(sizeof(EnvLightData) == 40);
 
 /**
  * @brief Emissive-triangle light resources for NEE.
@@ -237,22 +253,14 @@ struct LaunchParams {
     float jitter_x;
     float jitter_y;
 
-    /**
-     * @brief Sine of the IBL Y-axis rotation angle.
-     *
-     * The rotation angle is a launch constant, so the host precomputes the
-     * sin/cos pair once per frame. Device code rotates ray directions for
-     * cubemap lookup and NEE without a per-hit sincosf (whose Payne-Hanek
-     * argument reduction drags in double-precision math).
-     */
-    float env_rotation_sin;
-
-    /** @brief Cosine of the IBL Y-axis rotation angle (see env_rotation_sin). */
-    float env_rotation_cos;
-
     // ---- Scene light resources (packed; see EnvLightData / EmissiveLightData) ----
 
-    /** @brief Environment-map light resources (cubemap + alias table). */
+    /**
+     * @brief Environment-map light resources (cubemap + alias table + rotation).
+     *
+     * IBL orientation lives here as rotation_sin/cos so miss and NEE both
+     * consume the same packed env block.
+     */
     EnvLightData env;
 
     /** @brief Emissive-triangle light resources (triangles + alias table). */

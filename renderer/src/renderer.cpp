@@ -711,12 +711,15 @@ namespace qualquer::renderer {
             .dlss_enabled = dlss_active ? 1u : 0u,
             .jitter_x = jitter_x,
             .jitter_y = jitter_y,
-            // The rotation angle is a launch constant: precompute the sin/cos
-            // pair so device code avoids a per-hit sincosf.
-            .env_rotation_sin = std::sin(scene.settings.env_rotation),
-            .env_rotation_cos = std::cos(scene.settings.env_rotation),
             // Scene light resources (packed by SceneLoader via SceneRenderInput).
-            .env = scene.env,
+            // Rotation is a launch constant: copy scene env data, then fill
+            // sin/cos so device code reads orientation from the same env block.
+            .env = [&] {
+                auto e = scene.env;
+                e.rotation_sin = std::sin(scene.settings.env_rotation);
+                e.rotation_cos = std::cos(scene.settings.env_rotation);
+                return e;
+            }(),
             .emissive = scene.emissive,
             // Aux surfaces belong to the same write slot as color_output.
             .aux_depth = write.aux.depth.surf_object(),

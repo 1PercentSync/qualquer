@@ -276,7 +276,7 @@ __forceinline__ __device__ float3 evaluate_env_nee(
     const float3 L = sample_env_alias_table(
         params.env.alias_table, params.env.alias_count,
         params.env.alias_width, params.env.alias_height,
-        params.env_rotation_sin, params.env_rotation_cos,
+        params.env.rotation_sin, params.env.rotation_cos,
         env_r1, env_r2, env_r3, env_r4);
     const float NdotL = dot(N_shading, L);
 
@@ -292,7 +292,7 @@ __forceinline__ __device__ float3 evaluate_env_nee(
 
     // L is world space; rotate to env space for cubemap lookup.
     const float3 env_L = rotate_y_dir(
-        L, params.env_rotation_sin, params.env_rotation_cos);
+        L, params.env.rotation_sin, params.env.rotation_cos);
     const auto env_texel = texCubemap<float4>(
         params.env.cubemap, env_L.x, env_L.y, env_L.z);
     const float3 env_color = make_float3(env_texel.x, env_texel.y, env_texel.z);
@@ -304,7 +304,7 @@ __forceinline__ __device__ float3 evaluate_env_nee(
         params.env.alias_table,
         params.env.alias_width, params.env.alias_height,
         params.env.total_luminance,
-        params.env_rotation_sin, params.env_rotation_cos, L);
+        params.env.rotation_sin, params.env.rotation_cos, L);
     const float mis_w = mis_power_heuristic(pdf_light, brdf_pdf_e);
     const float st_factor = shadow_terminator_factor(N_face, N_shading, L);
 

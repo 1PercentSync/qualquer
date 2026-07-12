@@ -375,7 +375,7 @@ __global__ void __miss__env() { // NOLINT(*-reserved-identifier)
         const float3 world_dir = optixGetWorldRayDirection();
         // Forward IBL rotation: world space → env space.
         const float3 dir = rotate_y_dir(world_dir,
-                                        params.env_rotation_sin, params.env_rotation_cos);
+                                        params.env.rotation_sin, params.env.rotation_cos);
         const auto texel = texCubemap<float4>(params.env.cubemap, dir.x, dir.y, dir.z);
         env_color = make_float3(texel.x, texel.y, texel.z);
     }
@@ -604,7 +604,7 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
             params.env.alias_table,
             params.env.alias_width, params.env.alias_height,
             params.env.total_luminance,
-            params.env_rotation_sin, params.env_rotation_cos, bs.next_dir);
+            params.env.rotation_sin, params.env.rotation_cos, bs.next_dir);
         env_mis_w = mis_power_heuristic(bs.pdf_combined, pdf_env_at_brdf);
     }
 
