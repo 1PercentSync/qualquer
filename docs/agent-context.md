@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4.5 — 收敛质量 + DLSS-RR + 自适应
-- **进度**：Phase 4.5 Step 14.5 FrameSlot 封装完成；6 组平行 `std::array<X,2>` 合并为 `std::array<FrameSlot, 2>`
+- **进度**：Phase 4.5 Step 14.5 closesthit 瘦身完成；`brdf_pdf` + `evaluate_env_nee` / `evaluate_emissive_nee` + `write_aux_no_surface` 提取，closesthit 从 ~400 行降到 ~250 行
 
 ### 下一个任务
 
-Phase 4.5 Step 14.5 重构：closesthit 瘦身
+Phase 4.5 Step 14.5 重构：AccumKey 结构化 reset 检测
 
 ---
 
