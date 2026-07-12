@@ -564,7 +564,6 @@ namespace qualquer::app {
 
         camera_controller_.set_focus_target(&scene_loader_.scene_bounds());
         auto_position_camera(scene_loader_.scene_bounds());
-        renderer_.reset_accumulation();
 
         // Reload env map (destroy() cleared it along with scene resources)
         if (!config_.env_map_path.empty()) {
