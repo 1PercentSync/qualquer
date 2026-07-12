@@ -820,6 +820,22 @@ blit / record_vulkan 全幅不变，Vulkan 侧不感知渲染分辨率。DLSS-RR
 
 **异步上传 host source 生命周期**：`CudaBuffer::upload()` 的 host source 必须存活到对应 stream copy 完成。`SceneLoader` 按 source 所有权批次组织上传；同批 upload 共用一次 `cudaStreamSynchronize(stream)`，同步点位于任何局部 source 析构或提前返回之前。持久成员 source 不增加同步，不使用 `cudaDeviceSynchronize()`；无法延长到批次同步点的内层 source 在其所有权边界单独完成复制。
 
+#### Step 14.5 结构重构（草案，每项执行前需讨论确认）
+
+Step 11–14 实现过程中 Renderer 膨胀到 38 个成员、submit_cuda 超过 430 行、closesthit 超过 400 行。以下重构在正确性修复之后、Step 15 之前执行，防止后续特性（自适应 spp、Ray Cone、M2 ReSTIR）进一步恶化结构。各项方案为初步草案，执行前逐项与用户讨论确认。
+
+**FrameSlot 封装**：ping-pong 管理涉及 6 组平行 `std::array<X, 2>`（color buffer、AuxBufferSet、sample count、DlssFrameMetadata、production event、consumption event），任一组遗漏同步就产生帧错配 bug（Step 14.5 已有 5 个此类 fix）。合并为 `std::array<FrameSlot, 2>`，FrameSlot 持有 alloc/resize/free/invalidate，从结构上消除这类 bug。
+
+**closesthit 瘦身**：NEE 组装逻辑占 closesthit 40% 行数（~140/400），与交点处理（几何查询、材质采样、BRDF 采样、payload 写回）正交。提取到 `nee.cuh` 的 `evaluate_env_nee` / `evaluate_emissive_nee` 内联函数后，closesthit 从 ~400 行降到 ~200 行。同步提取 `brdf_pdf(BrdfParams, L, NdotL)` 消除 3 处 NEE/MIS 的 combined PDF 重复计算（与 `combined_lobe_pdf` 独立函数的设计理由一致——多处调用同一函数保证 MIS 一致性），以及 `write_aux_no_surface(sx, sy)` 消除 pass-through 与 raygen sky 的 aux 默认值写入重复。
+
+**AccumKey 结构化 reset 检测**：当前 7 个 `prev_*` 字段逐字段比较和赋值，每新增一个影响累积的参数就要加一个 prev_ 成员和一行比较。打包为 POD 结构体后用 `memcmp` 比较、单行赋值。
+
+**SceneRenderInput 场景资源打包**：env 和 emissive 资源各有 5-6 个散装字段在 SceneRenderInput、LaunchParams、Application 调用点三处镜像。在 `launch_params.h` 中定义 `EnvLightData` / `EmissiveLightData` POD 结构体（host/device 兼容，与 AliasEntry/EmissiveTriangle 同性质），SceneLoader 返回、SceneRenderInput 持有、LaunchParams 内嵌。每新增一个场景资源类型只需改结构体定义，不用在 3 处逐字段增补。
+
+**DlssRR 所有权移入 Renderer**：当前 Application 拥有 `dlss_rr_` 但 Renderer 在 submit_cuda 中管理其完整 feature 生命周期（create/release/recreate/evaluate），所有权与控制权分离。移入后：Renderer::init 从 Context 取 device_id 初始化 DlssRR；submit_cuda 不再接收 `DlssRR&` 参数；`dlss_preset` 移入 RenderSettings（与 max_bounces/spp 同为用户可调旋钮，render_settings.h 加 `#include <qualquer/optix/dlss_rr.h>` 合法——renderer→optix 是已有依赖方向）；DebugUIContext 通过 `Renderer::dlss() const` 获取 `const DlssRR&` 引用（与现有 `const vulkan::Context&` 引用模式一致）。
+
+**LaunchParams sobol 外移验证**：sobol_directions[4096] 占 LaunchParams 的 16384/~16900 bytes。D7 选择内嵌的理由是 `__constant__` cache 广播（~8 cycles vs L2 ~200+ cycles），但广播要求 warp-uniform 读取——实际使用中每线程查不同 dimension，不满足广播条件。改为 global memory `CudaBuffer<uint32_t>` 指针（LaunchParams 内 8 bytes），benchmark 1spp/32spp 吞吐，确认无回退后合入。若有回退则保持原方案并更新 D7 记录实测结论。
+
 **数值正确性源头修正**：在源头责任域完成并分别验证之前，不增加最终 radiance clamp 或非有限值清零作为统一兜底，避免掩盖修正是否生效。各责任域必须满足以下不变量：
 
 | 责任域 | 范围 | 不变量 |

@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4.5 — 收敛质量 + DLSS-RR + 自适应
-- **进度**：Phase 4.5 Step 14.5 单面 back-face pass-through aux 默认值完成；closesthit pass-through return 前写入 depth=inf / normal=0 / roughness=0 / albedo=0
+- **进度**：Phase 4.5 Step 14.5 结构重构任务已规划（FrameSlot 封装、closesthit 瘦身、AccumKey、SceneRenderInput 打包、DlssRR 所有权、sobol 外移验证），插入正确性修复之后
 
 ### 下一个任务
 
-Phase 4.5 Step 14.5 约束资产辐射度与材质输入的物理数值域
+Phase 4.5 Step 14.5 重构：FrameSlot 封装
 
 ---
 

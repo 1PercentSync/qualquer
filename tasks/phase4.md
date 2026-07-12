@@ -172,6 +172,12 @@ MUSTREAD:4
 - [x] NGX 崩溃诊断：NGX init 时提供日志回调（桥接 spdlog，`ON`，`DisableOtherLoggingSinks`）；所有 abort 宏（CUDA/OPTIX/VK/NGX）在 abort 前 flush spdlog
 - [x] display stream 排序修复：保留 SER 并恢复 NGX/default-stream 所需顺序，多轮压力测试稳定且吞吐无显著回退
 - [x] 修复 `SceneLoader` 异步上传的 host source 生命周期，确保局部 source 析构前复制完成
+- [ ] 重构（草案，执行前需讨论）：FrameSlot 封装——将 `accum_buffers_`、`aux_buffers_`、`accum_counts_`、`dlss_frame_metadata_`、`event_raygen_done_`、`event_tonemap_done_` 六组平行 `std::array<X,2>` 合并为 `std::array<FrameSlot, 2>`，FrameSlot 持有 alloc/resize/free/invalidate 方法
+- [ ] 重构（草案，执行前需讨论）：closesthit 瘦身——`brdf.cuh` 新增 `brdf_pdf(BrdfParams, L, NdotL)` 消除 3 处 NEE/MIS PDF 重复；`nee.cuh` 新增 `evaluate_env_nee` / `evaluate_emissive_nee` 内联函数将 ~140 行 NEE 逻辑提出 closesthit；device helper `write_aux_no_surface` 消除 pass-through 与 raygen sky 的 aux 默认值写入重复
+- [ ] 重构（草案，执行前需讨论）：AccumKey 结构化 reset 检测——将 7 个 `prev_*` 字段打包为 POD 结构体，用 `memcmp` 替代逐字段比较和赋值
+- [ ] 重构（草案，执行前需讨论）：SceneRenderInput 场景资源打包——`launch_params.h` 新增 `EnvLightData` / `EmissiveLightData` POD 结构体，SceneLoader 返回、SceneRenderInput 持有、LaunchParams 内嵌，替代 14 个散装字段
+- [ ] 重构（草案，执行前需讨论）：DlssRR 所有权移入 Renderer——`dlss_rr_` 从 Application 移入 Renderer 成员（init 时从 Context 取 device_id 初始化），`dlss_preset` 移入 RenderSettings，submit_cuda 不再接收 `DlssRR&` 参数，Renderer 暴露 `const DlssRR& dlss() const` 供 DebugUIContext 借用
+- [ ] 重构（草案，执行前需讨论）：LaunchParams sobol 外移验证——将 `sobol_directions[4096]` 改为 global memory 指针（LaunchParams 内 8 bytes 替代 16384 bytes），benchmark 对比 1spp/32spp 吞吐确认无回退后合入
 - [ ] 约束资产辐射度与材质输入的物理数值域
 - [ ] 保证几何与 shading frame 在退化输入下仍有效
 - [ ] 保证 BRDF 与能量模型在完整输入域内输出合法
