@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4.5 — 收敛质量 + DLSS-RR + 自适应
-- **进度**：Phase 4.5 Step 14.5 累积 reset 重分类完成；max_bounces/spp 从检测中移除，camera 打包为 CameraKey，7 个 prev_ → 4 个
+- **进度**：Phase 4.5 Step 14.5 结构重构 4/7 完成（FrameSlot、closesthit 瘦身、累积 reset 重分类、SceneRenderInput 打包）；FrameSlot resize metadata 修复同步合入
 
 ### 下一个任务
 
-Phase 4.5 Step 14.5 重构：SceneRenderInput 场景资源打包
+Phase 4.5 Step 14.5 重构：`env_rotation_sin/cos` 移入 `EnvLightData`
 
 ---
 
