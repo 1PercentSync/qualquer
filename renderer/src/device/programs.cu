@@ -488,10 +488,12 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
         payload_set_color(make_float3(0.0f, 0.0f, 0.0f));
         payload_set_hit_distance(hit_t);
         payload_set_env_mis_weight(1.0f);
-        // last_brdf_pdf: intentionally NOT written. Payload registers persist
-        // across bounces, so the previous closesthit's BRDF pdf carries through
-        // the pass-through unchanged — correct for MIS when the path later hits
-        // an emissive surface or misses into the environment.
+        // Shadow rays use TERMINATE_ON_FIRST_HIT without closesthit, so they
+        // cannot pass through single-sided back-faces. NEE at the previous
+        // shading point is therefore blind to anything beyond this surface.
+        // Clear last_brdf_pdf so that a subsequent emissive hit takes full
+        // weight (no competing NEE strategy), matching env_mis_weight = 1.0.
+        payload_set_last_brdf_pdf(0.0f);
         return;
     }
 
