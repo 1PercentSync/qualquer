@@ -521,7 +521,7 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
     const float3 N_mapped = get_shading_normal(
         N_interp, T_world, tangent.w,
         make_float2(nm_texel.x, nm_texel.y), mat.normal_scale);
-    const float3 N_shading = ensure_normal_consistency(N_mapped, N_interp);
+    const float3 N_shading = ensure_normal_consistency(N_mapped, N_face);
 
     // ---- Emissive (with BRDF-strategy MIS weight for bounce > 0) ----
     const auto em_texel = tex2D<float4>(tex[mat.emissive_tex], uv.x, uv.y);

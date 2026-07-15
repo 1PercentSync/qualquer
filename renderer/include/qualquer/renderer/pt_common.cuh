@@ -96,8 +96,7 @@ __forceinline__ __device__ float3 offset_ray_origin(const float3 p,
  * normal when the two disagree in hemisphere.
  *
  * @param n_shading Shading normal (post-normal-map, normalized).
- * @param n_geo     Geometric normal (interpolated vertex normal, normalized,
- *                  post-back-face-flip).
+ * @param n_geo     Geometric face normal (normalized, post-back-face-flip).
  * @return Corrected shading normal on the same side as n_geo.
  */
 __forceinline__ __device__ float3 ensure_normal_consistency(const float3 n_shading,
@@ -165,15 +164,9 @@ __forceinline__ __device__ float shadow_terminator_factor(const float3 N_geo,
         return 1.0f;
     }
 
-    // ensure_normal_consistency guarantees dot(N_shading, N_interp) >= 0,
-    // but shadow terminator uses N_face (geometric), not N_interp. When
-    // normal mapping pushes N_shading far from N_face, NgdotNs can be <= 0.
-    // The Chiang formula's geometric derivation requires NgdotNs > 0; when
-    // violated, skip the correction entirely.
+    // ensure_normal_consistency references N_face, guaranteeing
+    // dot(N_face, N_shading) >= 0 by construction.
     const float NgdotNs = dot(N_geo, N_shading);
-    if (NgdotNs <= 0.0f) {
-        return 1.0f;
-    }
 
     // Chiang 2019 Eq. 1: min(1, ratio) before Hermite smoothing.
     const float G = fminf(NgdotL / (NdotL * NgdotNs), 1.0f);
