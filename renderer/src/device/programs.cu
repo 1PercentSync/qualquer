@@ -516,7 +516,7 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
     const auto mr_texel = tex2D<float4>(tex[mat.metallic_roughness_tex], uv.x, uv.y);
     const float metallic = mr_texel.z * mat.metallic_factor;
     const float roughness = fmaxf(mr_texel.y * mat.roughness_factor, 0.04f);
-    const float alpha = fmaxf(roughness * roughness, 1e-4f);
+    const float alpha = roughness * roughness;
 
     // ---- Normal mapping + consistency ----
     const auto nm_texel = tex2D<float4>(tex[mat.normal_tex], uv.x, uv.y);
