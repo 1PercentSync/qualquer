@@ -164,10 +164,6 @@ Secondary ray（bounce ≥ 1）经 `optixTraverse` 后查询 hit object，取 `m
 - 选 10 bits 是容量取舍：1024 材质精确分组覆盖预期场景上限（256 可能突破、1024 不太可能），为材质发散场景保留 hint 通道
 - 掩码语义：超容量时低位混叠（共格材质仍成组，平滑退化）。掩码利用全局索引的低位紧致性——若全局材质数远超容量且索引稀疏，混叠趋于生日分布，届时的修法是可见材质稠密重映射，而非加宽位数
 
-**潜在扩展（shadow ray）**：
-
-Shadow ray 方向高度聚合（大量线程指向同一光源），可将 ray direction 量化为低精度整数（如 octahedral mapping → 8-16 bits）作为 hint，让方向相似的 shadow ray 聚在一起，提升 BVH 遍历缓存命中率。待按需评估。
-
 ### SBT / Pipeline
 
 | 类型 | 数量 | 说明 |
