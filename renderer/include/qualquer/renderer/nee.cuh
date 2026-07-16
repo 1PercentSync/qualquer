@@ -292,17 +292,16 @@ __forceinline__ __device__ float3 evaluate_env_nee(
         params.env.cubemap, env_L.x, env_L.y, env_L.z);
     const float3 env_color = make_float3(env_texel.x, env_texel.y, env_texel.z);
 
-    const float3 brdf_val = brdf_eval(bp, L, NdotL);
-    const float brdf_pdf_e = brdf_pdf(bp, L);
+    const BrdfEvalResult bep = brdf_eval_and_pdf(bp, L, NdotL);
 
     const float pdf_light = env_pdf(params.env, L);
     if (pdf_light <= 0.0f || !isfinite(pdf_light)) {
         return make_float3(0.0f, 0.0f, 0.0f);
     }
-    const float mis_w = mis_power_heuristic(pdf_light, brdf_pdf_e);
+    const float mis_w = mis_power_heuristic(pdf_light, bep.pdf);
     const float st_factor = shadow_terminator_factor(N_face, N_shading, L);
 
-    return env_color * brdf_val * NdotL * mis_w * st_factor / pdf_light;
+    return env_color * bep.value * NdotL * mis_w * st_factor / pdf_light;
 }
 
 /**
@@ -405,7 +404,7 @@ __forceinline__ __device__ float3 evaluate_emissive_nee(
         le_texel.y * light_mat.emissive_factor.y,
         le_texel.z * light_mat.emissive_factor.z);
 
-    const float3 brdf_val_emi = brdf_eval(bp, L, NdotL_emi);
+    const BrdfEvalResult bep_emi = brdf_eval_and_pdf(bp, L, NdotL_emi);
 
     const float emission_lum = luminance(tri.emission);
     const float light_pdf_emi = emissive_light_pdf(
@@ -414,11 +413,10 @@ __forceinline__ __device__ float3 evaluate_emissive_nee(
         return make_float3(0.0f, 0.0f, 0.0f);
     }
 
-    const float brdf_pdf_emi = brdf_pdf(bp, L);
-    const float mis_w_emi = mis_power_heuristic(light_pdf_emi, brdf_pdf_emi);
+    const float mis_w_emi = mis_power_heuristic(light_pdf_emi, bep_emi.pdf);
     const float st_factor_emi = shadow_terminator_factor(N_face, N_shading, L);
 
-    return Le * brdf_val_emi * NdotL_emi * mis_w_emi * st_factor_emi
+    return Le * bep_emi.value * NdotL_emi * mis_w_emi * st_factor_emi
         / light_pdf_emi;
 }
 

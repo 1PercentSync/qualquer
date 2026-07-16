@@ -751,11 +751,21 @@ __forceinline__ __device__ BrdfParams init_brdf_params(
     return p;
 }
 
-// ---- BRDF eval (NEE) --------------------------------------------------------
+// ---- BRDF eval + PDF (NEE) --------------------------------------------------
 
 /**
- * @brief Evaluates the full BRDF (specular + diffuse) at a fixed light
- *        direction, for next-event estimation.
+ * @brief Fused BRDF value and combined PDF at a fixed light direction.
+ *
+ * Shares L_ts, H_ts, and NdotH between eval and PDF, eliminating redundant
+ * world_to_tangent + normalize + dot that the separate functions repeated.
+ */
+struct BrdfEvalResult {
+    float3 value; ///< BRDF value (specular + diffuse), RGB.
+    float  pdf;   ///< Combined multi-lobe solid-angle PDF.
+};
+
+/**
+ * @brief Evaluates BRDF value and combined PDF for a light direction (NEE).
  *
  * Specular = D * V * F * turquin_comp (Turquin compensation included).
  * Diffuse = diffuse_weight * f_EON (EON already includes 1/pi and its own
@@ -765,10 +775,10 @@ __forceinline__ __device__ BrdfParams init_brdf_params(
  * @param params BRDF parameter bundle (from init_brdf_params).
  * @param L      Light direction (world, normalized, facing surface).
  * @param NdotL  dot(N, L), must be > 0 (caller culls back-facing).
- * @return BRDF value (RGB).
+ * @return BrdfEvalResult with BRDF value and combined PDF.
  */
-__forceinline__ __device__ float3 brdf_eval(const BrdfParams &params,
-                                            const float3 L, const float NdotL) {
+__forceinline__ __device__ BrdfEvalResult brdf_eval_and_pdf(
+        const BrdfParams &params, const float3 L, const float NdotL) {
     const float3 &V_ts = params.V_ts;
     const float3 L_ts = world_to_tangent(params.T, params.B, params.N, L);
 
@@ -776,39 +786,20 @@ __forceinline__ __device__ float3 brdf_eval(const BrdfParams &params,
     const float NdotH = fmaxf(H_ts.z, 0.0f);
     const float VdotH = fmaxf(dot(V_ts, H_ts), 0.0f);
 
+    // Eval: specular + diffuse
     const float D   = D_GGX(NdotH, params.alpha);
     const float Vis = V_SmithGGXCorrelated(params.NdotV, NdotL, params.alpha);
     const float3 F  = F_Schlick(VdotH, params.F0);
     const float3 spec = F * params.turquin_comp * (D * Vis);
-
     const float3 diff = params.diffuse_weight
         * f_EON(params.base_color, params.r, L_ts, V_ts);
 
-    return spec + diff;
-}
-
-// ---- BRDF PDF (NEE MIS) -----------------------------------------------------
-
-/**
- * @brief Combined multi-lobe BRDF PDF at a fixed light direction (NEE MIS).
- *
- * Mirrors the PDF construction inside brdf_sample so light-strategy and
- * BRDF-strategy MIS weights stay consistent across call sites.
- *
- * @param params BRDF parameter bundle (from init_brdf_params).
- * @param L      Light direction (world, normalized, facing surface).
- * @return Combined solid-angle PDF.
- */
-__forceinline__ __device__ float brdf_pdf(const BrdfParams &params,
-                                          const float3 L) {
-    const float3 &V_ts = params.V_ts;
-    const float3 L_ts = world_to_tangent(params.T, params.B, params.N, L);
-
-    const float3 H_ts = normalize(V_ts + L_ts);
-    const float NdotH = fmaxf(H_ts.z, 0.0f);
+    // PDF: combined multi-lobe
     const float pdf_spec = pdf_ggx_vndf(NdotH, params.NdotV, params.alpha);
     const float pdf_diff = pdf_EON(V_ts, L_ts, params.r);
-    return combined_lobe_pdf(pdf_spec, pdf_diff, params.p_spec);
+
+    return {spec + diff,
+            combined_lobe_pdf(pdf_spec, pdf_diff, params.p_spec)};
 }
 
 // ---- BRDF sample (bounce) ---------------------------------------------------
