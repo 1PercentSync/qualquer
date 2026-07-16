@@ -418,47 +418,13 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
     const DeviceVertex &v1 = verts[i1];
     const DeviceVertex &v2 = verts[i2];
 
-    // ---- Barycentric interpolation (object space) ----
-    const float2 bary = optixGetTriangleBarycentrics();
-    const float w0 = 1.0f - bary.x - bary.y;
-    const float w1 = bary.x;
-    const float w2 = bary.y;
-
-    const float3 obj_pos = w0 * v0.position + w1 * v1.position + w2 * v2.position;
-    const float3 obj_normal = w0 * v0.normal + w1 * v1.normal + w2 * v2.normal;
-    const float2 uv = w0 * v0.uv0 + w1 * v1.uv0 + w2 * v2.uv0;
-    const float4 vert_color = w0 * v0.color + w1 * v1.color + w2 * v2.color;
-    const float4 tangent = w0 * v0.tangent + w1 * v1.tangent + w2 * v2.tangent;
-
+    // ---- Early pass-through check (positions + face normal only) ----
+    // Single-sided back-face pass-through needs only positions (face normal),
+    // ray direction, and double_sided. Check before the full interpolation to
+    // skip normal/UV/color/tangent work on the pass-through path.
     const float3 face_normal_obj = cross(v1.position - v0.position,
                                          v2.position - v0.position);
-
-    // ---- World-space transforms ----
-    const float3 world_pos = optixTransformPointFromObjectToWorldSpace(obj_pos);
     float3 N_face = normalize(optixTransformNormalFromObjectToWorldSpace(face_normal_obj));
-
-    // Interpolated normal: barycentric interpolation of three unit normals
-    // can cancel to near-zero (e.g. cone-tip topology with 120°-spread
-    // normals). normalize(zero) → NaN, which would poison the entire
-    // shading pipeline. Fall back to the geometric face normal, which is
-    // guaranteed non-zero by the OptiX hit (non-degenerate triangle).
-    const float3 N_interp_raw = optixTransformNormalFromObjectToWorldSpace(obj_normal);
-    float3 N_interp;
-    {
-        const float len_sq = dot(N_interp_raw, N_interp_raw);
-        N_interp = len_sq >= 1e-12f
-            ? N_interp_raw * rsqrtf(len_sq)
-            : N_face;
-    }
-
-    // Tangent: passed unnormalized to get_shading_normal(), which has its
-    // own length guard + rsqrtf normalization. Normalizing here would turn
-    // a zero-length interpolated tangent into NaN, bypassing that guard
-    // (NaN < threshold is false in IEEE 754).
-    const float3 T_world = optixTransformVectorFromObjectToWorldSpace(
-        make_float3(tangent.x, tangent.y, tangent.z));
-
-    // ---- Back-face detection + single-sided pass-through ----
     const float3 ray_dir = optixGetWorldRayDirection();
     const bool is_back_face = dot(N_face, ray_dir) > 0.0f;
 
@@ -498,6 +464,42 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
         payload_set_last_brdf_pdf(0.0f);
         return;
     }
+
+    // ---- Full barycentric interpolation (only reached for shaded surfaces) ----
+    const float2 bary = optixGetTriangleBarycentrics();
+    const float w0 = 1.0f - bary.x - bary.y;
+    const float w1 = bary.x;
+    const float w2 = bary.y;
+
+    const float3 obj_pos = w0 * v0.position + w1 * v1.position + w2 * v2.position;
+    const float3 obj_normal = w0 * v0.normal + w1 * v1.normal + w2 * v2.normal;
+    const float2 uv = w0 * v0.uv0 + w1 * v1.uv0 + w2 * v2.uv0;
+    const float4 vert_color = w0 * v0.color + w1 * v1.color + w2 * v2.color;
+    const float4 tangent = w0 * v0.tangent + w1 * v1.tangent + w2 * v2.tangent;
+
+    // ---- World-space transforms ----
+    const float3 world_pos = optixTransformPointFromObjectToWorldSpace(obj_pos);
+
+    // Interpolated normal: barycentric interpolation of three unit normals
+    // can cancel to near-zero (e.g. cone-tip topology with 120°-spread
+    // normals). normalize(zero) → NaN, which would poison the entire
+    // shading pipeline. Fall back to the geometric face normal, which is
+    // guaranteed non-zero by the OptiX hit (non-degenerate triangle).
+    const float3 N_interp_raw = optixTransformNormalFromObjectToWorldSpace(obj_normal);
+    float3 N_interp;
+    {
+        const float len_sq = dot(N_interp_raw, N_interp_raw);
+        N_interp = len_sq >= 1e-12f
+            ? N_interp_raw * rsqrtf(len_sq)
+            : N_face;
+    }
+
+    // Tangent: passed unnormalized to get_shading_normal(), which has its
+    // own length guard + rsqrtf normalization. Normalizing here would turn
+    // a zero-length interpolated tangent into NaN, bypassing that guard
+    // (NaN < threshold is false in IEEE 754).
+    const float3 T_world = optixTransformVectorFromObjectToWorldSpace(
+        make_float3(tangent.x, tangent.y, tangent.z));
 
     // Double-sided back-face: flip normals to face the incoming ray.
     if (is_back_face) {
