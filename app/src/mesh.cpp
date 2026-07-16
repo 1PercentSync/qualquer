@@ -87,7 +87,10 @@ namespace qualquer::app {
         ctx.m_pInterface = &iface;
         ctx.m_pUserData = &user_data;
 
-        genTangSpaceDefault(&ctx);
+        if (!genTangSpaceDefault(&ctx)) {
+            spdlog::warn("MikkTSpace: genTangSpaceDefault failed, tangents left at default");
+            return;
+        }
 
         // Assign per-face-corner tangents back to vertices, splitting shared
         // vertices that received different tangents from different triangles.
