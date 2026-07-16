@@ -725,12 +725,6 @@ __global__ void __anyhit__ah() { // NOLINT(*-reserved-identifier)
     const auto &geo = params.geometry_infos[geo_index];
     const auto &mat = params.materials[geo.material_buffer_offset];
 
-    // Opaque materials should never reach any-hit (BLAS geometry flag
-    // prevents it), but guard against misconfiguration.
-    if (mat.alpha_mode == 0u) {
-        return;
-    }
-
     // ---- Lightweight UV + vertex color alpha interpolation ----
     const uint32_t prim_idx = optixGetPrimitiveIndex();
     const auto *indices = reinterpret_cast<const uint32_t *>(geo.index_buffer_address);
