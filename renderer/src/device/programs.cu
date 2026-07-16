@@ -641,6 +641,32 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
     const uint32_t sample_index = payload_get_sample_index();
     const uint32_t dim_base = bounce_dim_base(bounce);
 
+    // ---- NEE: environment + emissive (full evaluation lives in nee.cuh) ----
+    // NEE is valid on every bounce including the last (direct light contribution).
+    const float3 nee_radiance =
+        evaluate_env_nee(bp, offset_pos, N_face, N_brdf,
+                         pixel_index, sample_index, dim_base)
+        + evaluate_emissive_nee(bp, offset_pos, N_face, N_brdf,
+                                pixel_index, sample_index, dim_base);
+
+    // ---- Write common payload ----
+    payload_set_next_origin(offset_pos);
+    payload_set_color(emissive + nee_radiance);
+    payload_set_hit_distance(optixGetRayTmax());
+    payload_set_bounce(bounce);
+
+    // Last bounce: emissive + NEE already collected above. The next ray would
+    // never be traced (raygen loop condition), so skip BRDF sampling, RNG,
+    // and env MIS weight. Terminate via zero throughput.
+    if (bounce >= params.max_bounces - 1) {
+        payload_set_next_direction(make_float3(0.0f, 0.0f, 0.0f));
+        payload_set_throughput_update(make_float3(0.0f, 0.0f, 0.0f));
+        payload_set_env_mis_weight(1.0f);
+        payload_set_last_brdf_pdf(0.0f);
+        return;
+    }
+
+    // ---- BRDF sampling (not last bounce) ----
     const float u_lobe = sobol_rng(params.sobol_directions, pixel_index,
                                    sample_index, params.frame_index, dim_base + kBounceOffsetLobeSelect);
     const float u0 = sobol_rng(params.sobol_directions, pixel_index,
@@ -649,28 +675,6 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
                                sample_index, params.frame_index, dim_base + kBounceOffsetBrdfXi1);
 
     const BrdfSample bs = brdf_sample(bp, u_lobe, u0, u1);
-
-    // ---- NEE: environment + emissive (full evaluation lives in nee.cuh) ----
-    const float3 nee_radiance =
-        evaluate_env_nee(bp, offset_pos, N_face, N_brdf,
-                         pixel_index, sample_index, dim_base)
-        + evaluate_emissive_nee(bp, offset_pos, N_face, N_brdf,
-                                pixel_index, sample_index, dim_base);
-
-    // ---- Env MIS weight for BRDF-sampled direction ----
-    // When the BRDF ray misses (hits environment), the raygen loop scales its
-    // contribution by this weight. Without NEE it is 1.0; with env NEE it is
-    // power_heuristic(brdf_pdf, env_pdf(brdf_dir)) to avoid double-counting.
-    float env_mis_w = 1.0f;
-    if (bs.pdf_combined > 0.0f && params.env.alias_table != nullptr) {
-        const float pdf_env_at_brdf = env_pdf(params.env, bs.next_dir);
-        env_mis_w = mis_power_heuristic(bs.pdf_combined, pdf_env_at_brdf);
-    }
-
-    // ---- Write 18-register payload ----
-    payload_set_next_origin(offset_pos);
-    payload_set_color(emissive + nee_radiance);
-    payload_set_bounce(bounce);
 
     if (bs.pdf_combined == 0.0f) {
         // Invalid BRDF sample (specular reflected below surface): terminate
@@ -681,15 +685,23 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
         // surface hit is not.
         payload_set_next_direction(make_float3(0.0f, 0.0f, 0.0f));
         payload_set_throughput_update(make_float3(0.0f, 0.0f, 0.0f));
-        payload_set_hit_distance(optixGetRayTmax());
         payload_set_env_mis_weight(1.0f);
         payload_set_last_brdf_pdf(0.0f);
         return;
     }
 
+    // ---- Env MIS weight for BRDF-sampled direction ----
+    // When the BRDF ray misses (hits environment), the raygen loop scales its
+    // contribution by this weight. Without NEE it is 1.0; with env NEE it is
+    // power_heuristic(brdf_pdf, env_pdf(brdf_dir)) to avoid double-counting.
+    float env_mis_w = 1.0f;
+    if (params.env.alias_table != nullptr) {
+        const float pdf_env_at_brdf = env_pdf(params.env, bs.next_dir);
+        env_mis_w = mis_power_heuristic(bs.pdf_combined, pdf_env_at_brdf);
+    }
+
     payload_set_next_direction(bs.next_dir);
     payload_set_throughput_update(bs.throughput_update);
-    payload_set_hit_distance(optixGetRayTmax());
     payload_set_env_mis_weight(env_mis_w);
     payload_set_last_brdf_pdf(bs.pdf_combined);
 }
