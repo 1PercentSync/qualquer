@@ -213,13 +213,11 @@ __forceinline__ __device__ float3 compute_primary_dir(
     const float ndc_x = u * 2.0f - 1.0f;
     const float ndc_y = -(v * 2.0f - 1.0f);
 
+    // Unproject to view space. Homogeneous divide (1/w) is skipped: w is a
+    // positive uniform scale (1/far for glm::perspective RH_NO with ndc_z=1),
+    // and normalize absorbs it.
     const float4 clip_target = make_float4(ndc_x, ndc_y, 1.0f, 1.0f);
-    float4 view_target = mul(params.inv_projection, clip_target);
-    const float inv_w = 1.0f / view_target.w;
-    view_target = make_float4(view_target.x * inv_w,
-                              view_target.y * inv_w,
-                              view_target.z * inv_w,
-                              1.0f);
+    const float4 view_target = mul(params.inv_projection, clip_target);
     const float4 dir_w = mul(params.inv_view, make_float4(view_target.x,
                                                           view_target.y,
                                                           view_target.z,
