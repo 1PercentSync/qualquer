@@ -247,7 +247,8 @@ __forceinline__ __device__ float3 evaluate_env_nee(
         const uint32_t sample_index,
         const uint32_t dim_base) {
 
-    if (params.env.cubemap == 0 || params.env.alias_table == nullptr) {
+    if (params.env.cubemap == 0 || params.env.alias_table == nullptr
+        || params.env.total_luminance <= 0.0f) {
         return make_float3(0.0f, 0.0f, 0.0f);
     }
 
