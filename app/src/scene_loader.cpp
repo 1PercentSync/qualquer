@@ -388,26 +388,35 @@ namespace qualquer::app {
                 }
 
                 // TANGENT (optional)
-                // Invalid tangents (non-finite or zero-length xyz) are treated
-                // as missing so MikkTSpace can regenerate them from valid
-                // position/normal/UV data.
+                // Per glTF 2.0 spec:
+                //   §1306: W MUST be 1.0 or -1.0
+                //   §1289: XYZ portion is normalized (renormalize if off)
+                //   §1382: MUST be ignored when NORMAL is absent
+                //   §1384: same-triangle vertices SHOULD have same W
+                // Invalid tangents trigger MikkTSpace regeneration.
                 bool has_tangent = false;
-                if (const auto it = primitive.findAttribute("TANGENT");
-                    it != primitive.attributes.end()) {
-                    has_tangent = true;
-                    const auto &accessor = gltf.accessors[it->accessorIndex];
-                    size_t i = 0;
-                    for (auto t : fastgltf::iterateAccessor<fastgltf::math::fvec4>(gltf, accessor)) {
-                        glm::vec4 tan{t.x(), t.y(), t.z(), t.w()};
-                        const glm::vec3 xyz{tan.x, tan.y, tan.z};
-                        if (!std::isfinite(tan.x) || !std::isfinite(tan.y)
-                            || !std::isfinite(tan.z) || !std::isfinite(tan.w)
-                            || glm::dot(xyz, xyz) < 1e-12f) {
-                            has_tangent = false;
-                            break;
+                if (has_normals) {
+                    if (const auto it = primitive.findAttribute("TANGENT");
+                        it != primitive.attributes.end()) {
+                        has_tangent = true;
+                        const auto &accessor = gltf.accessors[it->accessorIndex];
+                        size_t i = 0;
+                        for (auto t : fastgltf::iterateAccessor<fastgltf::math::fvec4>(gltf, accessor)) {
+                            glm::vec4 tan{t.x(), t.y(), t.z(), t.w()};
+                            const glm::vec3 xyz{tan.x, tan.y, tan.z};
+                            const float len2 = glm::dot(xyz, xyz);
+                            if (!std::isfinite(tan.x) || !std::isfinite(tan.y)
+                                || !std::isfinite(tan.z) || !std::isfinite(tan.w)
+                                || len2 < 1e-12f
+                                || (tan.w != 1.0f && tan.w != -1.0f)) {
+                                has_tangent = false;
+                                break;
+                            }
+                            const glm::vec3 normalized_xyz = xyz / std::sqrt(len2);
+                            tan = {normalized_xyz.x, normalized_xyz.y, normalized_xyz.z, tan.w};
+                            vertices[i].tangent = tan;
+                            ++i;
                         }
-                        vertices[i].tangent = tan;
-                        ++i;
                     }
                 }
 
@@ -440,6 +449,38 @@ namespace qualquer::app {
                                      "clamping to last vertex",
                                      std::string(gltf_mesh.name), idx, vertex_count);
                         idx = last_vertex;
+                    }
+                }
+
+                // §1382: when normals are absent, compute flat normals from
+                // positions (per-triangle face normal assigned to all 3 vertices).
+                if (!has_normals && !indices.empty()) {
+                    for (size_t tri = 0; tri + 2 < indices.size(); tri += 3) {
+                        const auto &p0 = vertices[indices[tri]].position;
+                        const auto &p1 = vertices[indices[tri + 1]].position;
+                        const auto &p2 = vertices[indices[tri + 2]].position;
+                        const glm::vec3 face_n = glm::cross(p1 - p0, p2 - p0);
+                        const float len2 = glm::dot(face_n, face_n);
+                        const glm::vec3 n = len2 > 1e-12f
+                            ? face_n / std::sqrt(len2)
+                            : glm::vec3(0.0f, 0.0f, 1.0f);
+                        vertices[indices[tri]].normal = n;
+                        vertices[indices[tri + 1]].normal = n;
+                        vertices[indices[tri + 2]].normal = n;
+                    }
+                }
+
+                // §1384: vertices of the same triangle SHOULD have the same
+                // tangent.w. Mixed handedness makes interpolated w meaningless.
+                if (has_tangent) {
+                    for (size_t tri = 0; tri + 2 < indices.size(); tri += 3) {
+                        const float w0 = vertices[indices[tri]].tangent.w;
+                        const float w1 = vertices[indices[tri + 1]].tangent.w;
+                        const float w2 = vertices[indices[tri + 2]].tangent.w;
+                        if (w0 != w1 || w1 != w2) {
+                            has_tangent = false;
+                            break;
+                        }
                     }
                 }
 
