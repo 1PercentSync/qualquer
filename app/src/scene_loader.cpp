@@ -24,6 +24,7 @@
 #include <filesystem>
 #include <limits>
 #include <map>
+#include <numeric>
 #include <stdexcept>
 
 namespace qualquer::app {
@@ -292,7 +293,7 @@ namespace qualquer::app {
                                              + "' primitive missing POSITION attribute");
                 }
                 const auto &pos_accessor = gltf.accessors[pos_it->accessorIndex];
-                const auto vertex_count = pos_accessor.count;
+                auto vertex_count = pos_accessor.count;
 
                 std::vector<renderer::Vertex> vertices(vertex_count);
 
@@ -452,21 +453,30 @@ namespace qualquer::app {
                     }
                 }
 
-                // §1382: when normals are absent, compute flat normals from
-                // positions (per-triangle face normal assigned to all 3 vertices).
+                // §1382: when normals are absent, compute flat normals.
+                // Unindex first so each triangle owns its vertices — shared
+                // vertices would get overwritten by the last triangle's normal.
                 if (!has_normals && !indices.empty()) {
-                    for (size_t tri = 0; tri + 2 < indices.size(); tri += 3) {
-                        const auto &p0 = vertices[indices[tri]].position;
-                        const auto &p1 = vertices[indices[tri + 1]].position;
-                        const auto &p2 = vertices[indices[tri + 2]].position;
-                        const glm::vec3 face_n = glm::cross(p1 - p0, p2 - p0);
+                    std::vector<renderer::Vertex> unindexed(indices.size());
+                    for (size_t i = 0; i < indices.size(); ++i) {
+                        unindexed[i] = vertices[indices[i]];
+                    }
+                    vertices = std::move(unindexed);
+                    vertex_count = vertices.size();
+                    indices.resize(vertex_count);
+                    std::iota(indices.begin(), indices.end(), 0u);
+
+                    for (size_t tri = 0; tri + 2 < vertex_count; tri += 3) {
+                        const glm::vec3 face_n = glm::cross(
+                            vertices[tri + 1].position - vertices[tri].position,
+                            vertices[tri + 2].position - vertices[tri].position);
                         const float len2 = glm::dot(face_n, face_n);
                         const glm::vec3 n = len2 > 1e-12f
                             ? face_n / std::sqrt(len2)
                             : glm::vec3(0.0f, 0.0f, 1.0f);
-                        vertices[indices[tri]].normal = n;
-                        vertices[indices[tri + 1]].normal = n;
-                        vertices[indices[tri + 2]].normal = n;
+                        vertices[tri].normal = n;
+                        vertices[tri + 1].normal = n;
+                        vertices[tri + 2].normal = n;
                     }
                     has_normals = true;
                 }
