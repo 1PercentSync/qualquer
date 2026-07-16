@@ -426,6 +426,23 @@ namespace qualquer::app {
                     }
                 }
 
+                // Validate index buffer: count must be a multiple of 3 and
+                // every index must be within the vertex buffer range.
+                if (indices.size() % 3 != 0) {
+                    spdlog::warn("Mesh '{}': index count {} not a multiple of 3, truncating",
+                                 std::string(gltf_mesh.name), indices.size());
+                    indices.resize(indices.size() - indices.size() % 3);
+                }
+                const auto last_vertex = static_cast<uint32_t>(vertex_count - 1);
+                for (auto &idx : indices) {
+                    if (idx >= vertex_count) {
+                        spdlog::warn("Mesh '{}': index {} exceeds vertex count {}, "
+                                     "clamping to last vertex",
+                                     std::string(gltf_mesh.name), idx, vertex_count);
+                        idx = last_vertex;
+                    }
+                }
+
                 // Generate tangents via MikkTSpace if missing or invalid
                 // (needs normal + uv0).
                 if (!has_tangent && has_normals && has_uv0) {
