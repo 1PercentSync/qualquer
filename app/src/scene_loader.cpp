@@ -344,7 +344,9 @@ namespace qualquer::app {
                     const auto &accessor = gltf.accessors[it->accessorIndex];
                     size_t i = 0;
                     for (auto uv : fastgltf::iterateAccessor<fastgltf::math::fvec2>(gltf, accessor)) {
-                        vertices[i].uv0 = {uv.x(), uv.y()};
+                        const float u = std::isfinite(uv.x()) ? uv.x() : 0.0f;
+                        const float v = std::isfinite(uv.y()) ? uv.y() : 0.0f;
+                        vertices[i].uv0 = {u, v};
                         ++i;
                     }
                 }
