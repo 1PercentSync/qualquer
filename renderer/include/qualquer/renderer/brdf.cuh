@@ -647,7 +647,7 @@ __forceinline__ __device__ float specular_probability(const float NdotV,
  * passes it to both the bounce sampler and the NEE evaluators.
  */
 struct BrdfParams {
-    float3 V;              ///< View direction (world, normalized, facing surface).
+    float3 V_ts;           ///< View direction (tangent space, z = NdotV).
     float3 N;              ///< Shading normal (world, normalized).
     float3 T;              ///< Tangent axis (world, from build_orthonormal_basis).
     float3 B;              ///< Bitangent axis (world, from build_orthonormal_basis).
@@ -687,7 +687,8 @@ struct BrdfSample {
  *     per channel. Pure metals (metallic=1) have no diffuse, so E_glossy is
  *     skipped and diffuse_weight = 0.
  *
- * @param V              View direction (world, normalized, facing surface).
+ * @param V              View direction (world, normalized, facing surface);
+ *                       converted to tangent space and stored as V_ts.
  * @param N              Shading normal (world, normalized).
  * @param T_basis        Tangent axis (world, from build_orthonormal_basis).
  * @param B_basis        Bitangent axis (world).
@@ -705,10 +706,10 @@ __forceinline__ __device__ BrdfParams init_brdf_params(
         const float roughness, const float alpha,
         const uint32_t dlss_enabled, const uint32_t bounce) {
     BrdfParams p{};
-    p.V = V;
     p.N = N;
     p.T = T_basis;
     p.B = B_basis;
+    p.V_ts = world_to_tangent(T_basis, B_basis, N, V);
     p.F0 = compute_F0(base_color, metallic);
     p.base_color = base_color;
     p.alpha = alpha;
@@ -768,7 +769,7 @@ __forceinline__ __device__ BrdfParams init_brdf_params(
  */
 __forceinline__ __device__ float3 brdf_eval(const BrdfParams &params,
                                             const float3 L, const float NdotL) {
-    const float3 V_ts = world_to_tangent(params.T, params.B, params.N, params.V);
+    const float3 &V_ts = params.V_ts;
     const float3 L_ts = world_to_tangent(params.T, params.B, params.N, L);
 
     const float3 H_ts = normalize(V_ts + L_ts);
@@ -800,7 +801,7 @@ __forceinline__ __device__ float3 brdf_eval(const BrdfParams &params,
  */
 __forceinline__ __device__ float brdf_pdf(const BrdfParams &params,
                                           const float3 L) {
-    const float3 V_ts = world_to_tangent(params.T, params.B, params.N, params.V);
+    const float3 &V_ts = params.V_ts;
     const float3 L_ts = world_to_tangent(params.T, params.B, params.N, L);
 
     const float3 H_ts = normalize(V_ts + L_ts);
@@ -832,7 +833,7 @@ __forceinline__ __device__ BrdfSample brdf_sample(const BrdfParams &params,
                                                   const float u_lobe,
                                                   const float u0, const float u1) {
     BrdfSample result{};
-    const float3 V_ts = world_to_tangent(params.T, params.B, params.N, params.V);
+    const float3 &V_ts = params.V_ts;
 
     if (u_lobe < params.p_spec) {
         // Specular lobe: GGX VNDF
