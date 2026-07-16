@@ -64,33 +64,41 @@ static_assert(sizeof(EnvAliasEntry) == 12);
  * @brief World-space emissive triangle for NEE sampling.
  *
  * 96 bytes (16-byte aligned for vertex vector loads across array elements).
+ * Stores precomputed edges, face normal, and material properties so the
+ * device NEE evaluator avoids recomputing edges/cross/normalize and
+ * eliminates a random Material array lookup per sample.
  */
 struct EmissiveTriangle {
     /** @brief First vertex position (world space). */
     float3 v0;
-    float _pad0; ///< 16-byte alignment padding.
-    /** @brief Second vertex position (world space). */
-    float3 v1;
-    float _pad1; ///< 16-byte alignment padding.
-    /** @brief Third vertex position (world space). */
-    float3 v2;
-    float _pad2; ///< 16-byte alignment padding.
+    /** @brief X component of the precomputed face normal (unit length). */
+    float normal_x;
+
+    /** @brief Edge vector v1 - v0 (world space). */
+    float3 edge1;
+    /** @brief Y component of the precomputed face normal. */
+    float normal_y;
+
+    /** @brief Edge vector v2 - v0 (world space). */
+    float3 edge2;
+    /** @brief Z component of the precomputed face normal. */
+    float normal_z;
 
     /** @brief Emission color (material emissive_factor constant, not a texture sample). */
     float3 emission;
-
-    /** @brief Material index; NEE samples the emissive texture via the interpolated UV. */
-    uint32_t material_index;
+    /** @brief Index into the texture-object array for the emissive map. */
+    uint32_t emissive_tex;
 
     /** @brief First vertex texture coordinates. */
     float2 uv0;
     /** @brief Second vertex texture coordinates. */
     float2 uv1;
+
     /** @brief Third vertex texture coordinates. */
     float2 uv2;
-
-    uint32_t _pad3; ///< Pads to 16-byte aligned struct size (96 = 16 × 6).
-    uint32_t _pad4;
+    /** @brief 1 if the material is double-sided, 0 otherwise. */
+    uint32_t double_sided;
+    uint32_t _pad; ///< Pads to 16-byte aligned struct size (96 = 16 × 6).
 };
 
 static_assert(sizeof(EmissiveTriangle) == 96);

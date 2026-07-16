@@ -81,16 +81,22 @@ namespace qualquer::app {
                     continue;
                 }
 
+                const glm::vec3 normal = glm::normalize(glm::cross(e1, e2));
+
                 triangles.push_back({
-                    .v0 = {v0.x, v0.y, v0.z}, ._pad0 = 0.0f,
-                    .v1 = {v1.x, v1.y, v1.z}, ._pad1 = 0.0f,
-                    .v2 = {v2.x, v2.y, v2.z}, ._pad2 = 0.0f,
+                    .v0 = {v0.x, v0.y, v0.z},
+                    .normal_x = normal.x,
+                    .edge1 = {e1.x, e1.y, e1.z},
+                    .normal_y = normal.y,
+                    .edge2 = {e2.x, e2.y, e2.z},
+                    .normal_z = normal.z,
                     .emission = {emissive_f.x, emissive_f.y, emissive_f.z},
-                    .material_index = mesh.material_id,
+                    .emissive_tex = mat.emissive_tex,
                     .uv0 = {verts[i0].uv0.x, verts[i0].uv0.y},
                     .uv1 = {verts[i1].uv0.x, verts[i1].uv0.y},
                     .uv2 = {verts[i2].uv0.x, verts[i2].uv0.y},
-                    ._pad3 = 0, ._pad4 = 0,
+                    .double_sided = mat.double_sided,
+                    ._pad = 0,
                 });
 
                 powers.push_back(emissive_lum * area);

@@ -367,9 +367,12 @@ __forceinline__ __device__ float3 evaluate_emissive_nee(
         params.emissive.alias_table, params.emissive.count, emi_r1, emi_r2);
     const EmissiveTriangle &tri = params.emissive.triangles[tri_idx];
 
+    // Barycentric point on triangle: v0 + edge1 * b1 + edge2 * b2.
+    // triangle_barycentric returns (b0, b1, b2) with b0 = 1 - b1 - b2;
+    // the v0 term absorbs b0 via v0*b0 + (v0+e1)*b1 + (v0+e2)*b2 = v0 + e1*b1 + e2*b2.
     const float3 light_bary = triangle_barycentric(emi_r3, emi_r4);
-    const float3 light_pos = tri.v0 * light_bary.x + tri.v1 * light_bary.y
-                           + tri.v2 * light_bary.z;
+    const float3 light_pos = tri.v0 + tri.edge1 * light_bary.y
+                           + tri.edge2 * light_bary.z;
 
     const float3 to_light = light_pos - offset_pos;
     const float dist2 = dot(to_light, to_light);
@@ -383,15 +386,12 @@ __forceinline__ __device__ float3 evaluate_emissive_nee(
     const float dist = sqrtf(dist2);
     const float3 L = to_light * (1.0f / dist);
 
-    const float3 light_edge1 = tri.v1 - tri.v0;
-    const float3 light_edge2 = tri.v2 - tri.v0;
-    const float3 light_normal = normalize(cross(light_edge1, light_edge2));
+    const float3 light_normal = make_float3(tri.normal_x, tri.normal_y, tri.normal_z);
     float cos_theta_light = dot(light_normal, -L);
 
     // Double-sided: take absolute cosine so both faces are treated as
     // front-facing (light emits from both sides of the triangle).
-    const Material &light_mat = params.materials[tri.material_index];
-    if (light_mat.double_sided == 1u) {
+    if (tri.double_sided == 1u) {
         cos_theta_light = fabsf(cos_theta_light);
     }
     if (cos_theta_light <= 0.0f) {
@@ -416,14 +416,18 @@ __forceinline__ __device__ float3 evaluate_emissive_nee(
         return make_float3(0.0f, 0.0f, 0.0f);
     }
 
-    const float2 light_uv = tri.uv0 * light_bary.x + tri.uv1 * light_bary.y
-                          + tri.uv2 * light_bary.z;
+    // UV interpolation: uv0 + (uv1-uv0)*b1 + (uv2-uv0)*b2 (same edge form as position).
+    const float2 light_uv = make_float2(
+        tri.uv0.x + (tri.uv1.x - tri.uv0.x) * light_bary.y
+                   + (tri.uv2.x - tri.uv0.x) * light_bary.z,
+        tri.uv0.y + (tri.uv1.y - tri.uv0.y) * light_bary.y
+                   + (tri.uv2.y - tri.uv0.y) * light_bary.z);
     const auto le_texel = tex2D<float4>(
-        params.texture_objects[light_mat.emissive_tex], light_uv.x, light_uv.y);
+        params.texture_objects[tri.emissive_tex], light_uv.x, light_uv.y);
     const float3 Le = make_float3(
-        le_texel.x * light_mat.emissive_factor.x,
-        le_texel.y * light_mat.emissive_factor.y,
-        le_texel.z * light_mat.emissive_factor.z);
+        le_texel.x * tri.emission.x,
+        le_texel.y * tri.emission.y,
+        le_texel.z * tri.emission.z);
 
     const BrdfEvalResult bep_emi = brdf_eval_and_pdf(bp, L, NdotL_emi);
 
