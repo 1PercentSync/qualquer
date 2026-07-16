@@ -34,19 +34,33 @@ namespace qualquer::renderer {
  * the returned direction is transformed to world space by the inverse IBL
  * rotation.
  *
+ * Returns world_dir, env_dir (for cubemap lookup), and solid-angle PDF
+ * directly from the selected pixel's luminance, avoiding the reverse
+ * mapping (atan2/asin) that env_pdf would need to rediscover the pixel.
+ */
+struct EnvSample {
+    float3 world_dir; ///< Sampled direction in world space (normalized).
+    float3 env_dir;   ///< Sampled direction in env space (for cubemap lookup).
+    float  pdf;       ///< Solid-angle PDF of this sample.
+};
+
+/**
+ * @brief Alias-table importance sampling of the environment map.
+ *
  * @param env  Packed env light data (alias table, dimensions, rotation).
  * @param r1   Uniform random [0,1) — bin selection.
  * @param r2   Uniform random [0,1) — accept/reject.
  * @param r3   Uniform random [0,1) — horizontal sub-pixel jitter.
  * @param r4   Uniform random [0,1) — vertical sub-pixel jitter.
- * @return Sampled world-space direction (normalized).
+ * @return EnvSample with world_dir, env_dir, and PDF.
  */
-__forceinline__ __device__ float3 sample_env_alias_table(
+__forceinline__ __device__ EnvSample sample_env_alias_table(
         const EnvLightData &env,
         const float r1, const float r2, const float r3, const float r4) {
 
     if (env.alias_count == 0) {
-        return make_float3(0.0f, 1.0f, 0.0f);
+        return {make_float3(0.0f, 1.0f, 0.0f),
+                make_float3(0.0f, 1.0f, 0.0f), 0.0f};
     }
 
     const uint32_t idx = min(static_cast<uint32_t>(r1 * static_cast<float>(env.alias_count)),
@@ -69,8 +83,16 @@ __forceinline__ __device__ float3 sample_env_alias_table(
                                        __sinf(theta),
                                        cos_theta * __sinf(phi));
 
+    // PDF from the selected pixel's stored luminance (same value that built
+    // the alias table). Avoids the atan2/asin inverse mapping of env_pdf.
+    const float lum = env.alias_table[pixel].luminance;
+    const float pdf = lum * static_cast<float>(env.alias_width)
+                          * static_cast<float>(env.alias_height)
+                      / (env.total_luminance * kTwoPi * kPi);
+
     // Inverse IBL rotation: env space → world space.
-    return rotate_y_dir(env_dir, -env.rotation_sin, env.rotation_cos);
+    const float3 world_dir = rotate_y_dir(env_dir, -env.rotation_sin, env.rotation_cos);
+    return {world_dir, env_dir, pdf};
 }
 
 /**
@@ -265,8 +287,13 @@ __forceinline__ __device__ float3 evaluate_env_nee(
                                    sample_index, params.frame_index,
                                    dim_base + kBounceOffsetEnvNee + 3);
 
-    const float3 L = sample_env_alias_table(
+    const EnvSample es = sample_env_alias_table(
         params.env, env_r1, env_r2, env_r3, env_r4);
+    const float3 L = es.world_dir;
+
+    if (es.pdf <= 0.0f || !isfinite(es.pdf)) {
+        return make_float3(0.0f, 0.0f, 0.0f);
+    }
 
     // Geometric hemisphere reject: shadow_terminator_factor returns 0 when
     // NgdotL <= 0, so reject before the shadow ray and BRDF work.
@@ -285,23 +312,17 @@ __forceinline__ __device__ float3 evaluate_env_nee(
         return make_float3(0.0f, 0.0f, 0.0f);
     }
 
-    // L is world space; rotate to env space for cubemap lookup.
-    const float3 env_L = rotate_y_dir(
-        L, params.env.rotation_sin, params.env.rotation_cos);
+    // Cubemap lookup uses env_dir directly (no second rotation).
     const auto env_texel = texCubemap<float4>(
-        params.env.cubemap, env_L.x, env_L.y, env_L.z);
+        params.env.cubemap, es.env_dir.x, es.env_dir.y, es.env_dir.z);
     const float3 env_color = make_float3(env_texel.x, env_texel.y, env_texel.z);
 
     const BrdfEvalResult bep = brdf_eval_and_pdf(bp, L, NdotL);
 
-    const float pdf_light = env_pdf(params.env, L);
-    if (pdf_light <= 0.0f || !isfinite(pdf_light)) {
-        return make_float3(0.0f, 0.0f, 0.0f);
-    }
-    const float mis_w = mis_power_heuristic(pdf_light, bep.pdf);
+    const float mis_w = mis_power_heuristic(es.pdf, bep.pdf);
     const float st_factor = shadow_terminator_factor(N_face, N_shading, L);
 
-    return env_color * bep.value * NdotL * mis_w * st_factor / pdf_light;
+    return env_color * bep.value * NdotL * mis_w * st_factor / es.pdf;
 }
 
 /**
