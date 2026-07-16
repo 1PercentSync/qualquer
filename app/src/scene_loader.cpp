@@ -363,7 +363,7 @@ namespace qualquer::app {
                                 || !std::isfinite(color.z) || !std::isfinite(color.w)) {
                                 color = {1.0f, 1.0f, 1.0f, 1.0f};
                             } else {
-                                color = glm::max(color, glm::vec4(0.0f));
+                                color = glm::clamp(color, glm::vec4(0.0f), glm::vec4(1.0f));
                             }
                             vertices[i].color = color;
                             ++i;
@@ -375,7 +375,7 @@ namespace qualquer::app {
                                 || !std::isfinite(rgb.z)) {
                                 rgb = {1.0f, 1.0f, 1.0f};
                             } else {
-                                rgb = glm::max(rgb, glm::vec3(0.0f));
+                                rgb = glm::clamp(rgb, glm::vec3(0.0f), glm::vec3(1.0f));
                             }
                             vertices[i].color = {rgb.x, rgb.y, rgb.z, 1.0f};
                             ++i;
