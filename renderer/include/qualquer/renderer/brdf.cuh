@@ -249,6 +249,55 @@ __forceinline__ __device__ float3 f_EON(const float3 rho, const float r,
     return f_ss + f_ms;
 }
 
+// ---- BRDF parameter bundle --------------------------------------------------
+
+/**
+ * @brief Per-shading-point BRDF parameters, computed once and shared by
+ *        brdf_eval_and_pdf and brdf_sample.
+ *
+ * Packs geometry (V_ts/N/T/B), material (F0, diffuse_rho, alpha, r),
+ * precomputed energy compensation (turquin_comp, diffuse_weight, p_spec),
+ * and CLTC invariants (ltc_X/Y, ltc_a/b/c/d, eon_P_u/P_c) so the
+ * closesthit shader constructs one instance via init_brdf_params and
+ * passes it to both the bounce sampler and the NEE evaluators.
+ */
+struct BrdfParams {
+    float3 V_ts;           ///< View direction (tangent space, z = NdotV).
+    float3 N;              ///< Shading normal (world, normalized).
+    float3 T;              ///< Tangent axis (world, from build_orthonormal_basis).
+    float3 B;              ///< Bitangent axis (world, from build_orthonormal_basis).
+    float3 F0;             ///< lerp(0.04, base_color, metallic); RGB.
+    float3 base_color;     ///< Linear RGB base color (EON single-scatter albedo input).
+    float3 turquin_comp;   ///< Per-channel specular compensation multiplier (RGB).
+    float3 E_glossy_rgb;   ///< Per-channel specular directional reflectance (DLSS-RR specular albedo).
+    float3 diffuse_weight; ///< (1-metallic) * (1 - E_glossy_per_channel); RGB.
+    float3 ltc_X;          ///< LTC basis X axis (tangent space, from V_ts).
+    float3 ltc_Y;          ///< LTC basis Y axis (tangent space, from V_ts).
+    float  alpha;          ///< roughness^2 (specular primitives); caller clamps >= 1e-4.
+    float  r;              ///< Linear roughness in [0,1] (EON / E_ss / E_glossy).
+    float  NdotV;          ///< Clamped dot(N, V), must be > 0.
+    float  p_spec;         ///< Specular lobe selection probability.
+    float  ltc_a;          ///< LTC matrix coefficient a (from mu, r).
+    float  ltc_b;          ///< LTC matrix coefficient b (from mu, r).
+    float  ltc_c;          ///< LTC matrix coefficient c (from mu, r).
+    float  ltc_d;          ///< LTC matrix coefficient d (from mu, r).
+    float  eon_P_u;        ///< EON uniform-hemisphere mix weight.
+    float  eon_P_c;        ///< EON CLTC mix weight (1 - P_u).
+};
+
+/**
+ * @brief Result of brdf_sample: sampled direction, throughput update, and
+ *        combined multi-lobe PDF.
+ *
+ * A pdf_combined of 0 signals an invalid sample (specular lobe reflected
+ * below the surface); the caller terminates the path in that case.
+ */
+struct BrdfSample {
+    float3 next_dir;          ///< Sampled direction (world, normalized).
+    float3 throughput_update; ///< BRDF * cos / (pdf * lobe_prob).
+    float  pdf_combined;      ///< Combined multi-lobe PDF (0 = invalid sample).
+};
+
 // ---- EON importance sampling: CLTC + uniform hemisphere mix -----------------
 //
 // Mixes uniform hemisphere (P_u) and CLTC (P_c = 1 - P_u). P_u is a
@@ -316,19 +365,16 @@ __forceinline__ __device__ void ltc_coeffs(const float mu, const float r,
 }
 
 /**
- * @brief CLTC sample: direction + PDF.
+ * @brief CLTC sample: direction + PDF (uses precomputed LTC invariants).
  *
- * @param wo_local Outgoing direction (tangent space, z = normal).
- * @param r        Linear roughness in [0,1].
- * @param u1       Uniform random number in [0,1).
- * @param u2       Uniform random number in [0,1).
+ * @param p  BRDF parameter bundle (ltc_X/Y, ltc_a/b/c/d precomputed).
+ * @param u1 Uniform random number in [0,1).
+ * @param u2 Uniform random number in [0,1).
  * @return float4: xyz = sampled wi (tangent space, normalized), w = PDF.
  */
-__forceinline__ __device__ float4 cltc_sample(const float3 wo_local,
-                                              const float r,
+__forceinline__ __device__ float4 cltc_sample(const BrdfParams &p,
                                               const float u1, const float u2) {
-    float a, b, c, d;
-    ltc_coeffs(wo_local.z, r, a, b, c, d);
+    const float a = p.ltc_a, b = p.ltc_b, c = p.ltc_c, d = p.ltc_d;
 
     const float R     = sqrtf(u1);
     const float phi   = kTwoPi * u2;
@@ -349,29 +395,22 @@ __forceinline__ __device__ float4 cltc_sample(const float3 wo_local,
     const float det_m = c * (a - b * d);
     const float pdf_wi = pdf_wh * len * len * len / det_m;
 
-    float3 X, Y;
-    ltc_basis(wo_local, X, Y);
-    wi = normalize(ltc_from(X, Y, wi));
+    wi = normalize(ltc_from(p.ltc_X, p.ltc_Y, wi));
 
     return make_float4(wi.x, wi.y, wi.z, pdf_wi);
 }
 
 /**
- * @brief CLTC PDF for a given direction pair.
+ * @brief CLTC PDF for a given direction pair (uses precomputed LTC invariants).
  *
- * @param wo_local Outgoing direction (tangent space, z = normal).
+ * @param p        BRDF parameter bundle (ltc_X/Y, ltc_a/b/c/d precomputed).
  * @param wi_local Incident direction (tangent space, z = normal).
- * @param r        Linear roughness in [0,1].
  */
-__forceinline__ __device__ float cltc_pdf(const float3 wo_local,
-                                         const float3 wi_local,
-                                         const float r) {
-    float3 X, Y;
-    ltc_basis(wo_local, X, Y);
-    const float3 wi = ltc_to(X, Y, wi_local);
+__forceinline__ __device__ float cltc_pdf(const BrdfParams &p,
+                                         const float3 wi_local) {
+    const float3 wi = ltc_to(p.ltc_X, p.ltc_Y, wi_local);
 
-    float a, b, c, d;
-    ltc_coeffs(wo_local.z, r, a, b, c, d);
+    const float a = p.ltc_a, b = p.ltc_b, c = p.ltc_c, d = p.ltc_d;
     const float det_m = c * (a - b * d);
     const float3 wh = make_float3(c * (wi.x - b * wi.z),
                                   (a - b * d) * wi.y,
@@ -400,26 +439,25 @@ __forceinline__ __device__ float3 uniform_lobe_sample(const float u1, const floa
 /**
  * @brief EON importance sampling (uniform hemisphere + CLTC mix).
  *
- * @param wo_local Outgoing direction (tangent space, z = normal).
- * @param r        Linear roughness in [0,1].
- * @param u1       Uniform random number in [0,1).
- * @param u2       Uniform random number in [0,1).
+ * Uses precomputed P_u/P_c and LTC invariants from BrdfParams.
+ *
+ * @param p  BRDF parameter bundle (eon_P_u/P_c, ltc_* precomputed).
+ * @param u1 Uniform random number in [0,1).
+ * @param u2 Uniform random number in [0,1).
  * @return float4: xyz = sampled wi (tangent space, normalized), w = PDF.
  */
-__forceinline__ __device__ float4 sample_EON(const float3 wo_local, const float r,
+__forceinline__ __device__ float4 sample_EON(const BrdfParams &p,
                                              const float u1, const float u2) {
-    const float mu  = wo_local.z;
-    const float P_u = __powf(r, 0.1f)
-        * (0.162925f + (-0.372058f + (0.538233f - 0.290822f * mu) * mu) * mu);
-    const float P_c = 1.0f - P_u;
+    const float P_u = p.eon_P_u;
+    const float P_c = p.eon_P_c;
 
     if (u1 <= P_u) {
         const float3 wi = uniform_lobe_sample(u1 / P_u, u2);
-        const float pdf_c = cltc_pdf(wo_local, wi, r);
+        const float pdf_c = cltc_pdf(p, wi);
         constexpr float pdf_u = kInvTwoPi;
         return make_float4(wi.x, wi.y, wi.z, P_u * pdf_u + P_c * pdf_c);
     }
-    const float4 wi_c = cltc_sample(wo_local, r, (u1 - P_u) / P_c, u2);
+    const float4 wi_c = cltc_sample(p, (u1 - P_u) / P_c, u2);
     constexpr float pdf_u = kInvTwoPi;
     return make_float4(wi_c.x, wi_c.y, wi_c.z, P_u * pdf_u + P_c * wi_c.w);
 }
@@ -427,19 +465,16 @@ __forceinline__ __device__ float4 sample_EON(const float3 wo_local, const float 
 /**
  * @brief EON sampling PDF for a given direction pair.
  *
- * @param wo_local Outgoing direction (tangent space, z = normal).
+ * Uses precomputed P_u/P_c and LTC invariants from BrdfParams.
+ *
+ * @param p        BRDF parameter bundle (eon_P_u/P_c, ltc_* precomputed).
  * @param wi_local Incident direction (tangent space, z = normal).
- * @param r        Linear roughness in [0,1].
  */
-__forceinline__ __device__ float pdf_EON(const float3 wo_local,
-                                        const float3 wi_local, const float r) {
-    const float mu  = wo_local.z;
-    const float P_u = __powf(r, 0.1f)
-        * (0.162925f + (-0.372058f + (0.538233f - 0.290822f * mu) * mu) * mu);
-    const float P_c = 1.0f - P_u;
-    const float pdf_c = cltc_pdf(wo_local, wi_local, r);
+__forceinline__ __device__ float pdf_EON(const BrdfParams &p,
+                                        const float3 wi_local) {
+    const float pdf_c = cltc_pdf(p, wi_local);
     constexpr float pdf_u = kInvTwoPi;
-    return P_u * pdf_u + P_c * pdf_c;
+    return p.eon_P_u * pdf_u + p.eon_P_c * pdf_c;
 }
 
 // ---- Multi-scatter energy compensation (Turquin 2019) -----------------------
@@ -638,44 +673,6 @@ __forceinline__ __device__ float specular_probability(const float NdotV,
 // ---- BRDF parameter bundle --------------------------------------------------
 
 /**
- * @brief Per-shading-point BRDF parameters, computed once and shared by
- *        brdf_eval, brdf_sample, and brdf_pdf.
- *
- * Packs geometry (V/N/T/B), material (F0, diffuse_rho, alpha, r), and
- * precomputed energy compensation (turquin_comp, diffuse_weight, p_spec) so
- * the closesthit shader constructs one instance via init_brdf_params and
- * passes it to both the bounce sampler and the NEE evaluators.
- */
-struct BrdfParams {
-    float3 V_ts;           ///< View direction (tangent space, z = NdotV).
-    float3 N;              ///< Shading normal (world, normalized).
-    float3 T;              ///< Tangent axis (world, from build_orthonormal_basis).
-    float3 B;              ///< Bitangent axis (world, from build_orthonormal_basis).
-    float3 F0;             ///< lerp(0.04, base_color, metallic); RGB.
-    float3 base_color;     ///< Linear RGB base color (EON single-scatter albedo input).
-    float3 turquin_comp;   ///< Per-channel specular compensation multiplier (RGB).
-    float3 E_glossy_rgb;   ///< Per-channel specular directional reflectance (DLSS-RR specular albedo).
-    float3 diffuse_weight; ///< (1-metallic) * (1 - E_glossy_per_channel); RGB.
-    float  alpha;          ///< roughness^2 (specular primitives); caller clamps >= 1e-4.
-    float  r;              ///< Linear roughness in [0,1] (EON / E_ss / E_glossy).
-    float  NdotV;          ///< Clamped dot(N, V), must be > 0.
-    float  p_spec;         ///< Specular lobe selection probability.
-};
-
-/**
- * @brief Result of brdf_sample: sampled direction, throughput update, and
- *        combined multi-lobe PDF.
- *
- * A pdf_combined of 0 signals an invalid sample (specular lobe reflected
- * below the surface); the caller terminates the path in that case.
- */
-struct BrdfSample {
-    float3 next_dir;          ///< Sampled direction (world, normalized).
-    float3 throughput_update; ///< BRDF * cos / (pdf * lobe_prob).
-    float  pdf_combined;      ///< Combined multi-lobe PDF (0 = invalid sample).
-};
-
-/**
  * @brief Constructs a BrdfParams from raw shading-point inputs.
  *
  * Centralizes the per-channel energy compensation so closesthit stays free
@@ -748,6 +745,17 @@ __forceinline__ __device__ BrdfParams init_brdf_params(
     const float3 one = make_float3(1.0f, 1.0f, 1.0f);
     p.diffuse_weight = (1.0f - metallic) * (one - p.E_glossy_rgb);
     p.p_spec = specular_probability(p.NdotV, p.F0);
+
+    // Precompute CLTC invariants (depend only on V_ts and r, constant per
+    // shading point). Eliminates redundant recomputation across
+    // brdf_eval_and_pdf / brdf_sample calls separated by optixTrace.
+    ltc_basis(p.V_ts, p.ltc_X, p.ltc_Y);
+    ltc_coeffs(p.V_ts.z, roughness, p.ltc_a, p.ltc_b, p.ltc_c, p.ltc_d);
+    const float mu = p.V_ts.z;
+    p.eon_P_u = __powf(roughness, 0.1f)
+        * (0.162925f + (-0.372058f + (0.538233f - 0.290822f * mu) * mu) * mu);
+    p.eon_P_c = 1.0f - p.eon_P_u;
+
     return p;
 }
 
@@ -796,7 +804,7 @@ __forceinline__ __device__ BrdfEvalResult brdf_eval_and_pdf(
 
     // PDF: combined multi-lobe
     const float pdf_spec = pdf_ggx_vndf(NdotH, params.NdotV, params.alpha);
-    const float pdf_diff = pdf_EON(V_ts, L_ts, params.r);
+    const float pdf_diff = pdf_EON(params, L_ts);
 
     return {spec + diff,
             combined_lobe_pdf(pdf_spec, pdf_diff, params.p_spec)};
@@ -849,12 +857,12 @@ __forceinline__ __device__ BrdfSample brdf_sample(const BrdfParams &params,
         result.throughput_update = F * params.turquin_comp
             * (wp.weight / params.p_spec);
 
-        const float pdf_diff = pdf_EON(V_ts, L_ts, params.r);
+        const float pdf_diff = pdf_EON(params, L_ts);
         result.pdf_combined = combined_lobe_pdf(wp.pdf, pdf_diff, params.p_spec);
         result.next_dir = tangent_to_world(params.T, params.B, params.N, L_ts);
     } else {
         // Diffuse lobe: EON CLTC
-        const float4 wi_c = sample_EON(V_ts, params.r, u0, u1);
+        const float4 wi_c = sample_EON(params, u0, u1);
         const float3 L_ts = make_float3(wi_c.x, wi_c.y, wi_c.z);
         const float pdf_diff = wi_c.w;
         const float NdotL = fmaxf(L_ts.z, 1e-4f);
