@@ -107,6 +107,8 @@ namespace qualquer::renderer {
                                         const uint32_t render_height,
                                         const uint32_t display_width,
                                         const uint32_t display_height,
+                                        const float scale_x,
+                                        const float scale_y,
                                         const uint32_t sample_count,
                                         const float exposure) {
             const uint32_t x = blockIdx.x * blockDim.x + threadIdx.x;
@@ -150,8 +152,6 @@ namespace qualquer::renderer {
                 // footprint. Also covers the near-parity corner where width
                 // rounding leaves one axis at or slightly below 1:1 — the
                 // footprint then spans 1-2 texels and degrades to a tent filter.
-                const float scale_x = static_cast<float>(render_width) / static_cast<float>(display_width);
-                const float scale_y = static_cast<float>(render_height) / static_cast<float>(display_height);
                 const float x0 = static_cast<float>(x) * scale_x;
                 const float y0 = static_cast<float>(y) * scale_y;
                 mean = sample_box(color_tex, render_width, render_height,
@@ -161,8 +161,6 @@ namespace qualquer::renderer {
                 // into source texel space (pixel-center convention: the -0.5
                 // shift aligns texel centers). Negative lobes can undershoot on
                 // HDR contrast edges, so the mean is clamped to >= 0.
-                const float scale_x = static_cast<float>(render_width) / static_cast<float>(display_width);
-                const float scale_y = static_cast<float>(render_height) / static_cast<float>(display_height);
                 const float sx = (static_cast<float>(x) + 0.5f) * scale_x - 0.5f;
                 const float sy = (static_cast<float>(y) + 0.5f) * scale_y - 0.5f;
                 mean = sample_catmull_rom(color_tex, sx, sy) * inv_count;
@@ -200,9 +198,15 @@ namespace qualquer::renderer {
         const dim3 grid((display_width + kBlockDim - 1) / kBlockDim,
                         (display_height + kBlockDim - 1) / kBlockDim);
 
+        const float scale_x = static_cast<float>(render_width)
+                             / static_cast<float>(display_width);
+        const float scale_y = static_cast<float>(render_height)
+                             / static_cast<float>(display_height);
+
         tonemap_kernel<<<grid, block, 0, stream>>>(color_tex, display_surface,
                                                    render_width, render_height,
                                                    display_width, display_height,
+                                                   scale_x, scale_y,
                                                    sample_count, exposure);
 
         CUDA_CHECK_KERNEL(cudaGetLastError());
