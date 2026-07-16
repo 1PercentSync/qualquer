@@ -559,10 +559,28 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
 
     // ---- BRDF sampling ----
     const float3 V = -ray_dir;
+
+    // Grazing-angle fallback: at low-poly silhouettes, normal mapping can
+    // push N_shading into V's back hemisphere (dot(N,V) <= 0). Rotate N
+    // minimally toward V so that NdotV is just barely positive. This keeps
+    // shading continuous at the cost of higher variance (NdotV ≈ ε), which
+    // DLSS-RR temporal denoising handles well.
+    float3 N_brdf = N_shading;
+    {
+        const float NdotV = dot(N_shading, V);
+        if (NdotV <= 0.0f) {
+            // Shift N toward V: N' = normalize(N + V * (-NdotV + ε))
+            // This is the smallest additive correction that places N' just
+            // inside V's hemisphere.
+            constexpr float kGrazingEps = 1e-3f;
+            N_brdf = normalize(N_shading + V * (-NdotV + kGrazingEps));
+        }
+    }
+
     float3 T_basis, B_basis;
-    build_orthonormal_basis(N_shading, T_basis, B_basis);
+    build_orthonormal_basis(N_brdf, T_basis, B_basis);
     const BrdfParams bp = init_brdf_params(
-        V, N_shading, T_basis, B_basis,
+        V, N_brdf, T_basis, B_basis,
         base_color, metallic, roughness, alpha);
 
     const uint3 launch_idx = optixGetLaunchIndex();
@@ -626,9 +644,9 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
 
     // ---- NEE: environment + emissive (full evaluation lives in nee.cuh) ----
     const float3 nee_radiance =
-        evaluate_env_nee(bp, offset_pos, N_face, N_shading,
+        evaluate_env_nee(bp, offset_pos, N_face, N_brdf,
                          pixel_index, sample_index, dim_base)
-        + evaluate_emissive_nee(bp, offset_pos, N_face, N_shading,
+        + evaluate_emissive_nee(bp, offset_pos, N_face, N_brdf,
                                 pixel_index, sample_index, dim_base);
 
     // ---- Env MIS weight for BRDF-sampled direction ----
