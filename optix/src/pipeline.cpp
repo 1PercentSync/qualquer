@@ -69,14 +69,13 @@ namespace qualquer::optix {
         // graph shape used for instanced geometry, over the broader ALLOW_ANY so
         // the traversal shader compiles for the actual graph depth rather than the
         // most general one.
-        // numPayloadValues=18: the full path payload carried between raygen and
-        // closesthit (next origin/direction, throughput update, radiance, hit
-        // distance, MIS weights, bounce index, etc.). Declaring the upper bound
-        // here; programs may use fewer.
+        // numPayloadValues=17: the full path payload carried between raygen,
+        // closesthit, and miss (next origin/direction, throughput update,
+        // radiance, hit distance, BRDF PDF, bounce index, etc.).
         // numAttributeValues=2: triangle barycentrics (built-in).
         const OptixPipelineCompileOptions pipeline_options{
             .traversableGraphFlags = OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
-            .numPayloadValues = 18,
+            .numPayloadValues = 17,
             .numAttributeValues = 2,
             .pipelineLaunchParamsVariableName = launch_params_variable_name,
             .pipelineLaunchParamsSizeInBytes = launch_params_size,

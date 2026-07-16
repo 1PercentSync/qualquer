@@ -102,12 +102,9 @@ __forceinline__ __device__ float3 trace_sample(
     path.bounce = 0;
     path.alive = true;
 
-    // Payload registers persist across bounces: closesthit's env_mis_weight
-    // (p13) survives into the next iteration's miss read.
     uint32_t p0 = 0, p1 = 0, p2 = 0, p3 = 0, p4 = 0, p5 = 0;
     uint32_t p6 = 0, p7 = 0, p8 = 0, p9 = 0, p10 = 0, p11 = 0;
-    uint32_t p12 = 0, p13 = __float_as_uint(1.0f), p14 = 0;
-    uint32_t p15 = 0, p16 = 0, p17 = 0;
+    uint32_t p12 = 0, p13 = 0, p14 = 0, p15 = 0, p16 = 0;
 
     while (path.alive && path.bounce < params.max_bounces) {
         // ---- Russian Roulette (bounce >= 2) ----
@@ -125,8 +122,8 @@ __forceinline__ __device__ float3 trace_sample(
             path.throughput = path.throughput / rr_prob;
         }
 
-        p15 = sample_index;
-        p17 = path.bounce;
+        p14 = sample_index;
+        p16 = path.bounce;
 
         optixTraverse(params.traversable,
                       path.origin,
@@ -141,7 +138,7 @@ __forceinline__ __device__ float3 trace_sample(
                       0, // miss SBT index (env)
                       p0, p1, p2, p3, p4, p5,
                       p6, p7, p8, p9, p10, p11,
-                      p12, p13, p14, p15, p16, p17);
+                      p12, p13, p14, p15, p16);
         // SER: reorder by material for texture cache coherence. With a
         // single hitgroup record the default hint only separates hit vs
         // miss; the masked material hint additionally groups threads by
@@ -158,12 +155,12 @@ __forceinline__ __device__ float3 trace_sample(
         optixReorder(reorder_hint & 0x3FFu, 10);
         optixInvoke(p0, p1, p2, p3, p4, p5,
                     p6, p7, p8, p9, p10, p11,
-                    p12, p13, p14, p15, p16, p17);
+                    p12, p13, p14, p15, p16);
 
         const PayloadData d = payload_unpack(
             p0, p1, p2, p3, p4, p5,
             p6, p7, p8, p9, p10, p11,
-            p12, p13, p14, p15, p16, p17);
+            p12, p13, p14, p15, p16);
 
         // Capture first-bounce result for MV + sky aux defaults (first sample only).
         if (capture_primary && path.bounce == 0) {
@@ -176,12 +173,9 @@ __forceinline__ __device__ float3 trace_sample(
             }
         }
 
-        // Accumulate radiance contribution from this bounce.
-        float3 contribution = path.throughput * d.color;
-        if (d.hit_distance < 0.0f) {
-            contribution = contribution * d.env_mis_weight;
-        }
-        path.radiance = path.radiance + contribution;
+        // Accumulate radiance contribution from this bounce. Miss shader
+        // applies env MIS weight directly to color, so no post-multiply needed.
+        path.radiance = path.radiance + path.throughput * d.color;
 
         if (d.hit_distance < 0.0f) {
             path.alive = false;
@@ -376,18 +370,33 @@ __global__ void __raygen__rg() { // NOLINT(*-reserved-identifier)
 
 /// Samples the HDR environment cubemap along the missed ray direction.
 /// Applies IBL Y-axis rotation (world → env space) before cubemap lookup.
+/// When env NEE is active and this miss follows a BRDF sample, applies the
+/// MIS weight here instead of precomputing it in closesthit — env_pdf()
+/// (atan2f + asinf + alias table random read) only runs on actual misses.
 /// Falls back to a constant background when no env cubemap is loaded.
 __global__ void __miss__env() { // NOLINT(*-reserved-identifier)
     using namespace qualquer::renderer;
 
+    const float3 world_dir = optixGetWorldRayDirection();
+
     float3 env_color = make_float3(0.0f, 0.0f, 0.0f);
     if (params.env.cubemap != 0) {
-        const float3 world_dir = optixGetWorldRayDirection();
         // Forward IBL rotation: world space → env space.
         const float3 dir = rotate_y_dir(world_dir,
                                         params.env.rotation_sin, params.env.rotation_cos);
         const auto texel = texCubemap<float4>(params.env.cubemap, dir.x, dir.y, dir.z);
         env_color = make_float3(texel.x, texel.y, texel.z);
+    }
+
+    // Env MIS: when this miss follows a BRDF sample (last_brdf_pdf > 0)
+    // and env NEE is active, weight by power_heuristic(brdf_pdf, env_pdf)
+    // to avoid double-counting with the closesthit NEE strategy.
+    // Primary ray (bounce 0), pass-through, or invalid BRDF sample:
+    // last_brdf_pdf == 0 → weight stays 1.0.
+    const float last_brdf_pdf = payload_get_last_brdf_pdf();
+    if (last_brdf_pdf > 0.0f && params.env.alias_table != nullptr) {
+        const float pdf_env = env_pdf(params.env, world_dir);
+        env_color = env_color * mis_power_heuristic(last_brdf_pdf, pdf_env);
     }
 
     payload_set_color(env_color);
@@ -453,12 +462,11 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
         payload_set_throughput_update(make_float3(1.0f, 1.0f, 1.0f));
         payload_set_color(make_float3(0.0f, 0.0f, 0.0f));
         payload_set_hit_distance(hit_t);
-        payload_set_env_mis_weight(1.0f);
         // Shadow rays use TERMINATE_ON_FIRST_HIT without closesthit, so they
         // cannot pass through single-sided back-faces. NEE at the previous
         // shading point is therefore blind to anything beyond this surface.
         // Clear last_brdf_pdf so that a subsequent emissive hit takes full
-        // weight (no competing NEE strategy), matching env_mis_weight = 1.0.
+        // weight (no competing NEE strategy), and miss shader skips env MIS.
         payload_set_last_brdf_pdf(0.0f);
         return;
     }
@@ -654,12 +662,11 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
     payload_set_bounce(bounce);
 
     // Last bounce: emissive + NEE already collected above. The next ray would
-    // never be traced (raygen loop condition), so skip BRDF sampling, RNG,
-    // and env MIS weight. Terminate via zero throughput.
+    // never be traced (raygen loop condition), so skip BRDF sampling and RNG.
+    // Terminate via zero throughput.
     if (bounce >= params.max_bounces - 1) {
         payload_set_next_direction(make_float3(0.0f, 0.0f, 0.0f));
         payload_set_throughput_update(make_float3(0.0f, 0.0f, 0.0f));
-        payload_set_env_mis_weight(1.0f);
         payload_set_last_brdf_pdf(0.0f);
         return;
     }
@@ -683,24 +690,12 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
         // surface hit is not.
         payload_set_next_direction(make_float3(0.0f, 0.0f, 0.0f));
         payload_set_throughput_update(make_float3(0.0f, 0.0f, 0.0f));
-        payload_set_env_mis_weight(1.0f);
         payload_set_last_brdf_pdf(0.0f);
         return;
     }
 
-    // ---- Env MIS weight for BRDF-sampled direction ----
-    // When the BRDF ray misses (hits environment), the raygen loop scales its
-    // contribution by this weight. Without NEE it is 1.0; with env NEE it is
-    // power_heuristic(brdf_pdf, env_pdf(brdf_dir)) to avoid double-counting.
-    float env_mis_w = 1.0f;
-    if (params.env.alias_table != nullptr) {
-        const float pdf_env_at_brdf = env_pdf(params.env, bs.next_dir);
-        env_mis_w = mis_power_heuristic(bs.pdf_combined, pdf_env_at_brdf);
-    }
-
     payload_set_next_direction(bs.next_dir);
     payload_set_throughput_update(bs.throughput_update);
-    payload_set_env_mis_weight(env_mis_w);
     payload_set_last_brdf_pdf(bs.pdf_combined);
 }
 
