@@ -661,6 +661,10 @@ namespace qualquer::app {
                 spec_clamp(pbr.baseColorFactor[2], 0.0f, 1.0f, 1.0f),
                 spec_clamp(pbr.baseColorFactor[3], 0.0f, 1.0f, 1.0f),
             };
+            // NOTE: if KHR_materials_emissive_strength is added, multiply
+            // emissiveFactor by emissiveStrength here and widen the clamp range.
+            // emissive_alias_table.cpp total_power cast will also need overflow
+            // protection — see the NOTE there.
             data.emissive_factor = {
                 spec_clamp(mat.emissiveFactor[0], 0.0f, 1.0f, 0.0f),
                 spec_clamp(mat.emissiveFactor[1], 0.0f, 1.0f, 0.0f),

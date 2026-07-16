@@ -163,6 +163,11 @@ namespace qualquer::app {
             table[s].alias = s;
         }
 
+        // emissive_factor is clamped to [0,1] (no KHR_materials_emissive_strength),
+        // so per-triangle power = luminance(factor) * area <= area. Overflow
+        // would require total world-space emissive area > 3.4e38 m².
+        // NOTE: if KHR_materials_emissive_strength is added, factor can exceed 1
+        // and this cast needs overflow protection (see env_alias_table.cpp scaling).
         const auto total_power = static_cast<float>(power_sum);
 
         spdlog::info("Emissive alias table built: {} triangles ({:.1f} KB, total_power={:.2f})",

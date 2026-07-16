@@ -8,6 +8,7 @@
 #include <spdlog/spdlog.h>
 
 #include <cmath>
+#include <limits>
 #include <numbers>
 #include <vector>
 
@@ -53,7 +54,19 @@ namespace qualquer::app {
             }
         }
 
-        const auto total_luminance = static_cast<float>(weight_sum);
+        // Scale luminances so total fits in float. env_pdf divides
+        // lum[i] by total — uniform scaling cancels, PDF unchanged.
+        float lum_scale = 1.0f;
+        if (!std::isfinite(static_cast<float>(weight_sum))) {
+            lum_scale = static_cast<float>(
+                static_cast<double>(std::numeric_limits<float>::max()) * 0.5 / weight_sum);
+            spdlog::warn("Env alias table: weight_sum overflows float (double={:.6e}), "
+                         "scaling luminances by {:.6e}", weight_sum, lum_scale);
+            for (uint32_t i = 0; i < entry_count; ++i) {
+                luminances[i] *= lum_scale;
+            }
+        }
+        const auto total_luminance = static_cast<float>(weight_sum * static_cast<double>(lum_scale));
 
         // --- Vose's alias table algorithm O(N) ---
         std::vector<renderer::EnvAliasEntry> table(entry_count);
