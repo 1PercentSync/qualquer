@@ -273,11 +273,11 @@
 **关键考量**：
 - mipmap 基础设施完全就绪（`tex2DLod` 可直接使用）
 - Ray cone 减少 texture aliasing noise → 每个 sample 质量更高 → 自适应 spp 更高效
-- Phase 4.5 实现时使用 p16（reserved）+ p18（numPayloadValues = 19）
+- Phase 4.5 实现时扩展 payload（当前 16 registers，p0-p15）
 
 **决策**：✅ **A. Ray Cone**。mipmap 基础设施就绪，`tex2DLod` 直接可用。减少高频纹理 aliasing → 每 sample 质量更高。
 
-**Payload register 计划**：p15 = sample_index（raygen sample loop 传递给 closesthit RNG），p16 reserved。Phase 4.5 实现 ray cone 时：p16 → cone_width，p18 → cone_spread（numPayloadValues = 19）。p15 保留不动。
+**Payload register 计划**：当前 p14 = sample_index，p15 = bounce。Phase 4.5 实现 ray cone 时：新增 p16 → cone_width，p17 → cone_spread（numPayloadValues = 18）。
 
 ---
 

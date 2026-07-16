@@ -206,7 +206,7 @@ MUSTREAD:4
 
 ## Step 17：Ray Cone LOD
 
-- [ ] Payload 扩展至 19 registers：p16 → cone_width（float），p18 → cone_spread（float）
+- [ ] Payload 扩展至 18 registers：p16 → cone_width（float），p17 → cone_spread（float）
 - [ ] Raygen 初始化：cone_width = 0，cone_spread = 2 × tan(0.5 × fov) / render_height（primary ray pixel footprint）
 - [ ] Closesthit 更新：cone_width += cone_spread × hit_distance，bounce 时 cone_spread 根据 BRDF 散射特性更新
 - [ ] 纹理采样改 `tex2DLod`：LOD = log2(cone_width × texture_resolution / triangle_footprint)
