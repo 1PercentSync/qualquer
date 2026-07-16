@@ -202,7 +202,7 @@ __forceinline__ __device__ uint32_t sample_emissive_alias_table(
  * @param dist               Distance from shading point to light sample point.
  * @param cos_theta_light    |dot(light_normal, dir_to_shading_point)|.
  * @param total_power        Total power sum across all emissive triangles.
- * @return Solid-angle PDF. Returns HUGE_VALF when cos_theta_light <= 0
+ * @return Solid-angle PDF. Returns +Inf when cos_theta_light <= 0
  *         (edge-on triangle subtends near-zero solid angle → PDF → ∞).
  */
 __forceinline__ __device__ float emissive_light_pdf(
@@ -213,7 +213,7 @@ __forceinline__ __device__ float emissive_light_pdf(
         return 0.0f;
     }
     if (cos_theta_light <= 0.0f) {
-        return HUGE_VALF;
+        return __int_as_float(0x7f800000);  // +Inf
     }
     const float pdf_area = emission_luminance / total_power;
     return pdf_area * dist * dist / cos_theta_light;
