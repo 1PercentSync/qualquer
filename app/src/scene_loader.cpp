@@ -468,6 +468,7 @@ namespace qualquer::app {
                         vertices[indices[tri + 1]].normal = n;
                         vertices[indices[tri + 2]].normal = n;
                     }
+                    has_normals = true;
                 }
 
                 // §1384: vertices of the same triangle SHOULD have the same
