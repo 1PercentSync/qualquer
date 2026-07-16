@@ -534,20 +534,25 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
     const float3 N_shading = ensure_normal_consistency(N_mapped, N_face);
 
     // ---- Emissive (with BRDF-strategy MIS weight for bounce > 0) ----
-    const auto em_texel = tex2D<float4>(tex[mat.emissive_tex], uv.x, uv.y);
-    float3 emissive = make_float3(em_texel.x * mat.emissive_factor.x,
-                                  em_texel.y * mat.emissive_factor.y,
-                                  em_texel.z * mat.emissive_factor.z);
-
-    // Bounce 0 (direct view): weight 1.0 — primary ray is not a BRDF sample.
-    // Bounce > 0 with emissive NEE active: BRDF hit emissive is one of two MIS
-    // strategies, weight by power_heuristic(brdf_pdf, light_pdf).
-    // Bounce > 0 without emissive NEE: weight 1.0 — no competing strategy.
+    // Skip the emissive texture fetch when emissive_factor is zero (the
+    // vast majority of materials). SER groups threads by material, so
+    // this branch is warp-coherent and cheaper than a bindless tex2D to
+    // the default white texture whose result would be multiplied to zero.
     const uint32_t bounce = payload_get_bounce();
-    if (bounce > 0 && params.emissive.count > 0) {
-        const float emi_lum = luminance(make_float3(
-            mat.emissive_factor.x, mat.emissive_factor.y, mat.emissive_factor.z));
-        if (emi_lum > 0.0f) {
+    const float emi_lum = luminance(make_float3(
+        mat.emissive_factor.x, mat.emissive_factor.y, mat.emissive_factor.z));
+    float3 emissive = make_float3(0.0f, 0.0f, 0.0f);
+    if (emi_lum > 0.0f) {
+        const auto em_texel = tex2D<float4>(tex[mat.emissive_tex], uv.x, uv.y);
+        emissive = make_float3(em_texel.x * mat.emissive_factor.x,
+                               em_texel.y * mat.emissive_factor.y,
+                               em_texel.z * mat.emissive_factor.z);
+
+        // Bounce 0 (direct view): weight 1.0 — primary ray is not a BRDF sample.
+        // Bounce > 0 with emissive NEE active: BRDF hit emissive is one of two MIS
+        // strategies, weight by power_heuristic(brdf_pdf, light_pdf).
+        // Bounce > 0 without emissive NEE: weight 1.0 — no competing strategy.
+        if (bounce > 0 && params.emissive.count > 0) {
             const float last_brdf_pdf = payload_get_last_brdf_pdf();
             // MIS only when a competing BRDF strategy exists. last_brdf_pdf == 0
             // means no real BRDF sample preceded this bounce (camera ray followed
