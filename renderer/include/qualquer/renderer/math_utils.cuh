@@ -136,16 +136,15 @@ __forceinline__ __device__ float3 get_shading_normal(
     const float tz = sqrtf(fmaxf(0.0f, 1.0f - tx * tx - ty * ty));
 
     // Degenerate tangent guard
-    const float t_len_sq = dot(T_world, T_world);
-    if (t_len_sq < 1e-6f) {
+    if (dot(T_world, T_world) < 1e-6f) {
         return N;
     }
 
-    // TBN: T, B = cross(N, T) * handedness, N
-    const float3 T = T_world * rsqrtf(t_len_sq);
-    const float3 B = cross(N, T) * tangent_w;
+    // TBN uses unnormalized interpolated tangent per MikkTSpace requirement
+    // (mikktspace.h:120) and glTF spec §1386 formula. No Gram-Schmidt.
+    const float3 B = cross(N, T_world) * tangent_w;
 
-    return normalize(T * tx + B * ty + N * tz);
+    return normalize(T_world * tx + B * ty + N * tz);
 }
 
 } // namespace
