@@ -77,11 +77,14 @@ __forceinline__ __device__ EnvSample sample_env_alias_table(
     // Equirect UV → direction in env space (matches equirect_to_cubemap.cu convention).
     const float phi   = (u - 0.5f) * kTwoPi;
     const float theta = (0.5f - v) * kPi;
-    const float cos_theta = __cosf(theta);
+    float sin_theta, cos_theta;
+    __sincosf(theta, &sin_theta, &cos_theta);
+    float sin_phi, cos_phi;
+    __sincosf(phi, &sin_phi, &cos_phi);
 
-    const float3 env_dir = make_float3(cos_theta * __cosf(phi),
-                                       __sinf(theta),
-                                       cos_theta * __sinf(phi));
+    const float3 env_dir = make_float3(cos_theta * cos_phi,
+                                       sin_theta,
+                                       cos_theta * sin_phi);
 
     // PDF from the selected pixel's stored luminance (same value that built
     // the alias table). Avoids the atan2/asin inverse mapping of env_pdf.
