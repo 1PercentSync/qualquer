@@ -104,7 +104,7 @@ __forceinline__ __device__ float3 trace_sample(
 
     uint32_t p0 = 0, p1 = 0, p2 = 0, p3 = 0, p4 = 0, p5 = 0;
     uint32_t p6 = 0, p7 = 0, p8 = 0, p9 = 0, p10 = 0, p11 = 0;
-    uint32_t p12 = 0, p13 = 0, p14 = 0, p15 = 0, p16 = 0;
+    uint32_t p12 = 0, p13 = 0, p14 = 0, p15 = 0;
 
     while (path.alive && path.bounce < params.max_bounces) {
         // ---- Russian Roulette (bounce >= 2) ----
@@ -123,7 +123,7 @@ __forceinline__ __device__ float3 trace_sample(
         }
 
         p14 = sample_index;
-        p16 = path.bounce;
+        p15 = path.bounce;
 
         optixTraverse(params.traversable,
                       path.origin,
@@ -138,7 +138,7 @@ __forceinline__ __device__ float3 trace_sample(
                       0, // miss SBT index (env)
                       p0, p1, p2, p3, p4, p5,
                       p6, p7, p8, p9, p10, p11,
-                      p12, p13, p14, p15, p16);
+                      p12, p13, p14, p15);
         // SER: reorder secondary bounces by material for texture cache
         // coherence. Primary rays (bounce 0) are spatially coherent —
         // adjacent pixels hit nearby geometry with similar materials.
@@ -157,12 +157,12 @@ __forceinline__ __device__ float3 trace_sample(
         }
         optixInvoke(p0, p1, p2, p3, p4, p5,
                     p6, p7, p8, p9, p10, p11,
-                    p12, p13, p14, p15, p16);
+                    p12, p13, p14, p15);
 
         const PayloadData d = payload_unpack(
             p0, p1, p2, p3, p4, p5,
             p6, p7, p8, p9, p10, p11,
-            p12, p13, p14, p15, p16);
+            p12, p13, p14, p15);
 
         // Capture first-bounce result for MV + sky aux defaults (first sample only).
         if (capture_primary && path.bounce == 0) {
@@ -666,7 +666,6 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
     payload_set_next_origin(offset_pos);
     payload_set_color(emissive + nee_radiance);
     payload_set_hit_distance(optixGetRayTmax());
-    payload_set_bounce(bounce);
 
     // Last bounce: emissive + NEE already collected above. The next ray would
     // never be traced (raygen loop condition), so skip BRDF sampling and RNG.
