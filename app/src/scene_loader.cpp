@@ -685,6 +685,23 @@ namespace qualquer::app {
                 if (!node.meshIndex.has_value()) { return; }
 
                 const auto world_mat = convert_matrix(world_transform);
+
+                // Validate transform: all elements must be finite and the
+                // matrix must be non-singular (invertible for normal transform).
+                {
+                    bool finite = true;
+                    for (int col = 0; col < 4 && finite; ++col) {
+                        for (int row = 0; row < 4 && finite; ++row) {
+                            if (!std::isfinite(world_mat[col][row])) { finite = false; }
+                        }
+                    }
+                    if (!finite || glm::abs(glm::determinant(world_mat)) < 1e-12f) {
+                        spdlog::warn("Node '{}': non-finite or singular transform, skipping",
+                                     std::string(node.name));
+                        return;
+                    }
+                }
+
                 const auto gltf_mesh_idx = *node.meshIndex;
                 const uint32_t prim_start = mesh_data.prim_offsets[gltf_mesh_idx];
                 const uint32_t prim_end = mesh_data.prim_offsets[gltf_mesh_idx + 1];
