@@ -266,8 +266,14 @@ __forceinline__ __device__ float3 evaluate_env_nee(
 
     const float3 L = sample_env_alias_table(
         params.env, env_r1, env_r2, env_r3, env_r4);
-    const float NdotL = dot(N_shading, L);
 
+    // Geometric hemisphere reject: shadow_terminator_factor returns 0 when
+    // NgdotL <= 0, so reject before the shadow ray and BRDF work.
+    if (dot(N_face, L) <= 0.0f) {
+        return make_float3(0.0f, 0.0f, 0.0f);
+    }
+
+    const float NdotL = dot(N_shading, L);
     if (NdotL <= 0.0f) {
         return make_float3(0.0f, 0.0f, 0.0f);
     }
@@ -368,6 +374,12 @@ __forceinline__ __device__ float3 evaluate_emissive_nee(
         cos_theta_light = fabsf(cos_theta_light);
     }
     if (cos_theta_light <= 0.0f) {
+        return make_float3(0.0f, 0.0f, 0.0f);
+    }
+
+    // Geometric hemisphere reject: shadow_terminator_factor returns 0 when
+    // NgdotL <= 0, so reject before the shadow ray and BRDF work.
+    if (dot(N_face, L) <= 0.0f) {
         return make_float3(0.0f, 0.0f, 0.0f);
     }
 
