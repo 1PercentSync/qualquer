@@ -85,14 +85,15 @@ __forceinline__ __device__ float3 sample_env_alias_table(
  *
  * @param env  Packed env light data (alias table, dimensions, total luminance, rotation).
  * @param dir  World-space direction (normalized).
- * @return Solid-angle PDF (>= 1e-7).
+ * @return Solid-angle PDF (>= 0). Zero when the pixel has zero luminance
+ *         or the environment is absent.
  */
 __forceinline__ __device__ float env_pdf(
         const EnvLightData &env,
         const float3 dir) {
 
     if (env.total_luminance <= 0.0f) {
-        return 1e-7f;
+        return 0.0f;
     }
 
     // Forward IBL rotation: world space → env space.
@@ -113,8 +114,8 @@ __forceinline__ __device__ float env_pdf(
 
     const float lum = env.alias_table[pixel].luminance;
 
-    return fmaxf(lum * static_cast<float>(env.alias_width) * static_cast<float>(env.alias_height)
-                 / (env.total_luminance * kTwoPi * kPi), 1e-7f);
+    return lum * static_cast<float>(env.alias_width) * static_cast<float>(env.alias_height)
+           / (env.total_luminance * kTwoPi * kPi);
 }
 
 // ---- Shadow ray tracing -----------------------------------------------------
@@ -201,17 +202,21 @@ __forceinline__ __device__ uint32_t sample_emissive_alias_table(
  * @param dist               Distance from shading point to light sample point.
  * @param cos_theta_light    |dot(light_normal, dir_to_shading_point)|.
  * @param total_power        Total power sum across all emissive triangles.
- * @return Solid-angle PDF (>= 1e-7).
+ * @return Solid-angle PDF. Returns HUGE_VALF when cos_theta_light <= 0
+ *         (edge-on triangle subtends near-zero solid angle → PDF → ∞).
  */
 __forceinline__ __device__ float emissive_light_pdf(
         const float emission_luminance, const float dist,
         const float cos_theta_light, const float total_power) {
 
-    if (total_power <= 0.0f || cos_theta_light <= 0.0f) {
-        return 1e-7f;
+    if (total_power <= 0.0f) {
+        return 0.0f;
+    }
+    if (cos_theta_light <= 0.0f) {
+        return HUGE_VALF;
     }
     const float pdf_area = emission_luminance / total_power;
-    return fmaxf(pdf_area * dist * dist / cos_theta_light, 1e-7f);
+    return pdf_area * dist * dist / cos_theta_light;
 }
 
 // ---- Full NEE evaluations (env / emissive) ----------------------------------
@@ -284,11 +289,13 @@ __forceinline__ __device__ float3 evaluate_env_nee(
     const float brdf_pdf_e = brdf_pdf(bp, L);
 
     const float pdf_light = env_pdf(params.env, L);
+    if (pdf_light <= 0.0f || !isfinite(pdf_light)) {
+        return make_float3(0.0f, 0.0f, 0.0f);
+    }
     const float mis_w = mis_power_heuristic(pdf_light, brdf_pdf_e);
     const float st_factor = shadow_terminator_factor(N_face, N_shading, L);
 
-    return env_color * brdf_val * NdotL * mis_w * st_factor
-        / fmaxf(pdf_light, 1e-7f);
+    return env_color * brdf_val * NdotL * mis_w * st_factor / pdf_light;
 }
 
 /**
@@ -390,13 +397,16 @@ __forceinline__ __device__ float3 evaluate_emissive_nee(
     const float emission_lum = luminance(tri.emission);
     const float light_pdf_emi = emissive_light_pdf(
         emission_lum, dist, cos_theta_light, params.emissive.total_power);
+    if (light_pdf_emi <= 0.0f || !isfinite(light_pdf_emi)) {
+        return make_float3(0.0f, 0.0f, 0.0f);
+    }
 
     const float brdf_pdf_emi = brdf_pdf(bp, L);
     const float mis_w_emi = mis_power_heuristic(light_pdf_emi, brdf_pdf_emi);
     const float st_factor_emi = shadow_terminator_factor(N_face, N_shading, L);
 
     return Le * brdf_val_emi * NdotL_emi * mis_w_emi * st_factor_emi
-        / fmaxf(light_pdf_emi, 1e-7f);
+        / light_pdf_emi;
 }
 
 } // namespace qualquer::renderer

@@ -128,6 +128,10 @@ __forceinline__ __device__ float mis_power_heuristic(const float pdf_a,
         return 0.0f;
     }
     const float r = pdf_b / pdf_a;
+    // Both Inf → r = NaN → guard to 0.5 (equal weight, symmetric default).
+    if (!isfinite(r)) {
+        return 0.5f;
+    }
     return 1.0f / (1.0f + r * r);
 }
 
