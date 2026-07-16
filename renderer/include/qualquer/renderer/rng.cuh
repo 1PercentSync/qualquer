@@ -169,7 +169,7 @@ __forceinline__ __device__ float sobol_rng(const uint32_t *directions,
                                            const uint32_t dimension) {
     if (dimension >= kSobolDims) {
         const uint32_t h = xxhash32(pixel_index, sequence_index, dimension);
-        return static_cast<float>(h) / static_cast<float>(0xFFFFFFFFu);
+        return static_cast<float>(h >> 8) * 0x1p-24f;
     }
     uint32_t sobol_val = sobol_sample(directions, dimension, sequence_index);
     // Cranley-Patterson rotation: additive shift preserves low-discrepancy.

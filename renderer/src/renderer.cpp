@@ -69,7 +69,7 @@ namespace qualquer::renderer {
             uint32_t sobol_val = sobol_sample_host(directions, dimension, frame_index);
             // Golden-ratio temporal offset (same as device rng, 2654435769 ≈ φ × 2^32)
             sobol_val += frame_index * 2654435769u;
-            return static_cast<float>(sobol_val) / static_cast<float>(0xFFFFFFFFu);
+            return static_cast<float>(sobol_val >> 8) * 0x1p-24f;
         }
 
         /**
