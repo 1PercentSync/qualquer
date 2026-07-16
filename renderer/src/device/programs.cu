@@ -190,7 +190,7 @@ __forceinline__ __device__ float3 trace_sample(
 
         path.throughput = path.throughput * d.throughput_update;
 
-        if (fmaxf(path.throughput.x, fmaxf(path.throughput.y, path.throughput.z)) < 1e-6f) {
+        if (fmaxf(path.throughput.x, fmaxf(path.throughput.y, path.throughput.z)) == 0.0f) {
             path.alive = false;
             break;
         }
