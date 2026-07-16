@@ -6,6 +6,7 @@
 #include <qualquer/renderer/renderer.h>
 
 #include <algorithm>
+#include <bit>
 #include <cmath>
 #include <cstdint>
 #include <vector>
@@ -48,11 +49,10 @@ namespace qualquer::renderer {
                                     uint32_t sample_index) {
             uint32_t result = 0;
             const uint32_t offset = dim * 32u;
-            for (uint32_t bit = 0; bit < 32u && sample_index != 0u; ++bit) {
-                if ((sample_index & 1u) != 0u) {
-                    result ^= directions[offset + bit];
-                }
-                sample_index >>= 1u;
+            while (sample_index != 0u) {
+                const uint32_t bit = std::countr_zero(sample_index);
+                result ^= directions[offset + bit];
+                sample_index &= sample_index - 1u;
             }
             return result;
         }

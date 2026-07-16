@@ -119,8 +119,9 @@ __forceinline__ __device__ uint32_t xxhash32(const uint32_t p0,
  * @brief Generates one Sobol sample via the binary representation method.
  *
  * XORs the left-justified direction numbers selected by the set bits of the
- * sample index. The result is a 32-bit integer in [0, 2^32); the caller
- * converts to float after applying scramble offsets.
+ * sample index. Uses __ffs() + clear-lowest-bit to iterate only the set bits
+ * (popcount(n) iterations instead of floor(log2(n))+1). XOR is commutative,
+ * so visiting set bits lowest-first produces the same result.
  *
  * @param directions Pointer to the 4096-entry direction number table
  *                   (params.sobol_directions, in __constant__ memory).
@@ -133,11 +134,10 @@ __forceinline__ __device__ uint32_t sobol_sample(const uint32_t *directions,
                                                  uint32_t sample_index) {
     uint32_t result = 0;
     const uint32_t offset = dim * 32u;
-    for (uint32_t bit = 0; bit < 32u && sample_index != 0u; ++bit) {
-        if ((sample_index & 1u) != 0u) {
-            result ^= directions[offset + bit];
-        }
-        sample_index >>= 1u;
+    while (sample_index != 0u) {
+        const uint32_t bit = __ffs(sample_index) - 1u;
+        result ^= directions[offset + bit];
+        sample_index &= sample_index - 1u;
     }
     return result;
 }
