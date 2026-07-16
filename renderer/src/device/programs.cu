@@ -139,20 +139,22 @@ __forceinline__ __device__ float3 trace_sample(
                       p0, p1, p2, p3, p4, p5,
                       p6, p7, p8, p9, p10, p11,
                       p12, p13, p14, p15, p16);
-        // SER: reorder by material for texture cache coherence. With a
-        // single hitgroup record the default hint only separates hit vs
-        // miss; the masked material hint additionally groups threads by
-        // material. 10 bits cover 1024 materials exactly; beyond that the
-        // mask aliases low index bits (bucket-sharing materials still
-        // group, quality degrades gracefully). Wider hints measurably pay
-        // more sort cost; narrower ones cap the exact-grouping capacity.
-        uint32_t reorder_hint = 0;
-        if (optixHitObjectIsHit()) {
-            const uint32_t geo_idx = optixHitObjectGetInstanceId()
-                                   + optixHitObjectGetSbtGASIndex();
-            reorder_hint = params.geometry_infos[geo_idx].material_buffer_offset;
+        // SER: reorder secondary bounces by material for texture cache
+        // coherence. Primary rays (bounce 0) are spatially coherent —
+        // adjacent pixels hit nearby geometry with similar materials.
+        // Reordering them by material scatters this spatial locality,
+        // hurting texture cache and aux surface-write coalescing.
+        // Secondary bounces lose spatial coherence after BRDF sampling,
+        // so material grouping is a net win.
+        if (path.bounce > 0) {
+            uint32_t reorder_hint = 0;
+            if (optixHitObjectIsHit()) {
+                const uint32_t geo_idx = optixHitObjectGetInstanceId()
+                                       + optixHitObjectGetSbtGASIndex();
+                reorder_hint = params.geometry_infos[geo_idx].material_buffer_offset;
+            }
+            optixReorder(reorder_hint & 0x3FFu, 10);
         }
-        optixReorder(reorder_hint & 0x3FFu, 10);
         optixInvoke(p0, p1, p2, p3, p4, p5,
                     p6, p7, p8, p9, p10, p11,
                     p12, p13, p14, p15, p16);
