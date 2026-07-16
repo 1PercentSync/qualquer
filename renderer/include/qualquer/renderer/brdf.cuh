@@ -687,20 +687,23 @@ struct BrdfSample {
  *     per channel. Pure metals (metallic=1) have no diffuse, so E_glossy is
  *     skipped and diffuse_weight = 0.
  *
- * @param V          View direction (world, normalized, facing surface).
- * @param N          Shading normal (world, normalized).
- * @param T_basis    Tangent axis (world, from build_orthonormal_basis).
- * @param B_basis    Bitangent axis (world).
- * @param base_color Linear RGB base color.
- * @param metallic   Metallic factor in [0,1].
- * @param roughness  Linear roughness in [0,1] (glTF value, caller clamps >= 0.04).
- * @param alpha      roughness^2, caller-clamped >= 1e-4 (NaN guard at alpha=0).
+ * @param V              View direction (world, normalized, facing surface).
+ * @param N              Shading normal (world, normalized).
+ * @param T_basis        Tangent axis (world, from build_orthonormal_basis).
+ * @param B_basis        Bitangent axis (world).
+ * @param base_color     Linear RGB base color.
+ * @param metallic       Metallic factor in [0,1].
+ * @param roughness      Linear roughness in [0,1] (glTF value, caller clamps >= 0.04).
+ * @param alpha          roughness^2, caller-clamped >= 1e-4 (NaN guard at alpha=0).
+ * @param dlss_enabled   Whether DLSS-RR is active (controls aux data needs).
+ * @param bounce         Current bounce index (E_glossy needed at bounce 0 for aux).
  */
 __forceinline__ __device__ BrdfParams init_brdf_params(
         const float3 V, const float3 N,
         const float3 T_basis, const float3 B_basis,
         const float3 base_color, const float metallic,
-        const float roughness, const float alpha) {
+        const float roughness, const float alpha,
+        const uint32_t dlss_enabled, const uint32_t bounce) {
     BrdfParams p{};
     p.V = V;
     p.N = N;
@@ -718,6 +721,20 @@ __forceinline__ __device__ BrdfParams init_brdf_params(
         turquin_compensation(p.F0.y, E_ss_val),
         turquin_compensation(p.F0.z, E_ss_val));
 
+    // Pure metal: no diffuse lobe. Skip E_glossy (3× 39-coeff polynomial)
+    // unless DLSS bounce 0 needs it for aux specular albedo.
+    if (metallic >= 1.0f) {
+        p.diffuse_weight = make_float3(0.0f, 0.0f, 0.0f);
+        p.p_spec = 1.0f;
+        if (dlss_enabled && bounce == 0) {
+            p.E_glossy_rgb = make_float3(
+                fminf(fmaxf(E_glossy(p.F0.x, roughness, p.NdotV), 0.0f), 1.0f),
+                fminf(fmaxf(E_glossy(p.F0.y, roughness, p.NdotV), 0.0f), 1.0f),
+                fminf(fmaxf(E_glossy(p.F0.z, roughness, p.NdotV), 0.0f), 1.0f));
+        }
+        return p;
+    }
+
     // Clamp E_glossy to [0,1]: the 39-coefficient rational polynomial can
     // overshoot at domain boundaries due to fitting error. Unclamped values
     // cause negative diffuse_weight (E_glossy > 1) or energy over-budget
@@ -727,13 +744,8 @@ __forceinline__ __device__ BrdfParams init_brdf_params(
         fminf(fmaxf(E_glossy(p.F0.y, roughness, p.NdotV), 0.0f), 1.0f),
         fminf(fmaxf(E_glossy(p.F0.z, roughness, p.NdotV), 0.0f), 1.0f));
 
-    if (metallic < 1.0f) {
-        const float3 one = make_float3(1.0f, 1.0f, 1.0f);
-        p.diffuse_weight = (1.0f - metallic) * (one - p.E_glossy_rgb);
-    } else {
-        p.diffuse_weight = make_float3(0.0f, 0.0f, 0.0f);
-    }
-
+    const float3 one = make_float3(1.0f, 1.0f, 1.0f);
+    p.diffuse_weight = (1.0f - metallic) * (one - p.E_glossy_rgb);
     p.p_spec = specular_probability(p.NdotV, p.F0);
     return p;
 }

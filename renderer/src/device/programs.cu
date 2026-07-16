@@ -585,7 +585,8 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
     build_orthonormal_basis(N_brdf, T_basis, B_basis);
     const BrdfParams bp = init_brdf_params(
         V, N_brdf, T_basis, B_basis,
-        base_color, metallic, roughness, alpha);
+        base_color, metallic, roughness, alpha,
+        params.dlss_enabled, bounce);
 
     const uint3 launch_idx = optixGetLaunchIndex();
     const uint32_t pixel_index = launch_idx.y * params.width + launch_idx.x;
