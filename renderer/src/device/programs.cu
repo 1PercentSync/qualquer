@@ -254,7 +254,7 @@ __global__ void __raygen__rg() { // NOLINT(*-reserved-identifier)
     // Register-local accumulation across all samples in this frame.
     float3 frame_radiance = make_float3(0.0f, 0.0f, 0.0f);
 
-    // First-bounce capture for MV + sky aux defaults (sample 0 only).
+    // First-bounce capture for MV + sky aux defaults (DLSS ON only).
     float3 primary_hit_pos = make_float3(0.0f, 0.0f, 0.0f);
     float3 primary_sky_color = make_float3(0.0f, 0.0f, 0.0f);
     float3 primary_dir_saved = make_float3(0.0f, 0.0f, 1.0f);
@@ -277,6 +277,7 @@ __global__ void __raygen__rg() { // NOLINT(*-reserved-identifier)
     } else {
         // DLSS OFF: per-pixel Sobol + CP rotation, per-sample jitter.
         // Each sample gets a different primary ray for Monte Carlo convergence.
+        // No primary capture — aux data has no consumer when DLSS is off.
         for (uint32_t s = 0; s < params.samples_per_frame; ++s) {
             const uint32_t sample_index = params.sample_count + s;
             const float jx = sobol_rng(params.sobol_directions, pixel_index,
@@ -285,13 +286,9 @@ __global__ void __raygen__rg() { // NOLINT(*-reserved-identifier)
                                        sample_index, params.frame_index, kDimJitterY);
             const float3 primary_dir = compute_primary_dir(idx.x, idx.y, jx, jy);
 
-            if (s == 0) {
-                primary_dir_saved = primary_dir;
-            }
-
             frame_radiance = frame_radiance + trace_sample(
                 cam_origin, primary_dir, pixel_index, sample_index,
-                s == 0, primary_hit_pos, primary_sky_color, primary_is_hit);
+                false, primary_hit_pos, primary_sky_color, primary_is_hit);
         }
     }
 
@@ -329,49 +326,53 @@ __global__ void __raygen__rg() { // NOLINT(*-reserved-identifier)
     }
 
     // ---- Aux G-buffer: motion vectors + sky defaults ----
-    const int sx = static_cast<int>(idx.x);
-    const int sy = static_cast<int>(idx.y);
-    const float2 resolution = make_float2(
-        static_cast<float>(params.width), static_cast<float>(params.height));
+    // DLSS OFF: no consumer for aux data, skip entirely (launch-uniform
+    // branch, no warp divergence).
+    if (params.dlss_enabled) {
+        const int sx = static_cast<int>(idx.x);
+        const int sy = static_cast<int>(idx.y);
+        const float2 resolution = make_float2(
+            static_cast<float>(params.width), static_cast<float>(params.height));
 
-    // MV: project world position (w=1 hit) or direction (w=0 sky) through
-    // current and previous unjittered VP. Pixel-space result with MVScale=1.
-    {
-        const float hw = primary_is_hit ? 1.0f : 0.0f;
-        const float3 pos = primary_is_hit ? primary_hit_pos : primary_dir_saved;
-        const float4 homo = make_float4(pos.x, pos.y, pos.z, hw);
-        const float4 curr_clip = mul(params.view_projection, homo);
-        const float4 prev_clip = mul(params.prev_view_projection, homo);
+        // MV: project world position (w=1 hit) or direction (w=0 sky) through
+        // current and previous unjittered VP. Pixel-space result with MVScale=1.
+        {
+            const float hw = primary_is_hit ? 1.0f : 0.0f;
+            const float3 pos = primary_is_hit ? primary_hit_pos : primary_dir_saved;
+            const float4 homo = make_float4(pos.x, pos.y, pos.z, hw);
+            const float4 curr_clip = mul(params.view_projection, homo);
+            const float4 prev_clip = mul(params.prev_view_projection, homo);
 
-        // Guard against degenerate perspective division. clip.w ≈ 0 when
-        // the projected point/direction lies near the camera plane: sky
-        // direction perpendicular to the previous camera forward (fast
-        // rotation), or a hit point crossing the previous near plane (fast
-        // translation). The MV is undefined in these cases; zero tells
-        // DLSS-RR "static pixel", falling back to its internal heuristics.
-        constexpr float kClipWMin = 1e-4f;
-        float2 mv = make_float2(0.0f, 0.0f);
-        if (fabsf(curr_clip.w) >= kClipWMin && fabsf(prev_clip.w) >= kClipWMin) {
-            const float2 curr_ndc = make_float2(curr_clip.x / curr_clip.w,
-                                                curr_clip.y / curr_clip.w);
-            const float2 prev_ndc = make_float2(prev_clip.x / prev_clip.w,
-                                                prev_clip.y / prev_clip.w);
-            mv = make_float2(
-                (prev_ndc.x - curr_ndc.x) * 0.5f * resolution.x,
-                (prev_ndc.y - curr_ndc.y) * 0.5f * resolution.y);
+            // Guard against degenerate perspective division. clip.w ≈ 0 when
+            // the projected point/direction lies near the camera plane: sky
+            // direction perpendicular to the previous camera forward (fast
+            // rotation), or a hit point crossing the previous near plane (fast
+            // translation). The MV is undefined in these cases; zero tells
+            // DLSS-RR "static pixel", falling back to its internal heuristics.
+            constexpr float kClipWMin = 1e-4f;
+            float2 mv = make_float2(0.0f, 0.0f);
+            if (fabsf(curr_clip.w) >= kClipWMin && fabsf(prev_clip.w) >= kClipWMin) {
+                const float2 curr_ndc = make_float2(curr_clip.x / curr_clip.w,
+                                                    curr_clip.y / curr_clip.w);
+                const float2 prev_ndc = make_float2(prev_clip.x / prev_clip.w,
+                                                    prev_clip.y / prev_clip.w);
+                mv = make_float2(
+                    (prev_ndc.x - curr_ndc.x) * 0.5f * resolution.x,
+                    (prev_ndc.y - curr_ndc.y) * 0.5f * resolution.y);
+            }
+            surf2Dwrite(mv, params.aux_motion_vectors,
+                        sx * static_cast<int>(sizeof(float2)), sy);
         }
-        surf2Dwrite(mv, params.aux_motion_vectors,
-                    sx * static_cast<int>(sizeof(float2)), sy);
-    }
 
-    // Sky pixels: closesthit never ran, so write aux defaults.
-    // Tonemapped sky radiance as diffuse albedo guide (HDR compressed to
-    // [0,1] so DLSS-RR preserves sky detail without denoising it).
-    if (!primary_is_hit) {
-        const float3 sky_albedo = pbr_neutral_tonemap(primary_sky_color);
-        write_aux_no_surface(
-            sx, sy,
-            make_float4(sky_albedo.x, sky_albedo.y, sky_albedo.z, 1.0f));
+        // Sky pixels: closesthit never ran, so write aux defaults.
+        // Tonemapped sky radiance as diffuse albedo guide (HDR compressed to
+        // [0,1] so DLSS-RR preserves sky detail without denoising it).
+        if (!primary_is_hit) {
+            const float3 sky_albedo = pbr_neutral_tonemap(primary_sky_color);
+            write_aux_no_surface(
+                sx, sy,
+                make_float4(sky_albedo.x, sky_albedo.y, sky_albedo.z, 1.0f));
+        }
     }
 }
 
@@ -475,7 +476,8 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
         // pixels uncleared"). The pass-through surface has no meaningful
         // material attributes, so write "no surface" values matching the
         // sky/miss convention used by the reference projects.
-        if (payload_get_bounce() == 0
+        if (params.dlss_enabled
+            && payload_get_bounce() == 0
             && payload_get_sample_index() == params.sample_count) {
             const uint3 li = optixGetLaunchIndex();
             write_aux_no_surface(static_cast<int>(li.x), static_cast<int>(li.y),
@@ -589,7 +591,10 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
     // ---- Aux G-buffer writes (first sample's bounce 0 only) ----
     // D37: all samples share per-frame jitter → primary ray identical →
     // aux data identical. Write once at the first sample of the batch.
-    if (bounce == 0 && payload_get_sample_index() == params.sample_count) {
+    // DLSS OFF: no consumer for aux data, skip entirely (launch-uniform
+    // branch, no warp divergence).
+    if (params.dlss_enabled
+        && bounce == 0 && payload_get_sample_index() == params.sample_count) {
         const int sx = static_cast<int>(launch_idx.x);
         const int sy = static_cast<int>(launch_idx.y);
 
