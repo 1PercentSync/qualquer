@@ -256,10 +256,11 @@ __forceinline__ __device__ float3 f_EON(const float3 rho, const float r,
  *        brdf_eval_and_pdf and brdf_sample.
  *
  * Packs geometry (V_ts/N/T/B), material (F0, diffuse_rho, alpha, r),
- * precomputed energy compensation (turquin_comp, diffuse_weight, p_spec),
- * and CLTC invariants (ltc_X/Y, ltc_a/b/c/d, eon_P_u/P_c) so the
- * closesthit shader constructs one instance via init_brdf_params and
- * passes it to both the bounce sampler and the NEE evaluators.
+ * and precomputed energy compensation (turquin_comp, diffuse_weight, p_spec).
+ * CLTC invariants (LTC basis/coefficients, EON mix weights) are deliberately
+ * excluded: they are recomputed on-the-fly in brdf_eval_and_pdf / brdf_sample
+ * from V_ts and r, so they do not cross shadow-ray optixTrace continuation
+ * points and thus do not inflate the per-thread continuation stack.
  */
 struct BrdfParams {
     float3 V_ts;           ///< View direction (tangent space, z = NdotV).
@@ -271,18 +272,10 @@ struct BrdfParams {
     float3 turquin_comp;   ///< Per-channel specular compensation multiplier (RGB).
     float3 E_glossy_rgb;   ///< Per-channel specular directional reflectance (DLSS-RR specular albedo).
     float3 diffuse_weight; ///< (1-metallic) * (1 - E_glossy_per_channel); RGB.
-    float3 ltc_X;          ///< LTC basis X axis (tangent space, from V_ts).
-    float3 ltc_Y;          ///< LTC basis Y axis (tangent space, from V_ts).
     float  alpha;          ///< roughness^2 (specular primitives); caller clamps >= 1e-4.
     float  r;              ///< Linear roughness in [0,1] (EON / E_ss / E_glossy).
     float  NdotV;          ///< Clamped dot(N, V), must be > 0.
     float  p_spec;         ///< Specular lobe selection probability.
-    float  ltc_a;          ///< LTC matrix coefficient a (from mu, r).
-    float  ltc_b;          ///< LTC matrix coefficient b (from mu, r).
-    float  ltc_c;          ///< LTC matrix coefficient c (from mu, r).
-    float  ltc_d;          ///< LTC matrix coefficient d (from mu, r).
-    float  eon_P_u;        ///< EON uniform-hemisphere mix weight.
-    float  eon_P_c;        ///< EON CLTC mix weight (1 - P_u).
 };
 
 /**
@@ -365,16 +358,53 @@ __forceinline__ __device__ void ltc_coeffs(const float mu, const float r,
 }
 
 /**
- * @brief CLTC sample: direction + PDF (uses precomputed LTC invariants).
+ * @brief CLTC invariants computed on-the-fly from V_ts and roughness.
  *
- * @param p  BRDF parameter bundle (ltc_X/Y, ltc_a/b/c/d precomputed).
- * @param u1 Uniform random number in [0,1).
- * @param u2 Uniform random number in [0,1).
+ * Deliberately not stored in BrdfParams: recomputing these (~30 FMA) at each
+ * brdf_eval_and_pdf / brdf_sample call avoids carrying 48 extra bytes across
+ * shadow-ray optixTrace continuation points.
+ */
+struct CltcInvariants {
+    float3 X;   ///< LTC basis X axis (tangent space).
+    float3 Y;   ///< LTC basis Y axis (tangent space).
+    float  a;   ///< LTC matrix coefficient a.
+    float  b;   ///< LTC matrix coefficient b.
+    float  c;   ///< LTC matrix coefficient c.
+    float  d;   ///< LTC matrix coefficient d.
+    float  P_u; ///< EON uniform-hemisphere mix weight.
+    float  P_c; ///< EON CLTC mix weight (1 - P_u).
+};
+
+/**
+ * @brief Computes CLTC invariants from the view direction and roughness.
+ *
+ * @param V_ts View direction in tangent space (z = NdotV).
+ * @param r    Linear roughness in [0,1].
+ * @return CltcInvariants ready for cltc_sample / cltc_pdf / sample_EON / pdf_EON.
+ */
+__forceinline__ __device__ CltcInvariants compute_cltc(const float3 V_ts,
+                                                       const float r) {
+    CltcInvariants inv{};
+    ltc_basis(V_ts, inv.X, inv.Y);
+    ltc_coeffs(V_ts.z, r, inv.a, inv.b, inv.c, inv.d);
+    const float mu = V_ts.z;
+    inv.P_u = __powf(r, 0.1f)
+        * (0.162925f + (-0.372058f + (0.538233f - 0.290822f * mu) * mu) * mu);
+    inv.P_c = 1.0f - inv.P_u;
+    return inv;
+}
+
+/**
+ * @brief CLTC sample: direction + PDF.
+ *
+ * @param cltc CLTC invariants (from compute_cltc).
+ * @param u1   Uniform random number in [0,1).
+ * @param u2   Uniform random number in [0,1).
  * @return float4: xyz = sampled wi (tangent space, normalized), w = PDF.
  */
-__forceinline__ __device__ float4 cltc_sample(const BrdfParams &p,
+__forceinline__ __device__ float4 cltc_sample(const CltcInvariants &cltc,
                                               const float u1, const float u2) {
-    const float a = p.ltc_a, b = p.ltc_b, c = p.ltc_c, d = p.ltc_d;
+    const float a = cltc.a, b = cltc.b, c = cltc.c, d = cltc.d;
 
     const float R     = sqrtf(u1);
     const float phi   = kTwoPi * u2;
@@ -395,22 +425,22 @@ __forceinline__ __device__ float4 cltc_sample(const BrdfParams &p,
     const float det_m = c * (a - b * d);
     const float pdf_wi = pdf_wh * len * len * len / det_m;
 
-    wi = normalize(ltc_from(p.ltc_X, p.ltc_Y, wi));
+    wi = normalize(ltc_from(cltc.X, cltc.Y, wi));
 
     return make_float4(wi.x, wi.y, wi.z, pdf_wi);
 }
 
 /**
- * @brief CLTC PDF for a given direction pair (uses precomputed LTC invariants).
+ * @brief CLTC PDF for a given direction pair.
  *
- * @param p        BRDF parameter bundle (ltc_X/Y, ltc_a/b/c/d precomputed).
+ * @param cltc     CLTC invariants (from compute_cltc).
  * @param wi_local Incident direction (tangent space, z = normal).
  */
-__forceinline__ __device__ float cltc_pdf(const BrdfParams &p,
+__forceinline__ __device__ float cltc_pdf(const CltcInvariants &cltc,
                                          const float3 wi_local) {
-    const float3 wi = ltc_to(p.ltc_X, p.ltc_Y, wi_local);
+    const float3 wi = ltc_to(cltc.X, cltc.Y, wi_local);
 
-    const float a = p.ltc_a, b = p.ltc_b, c = p.ltc_c, d = p.ltc_d;
+    const float a = cltc.a, b = cltc.b, c = cltc.c, d = cltc.d;
     const float det_m = c * (a - b * d);
     const float3 wh = make_float3(c * (wi.x - b * wi.z),
                                   (a - b * d) * wi.y,
@@ -439,25 +469,23 @@ __forceinline__ __device__ float3 uniform_lobe_sample(const float u1, const floa
 /**
  * @brief EON importance sampling (uniform hemisphere + CLTC mix).
  *
- * Uses precomputed P_u/P_c and LTC invariants from BrdfParams.
- *
- * @param p  BRDF parameter bundle (eon_P_u/P_c, ltc_* precomputed).
- * @param u1 Uniform random number in [0,1).
- * @param u2 Uniform random number in [0,1).
+ * @param cltc CLTC invariants (from compute_cltc).
+ * @param u1   Uniform random number in [0,1).
+ * @param u2   Uniform random number in [0,1).
  * @return float4: xyz = sampled wi (tangent space, normalized), w = PDF.
  */
-__forceinline__ __device__ float4 sample_EON(const BrdfParams &p,
+__forceinline__ __device__ float4 sample_EON(const CltcInvariants &cltc,
                                              const float u1, const float u2) {
-    const float P_u = p.eon_P_u;
-    const float P_c = p.eon_P_c;
+    const float P_u = cltc.P_u;
+    const float P_c = cltc.P_c;
 
     if (u1 <= P_u) {
         const float3 wi = uniform_lobe_sample(u1 / P_u, u2);
-        const float pdf_c = cltc_pdf(p, wi);
+        const float pdf_c = cltc_pdf(cltc, wi);
         constexpr float pdf_u = kInvTwoPi;
         return make_float4(wi.x, wi.y, wi.z, P_u * pdf_u + P_c * pdf_c);
     }
-    const float4 wi_c = cltc_sample(p, (u1 - P_u) / P_c, u2);
+    const float4 wi_c = cltc_sample(cltc, (u1 - P_u) / P_c, u2);
     constexpr float pdf_u = kInvTwoPi;
     return make_float4(wi_c.x, wi_c.y, wi_c.z, P_u * pdf_u + P_c * wi_c.w);
 }
@@ -465,16 +493,14 @@ __forceinline__ __device__ float4 sample_EON(const BrdfParams &p,
 /**
  * @brief EON sampling PDF for a given direction pair.
  *
- * Uses precomputed P_u/P_c and LTC invariants from BrdfParams.
- *
- * @param p        BRDF parameter bundle (eon_P_u/P_c, ltc_* precomputed).
+ * @param cltc     CLTC invariants (from compute_cltc).
  * @param wi_local Incident direction (tangent space, z = normal).
  */
-__forceinline__ __device__ float pdf_EON(const BrdfParams &p,
+__forceinline__ __device__ float pdf_EON(const CltcInvariants &cltc,
                                         const float3 wi_local) {
-    const float pdf_c = cltc_pdf(p, wi_local);
+    const float pdf_c = cltc_pdf(cltc, wi_local);
     constexpr float pdf_u = kInvTwoPi;
-    return p.eon_P_u * pdf_u + p.eon_P_c * pdf_c;
+    return cltc.P_u * pdf_u + cltc.P_c * pdf_c;
 }
 
 // ---- Multi-scatter energy compensation (Turquin 2019) -----------------------
@@ -746,16 +772,6 @@ __forceinline__ __device__ BrdfParams init_brdf_params(
     p.diffuse_weight = (1.0f - metallic) * (one - p.E_glossy_rgb);
     p.p_spec = specular_probability(p.NdotV, p.F0);
 
-    // Precompute CLTC invariants (depend only on V_ts and r, constant per
-    // shading point). Eliminates redundant recomputation across
-    // brdf_eval_and_pdf / brdf_sample calls separated by optixTrace.
-    ltc_basis(p.V_ts, p.ltc_X, p.ltc_Y);
-    ltc_coeffs(p.V_ts.z, roughness, p.ltc_a, p.ltc_b, p.ltc_c, p.ltc_d);
-    const float mu = p.V_ts.z;
-    p.eon_P_u = __powf(roughness, 0.1f)
-        * (0.162925f + (-0.372058f + (0.538233f - 0.290822f * mu) * mu) * mu);
-    p.eon_P_c = 1.0f - p.eon_P_u;
-
     return p;
 }
 
@@ -802,9 +818,11 @@ __forceinline__ __device__ BrdfEvalResult brdf_eval_and_pdf(
     const float3 diff = params.diffuse_weight
         * f_EON(params.base_color, params.r, L_ts, V_ts);
 
-    // PDF: combined multi-lobe
+    // PDF: combined multi-lobe (CLTC invariants recomputed locally so they
+    // do not cross shadow-ray optixTrace boundaries in the caller).
     const float pdf_spec = pdf_ggx_vndf(NdotH, params.NdotV, params.alpha);
-    const float pdf_diff = pdf_EON(params, L_ts);
+    const CltcInvariants cltc = compute_cltc(params.V_ts, params.r);
+    const float pdf_diff = pdf_EON(cltc, L_ts);
 
     return {spec + diff,
             combined_lobe_pdf(pdf_spec, pdf_diff, params.p_spec)};
@@ -834,6 +852,10 @@ __forceinline__ __device__ BrdfSample brdf_sample(const BrdfParams &params,
     BrdfSample result{};
     const float3 &V_ts = params.V_ts;
 
+    // CLTC invariants recomputed locally (not stored in BrdfParams) so they
+    // do not inflate the continuation stack across shadow-ray optixTrace.
+    const CltcInvariants cltc = compute_cltc(params.V_ts, params.r);
+
     if (u_lobe < params.p_spec) {
         // Specular lobe: GGX VNDF
         const float3 H_ts = sample_ggx_vndf(V_ts, params.alpha, make_float2(u0, u1));
@@ -857,12 +879,12 @@ __forceinline__ __device__ BrdfSample brdf_sample(const BrdfParams &params,
         result.throughput_update = F * params.turquin_comp
             * (wp.weight / params.p_spec);
 
-        const float pdf_diff = pdf_EON(params, L_ts);
+        const float pdf_diff = pdf_EON(cltc, L_ts);
         result.pdf_combined = combined_lobe_pdf(wp.pdf, pdf_diff, params.p_spec);
         result.next_dir = tangent_to_world(params.T, params.B, params.N, L_ts);
     } else {
         // Diffuse lobe: EON CLTC
-        const float4 wi_c = sample_EON(params, u0, u1);
+        const float4 wi_c = sample_EON(cltc, u0, u1);
         const float3 L_ts = make_float3(wi_c.x, wi_c.y, wi_c.z);
         const float pdf_diff = wi_c.w;
         const float NdotL = fmaxf(L_ts.z, 1e-4f);
