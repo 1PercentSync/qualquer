@@ -606,6 +606,77 @@ __forceinline__ __device__ float E_glossy(const float F0, const float r,
     return num / denom;
 }
 
+/**
+ * @brief Factored RGB E_glossy: evaluates three F0 channels sharing r/mu work.
+ *
+ * Reorganizes the 39-coefficient rational polynomial by F0 powers:
+ *   P(F0) = k0(r,mu) + F0·k1(r,mu) + F0²·k2(r,mu) + F0³·k3
+ * Computing k0..k3 once and evaluating the Horner form per channel saves ~40%
+ * FMA vs three independent E_glossy calls when F0 channels differ. Each channel
+ * is clamped to [0,1] (fitting error at domain boundaries).
+ *
+ * @param F0 Per-channel normal-incidence reflectance.
+ * @param r  Linear roughness in [0,1].
+ * @param mu cos(theta) in [0,1] (= NdotV).
+ * @return E_glossy per channel, clamped to [0,1].
+ */
+__forceinline__ __device__ float3 E_glossy_rgb_clamped(const float3 F0,
+                                                       const float r,
+                                                       const float mu) {
+    const float r2 = r * r, mu2 = mu * mu, r_mu = r * mu;
+    const float r3 = r2 * r, r2_mu = r2 * mu, r_mu2 = r * mu2, mu3 = mu2 * mu;
+
+    // Numerator coefficients grouped by F0 power.
+    const float nk0 =  0.04301317f + (-0.9273584f) * r + (-0.61434704f) * mu
+                     +  5.125822f * r2 + (-0.37465897f) * r_mu + 9.284745f * mu2
+                     + (-2.2108653f) * r3 + (-6.056363f) * r2_mu
+                     +  0.95864034f * r_mu2 + (-11.775469f) * mu3;
+    const float nk1 =  132.98329f + (-137.75214f) * r + (-234.72151f) * mu
+                     +  206.99231f * r2 + 1.0847985f * r_mu + 428.02484f * mu2;
+    const float nk2 = -262.23462f + 171.82188f * r + 400.04813f * mu;
+    const float nk3 =  129.71187f;
+
+    // Denominator coefficients grouped by F0 power.
+    const float dk0 =  1.0f + (-24.177433f) * r + (-3.7300687f) * mu
+                     +  153.19194f * r2 + (-184.53282f) * r_mu + 230.02286f * mu2
+                     +  17.030241f * r3 + 25.947954f * r2_mu
+                     +  75.77901f * r_mu2 + 49.348934f * mu3;
+    const float dk1 =  139.43494f + 6.717145f * r + 98.03935f * mu
+                     +  23.577564f * r2 + 120.04127f * r_mu + 102.90899f * mu2;
+    const float dk2 = -253.77824f + 66.64211f * r + 108.315094f * mu;
+    const float dk3 =  113.9376f;
+
+    // Per-channel Horner evaluation + clamp.
+    const float nx = nk0 + F0.x * (nk1 + F0.x * (nk2 + F0.x * nk3));
+    const float dx = dk0 + F0.x * (dk1 + F0.x * (dk2 + F0.x * dk3));
+    const float ny = nk0 + F0.y * (nk1 + F0.y * (nk2 + F0.y * nk3));
+    const float dy = dk0 + F0.y * (dk1 + F0.y * (dk2 + F0.y * dk3));
+    const float nz = nk0 + F0.z * (nk1 + F0.z * (nk2 + F0.z * nk3));
+    const float dz = dk0 + F0.z * (dk1 + F0.z * (dk2 + F0.z * dk3));
+
+    return make_float3(
+        fminf(fmaxf(nx / dx, 0.0f), 1.0f),
+        fminf(fmaxf(ny / dy, 0.0f), 1.0f),
+        fminf(fmaxf(nz / dz, 0.0f), 1.0f));
+}
+
+/**
+ * @brief Clamped E_glossy per channel with scalar fast path.
+ *
+ * Pure dielectrics (metallic=0) have F0={0.04,0.04,0.04}: all channels
+ * identical. Detects this and evaluates the polynomial once, avoiding
+ * 3x redundant computation for the most common material class. Falls
+ * back to the factored RGB variant for mixed-metallic F0.
+ */
+__forceinline__ __device__ float3 compute_E_glossy_clamped(
+        const float3 F0, const float r, const float mu) {
+    if (F0.x == F0.y && F0.y == F0.z) {
+        const float eg = fminf(fmaxf(E_glossy(F0.x, r, mu), 0.0f), 1.0f);
+        return make_float3(eg, eg, eg);
+    }
+    return E_glossy_rgb_clamped(F0, r, mu);
+}
+
 // ---- Combined multi-lobe PDF ------------------------------------------------
 
 /**
@@ -740,33 +811,33 @@ __forceinline__ __device__ BrdfParams init_brdf_params(
     p.NdotV = fmaxf(dot(N, V), 1e-4f);
 
     const float E_ss_val = fmaxf(fminf(E_ss(roughness, p.NdotV), 1.0f), kEpsilon);
-    p.turquin_comp = make_float3(
-        turquin_compensation(p.F0.x, E_ss_val),
-        turquin_compensation(p.F0.y, E_ss_val),
-        turquin_compensation(p.F0.z, E_ss_val));
+    // Scalar fast path when F0 channels are equal (pure dielectric, ~90% of
+    // glTF materials). turquin_compensation is lightweight (1 div + 2 FMA)
+    // but the pattern matches the E_glossy optimization below.
+    if (p.F0.x == p.F0.y && p.F0.y == p.F0.z) {
+        const float tc = turquin_compensation(p.F0.x, E_ss_val);
+        p.turquin_comp = make_float3(tc, tc, tc);
+    } else {
+        p.turquin_comp = make_float3(
+            turquin_compensation(p.F0.x, E_ss_val),
+            turquin_compensation(p.F0.y, E_ss_val),
+            turquin_compensation(p.F0.z, E_ss_val));
+    }
 
-    // Pure metal: no diffuse lobe. Skip E_glossy (3× 39-coeff polynomial)
-    // unless DLSS bounce 0 needs it for aux specular albedo.
+    // Pure metal: no diffuse lobe. Skip E_glossy unless DLSS bounce 0 needs
+    // it for aux specular albedo.
     if (metallic >= 1.0f) {
         p.diffuse_weight = make_float3(0.0f, 0.0f, 0.0f);
         p.p_spec = 1.0f;
         if (dlss_enabled && bounce == 0) {
-            p.E_glossy_rgb = make_float3(
-                fminf(fmaxf(E_glossy(p.F0.x, roughness, p.NdotV), 0.0f), 1.0f),
-                fminf(fmaxf(E_glossy(p.F0.y, roughness, p.NdotV), 0.0f), 1.0f),
-                fminf(fmaxf(E_glossy(p.F0.z, roughness, p.NdotV), 0.0f), 1.0f));
+            p.E_glossy_rgb = compute_E_glossy_clamped(p.F0, roughness, p.NdotV);
         }
         return p;
     }
 
-    // Clamp E_glossy to [0,1]: the 39-coefficient rational polynomial can
-    // overshoot at domain boundaries due to fitting error. Unclamped values
-    // cause negative diffuse_weight (E_glossy > 1) or energy over-budget
-    // (E_glossy < 0), and corrupt the DLSS-RR specular albedo aux buffer.
-    p.E_glossy_rgb = make_float3(
-        fminf(fmaxf(E_glossy(p.F0.x, roughness, p.NdotV), 0.0f), 1.0f),
-        fminf(fmaxf(E_glossy(p.F0.y, roughness, p.NdotV), 0.0f), 1.0f),
-        fminf(fmaxf(E_glossy(p.F0.z, roughness, p.NdotV), 0.0f), 1.0f));
+    // E_glossy per channel with scalar fast path for equal F0 (pure
+    // dielectric) and factored RGB variant for mixed metallic.
+    p.E_glossy_rgb = compute_E_glossy_clamped(p.F0, roughness, p.NdotV);
 
     const float3 one = make_float3(1.0f, 1.0f, 1.0f);
     p.diffuse_weight = (1.0f - metallic) * (one - p.E_glossy_rgb);
@@ -810,17 +881,26 @@ __forceinline__ __device__ BrdfEvalResult brdf_eval_and_pdf(
     const float NdotH = fmaxf(H_ts.z, 0.0f);
     const float VdotH = fmaxf(dot(V_ts, H_ts), 0.0f);
 
-    // Eval: specular + diffuse
+    // Eval: specular (always needed)
     const float D   = D_GGX(NdotH, params.alpha);
     const float Vis = V_SmithGGXCorrelated(params.NdotV, NdotL, params.alpha);
     const float3 F  = F_Schlick(VdotH, params.F0);
     const float3 spec = F * params.turquin_comp * (D * Vis);
+
+    const float pdf_spec = pdf_ggx_vndf(NdotH, params.NdotV, params.alpha);
+
+    // Pure specular (metal): skip EON diffuse eval and CLTC computation.
+    // SER groups threads by material, so this branch is warp-coherent.
+    if (params.p_spec >= 1.0f) {
+        return {spec, pdf_spec};
+    }
+
+    // Eval: diffuse (dielectric / mixed metallic only)
     const float3 diff = params.diffuse_weight
         * f_EON(params.base_color, params.r, L_ts, V_ts);
 
     // PDF: combined multi-lobe (CLTC invariants recomputed locally so they
     // do not cross shadow-ray optixTrace boundaries in the caller).
-    const float pdf_spec = pdf_ggx_vndf(NdotH, params.NdotV, params.alpha);
     const CltcInvariants cltc = compute_cltc(params.V_ts, params.r);
     const float pdf_diff = pdf_EON(cltc, L_ts);
 
@@ -852,10 +932,6 @@ __forceinline__ __device__ BrdfSample brdf_sample(const BrdfParams &params,
     BrdfSample result{};
     const float3 &V_ts = params.V_ts;
 
-    // CLTC invariants recomputed locally (not stored in BrdfParams) so they
-    // do not inflate the continuation stack across shadow-ray optixTrace.
-    const CltcInvariants cltc = compute_cltc(params.V_ts, params.r);
-
     if (u_lobe < params.p_spec) {
         // Specular lobe: GGX VNDF
         const float3 H_ts = sample_ggx_vndf(V_ts, params.alpha, make_float2(u0, u1));
@@ -879,11 +955,18 @@ __forceinline__ __device__ BrdfSample brdf_sample(const BrdfParams &params,
         result.throughput_update = F * params.turquin_comp
             * (wp.weight / params.p_spec);
 
-        const float pdf_diff = pdf_EON(cltc, L_ts);
-        result.pdf_combined = combined_lobe_pdf(wp.pdf, pdf_diff, params.p_spec);
+        // Pure specular (metal): combined PDF = specular PDF, skip CLTC entirely.
+        if (params.p_spec >= 1.0f) {
+            result.pdf_combined = wp.pdf;
+        } else {
+            const CltcInvariants cltc = compute_cltc(params.V_ts, params.r);
+            const float pdf_diff = pdf_EON(cltc, L_ts);
+            result.pdf_combined = combined_lobe_pdf(wp.pdf, pdf_diff, params.p_spec);
+        }
         result.next_dir = tangent_to_world(params.T, params.B, params.N, L_ts);
     } else {
-        // Diffuse lobe: EON CLTC
+        // Diffuse lobe: EON CLTC (only reached when p_spec < 1.0).
+        const CltcInvariants cltc = compute_cltc(params.V_ts, params.r);
         const float4 wi_c = sample_EON(cltc, u0, u1);
         const float3 L_ts = make_float3(wi_c.x, wi_c.y, wi_c.z);
         const float pdf_diff = wi_c.w;
