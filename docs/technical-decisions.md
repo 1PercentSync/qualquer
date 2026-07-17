@@ -195,8 +195,8 @@ CUDA 侧通过 `cudaExternalMemoryGetMappedMipmappedArray` → `cudaArray_t` →
 
 ### 后续改进方向
 
-1. **单帧多 sample 累积**：Phase 4 已决策（D4），raygen 内 sample 循环，max 64 spp/frame
-2. **自适应采样**：D16 决策仅手动 `samples_per_frame` 参数，自适应逻辑不纳入 Phase 4/4.5
+1. **单帧多 sample 累积**：Phase 4 已实现（D4），raygen 内 sample 循环，max 64 spp/frame
+2. **自适应采样**：Phase 4 仅手动参数（D16）；Phase 4.5 Step 15 纳入三级降级自适应（D34）
 
 ---
 
