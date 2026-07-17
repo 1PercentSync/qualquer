@@ -188,8 +188,8 @@ namespace qualquer::app {
         return {
             .entries = std::move(table),
             .total_luminance = total_luminance,
-            .width = ds_w,
-            .height = ds_h,
+            .alias_width = ds_w,
+            .alias_height = ds_h,
         };
     }
 

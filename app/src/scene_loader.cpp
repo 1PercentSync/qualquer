@@ -874,13 +874,13 @@ namespace qualquer::app {
 
         // Commit all resources
         env_cubemap_texture_ = std::move(cubemap);
-        env_alias_width_ = alias_result.width;
-        env_alias_height_ = alias_result.height;
+        env_alias_width_ = alias_result.alias_width;
+        env_alias_height_ = alias_result.alias_height;
         env_total_luminance_ = alias_result.total_luminance;
 
         spdlog::info("Env map ready: cubemap tex={}, alias table {}x{} ({} entries)",
                      env_cubemap_texture_.texture_object,
-                     alias_result.width, alias_result.height,
+                     alias_result.alias_width, alias_result.alias_height,
                      alias_result.entries.size());
         return true;
     }
