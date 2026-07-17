@@ -178,7 +178,8 @@ __forceinline__ __device__ float sobol_rng(const uint32_t *directions,
     // Golden-ratio temporal offset (2654435769 ≈ φ × 2^32).
     const uint32_t temporal_offset = frame_index * 2654435769u;
     sobol_val += pixel_offset + temporal_offset;
-    return static_cast<float>(sobol_val) / static_cast<float>(0xFFFFFFFFu);
+    // >> 8 * 2^-24 maps uint32 to [0,1); division by 0xFFFFFFFF can yield 1.0.
+    return static_cast<float>(sobol_val >> 8) * 0x1p-24f;
 }
 
 } // namespace qualquer::renderer
