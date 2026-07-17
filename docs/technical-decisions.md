@@ -17,7 +17,7 @@
 - 嵌入（bin2c 转 C 数组）引入 bin2c 的 size 符号命名、stdint 依赖、padding 等复杂度；对单一 module
   的项目，其收益（免去运行时文件路径管理）不足以抵消——违反 architecture.md「复杂度与收益成正比」
 - 不嵌入下，改 .cu 只需 CMake 重编 .optixir（incremental），不重新链接整个 exe，开发迭代快
-- 本地学习项目不分发，.optixir 部署的路径管理（POST_BUILD 复制到运行目录）开销可控
+- 本地学习项目不分发，.optixir 部署到可执行目录旁的路径管理开销可控
 
 **备选（已排除）**：
 
@@ -25,8 +25,9 @@
   wrapper 拼接，得不偿失
 - **运行时 NVRTC 编译**：OptiX `.cu` 需运行时访问 OptiX headers 路径，且单 module 用不上磁盘缓存收益，复杂度高于构建期 nvcc
 
-**部署参考**：himalaya 的 POST_BUILD copy 模式——himalaya 复制 shader 源文件、运行时 shaderc 编译；Qualquer 借其「部署 +
-运行时加载」形态，编译留在构建期（nvcc），运行时只读已编译的 .optixir。
+**部署**：app 目标用 dependency-tracked copy（`OUTPUT` + `DEPENDS` 到可执行目录 `shaders/`），**不用** `POST_BUILD`——仅改 device
+  代码时 host 不 relink，`POST_BUILD` 会继续部署陈旧 IR。形态上仍是「构建期编译 + 部署后运行时加载」；himalaya 用 POST_BUILD 复制源文件再
+  运行时编译，Qualquer 编译留在构建期（nvcc），运行时只读已编译的 .optixir。
 
 ### 初始化顺序
 
@@ -153,7 +154,7 @@ MUSTREAD:8
 
 ### Payload
 
-**决策**：全信息 payload registers，不走 global hit buffer。当前 16 槽；Ray Cone LOD 落地时扩至 18（p16/p17 = cone_width /
+**决策**：全信息 payload registers，不走 global hit buffer。当前 16 槽；Ray Cone LOD 使用时扩至 18（p16/p17 = cone_width /
 cone_spread）。
 
 **理由**：SER 重排后 payload 随线程移动、零全局内存；global buffer 在重排后访问变为 non-coalesced，反而更差。OptiX 上限 32
@@ -167,17 +168,17 @@ registers。
 
 ### 每帧多 Sample
 
-**决策**：raygen 内 sample 循环（单次 `optixLaunch`，寄存器局部累积）。硬上限 `max_samples_per_frame = 64`（TDR 安全）。
+**决策**：raygen 内 sample 循环（单次 `optixLaunch`，寄存器局部累积）。UI 将 `samples_per_frame` 限制在 1..64（TDR 安全）；引擎路径不另做 clamp。
 
-**理由**：相对每 sample 一次 launch 或 3D launch，带宽与 launch 开销最优；寄存器仅多约 3 floats + counter。
+**理由**：相对每 sample 一次 launch 或 3D launch，带宽与 launch 开销最优；寄存器仅多约 3 floats + counter。上限由 UI 约定，非独立硬编码常量。
 
 ### SBT / Pipeline
 
-**决策**：2 miss（`__miss__env` + `__miss__shadow`）+ **1 hitgroup**（CH+AH）；stride=0；BLAS per-geometry flag 控制
+**决策**：2 miss（`__miss__env` + `__miss__shadow`）+ **1 hitgroup**（CH+AH）；单 hitgroup record（`hitgroupRecordCount = 1`，无 per-material SBT 索引）；BLAS per-geometry flag 控制
 anyhit（opaque: `DISABLE_ANYHIT`，non-opaque: `REQUIRE_SINGLE_ANYHIT_CALL`）。Shadow ray 用 `DISABLE_CLOSESTHIT`，与 bounce
 共享 hitgroup。
 
-**理由**：否定 2 hitgroup + stride 方案——CH/AH 独立入口与寄存器分配，opaque 不链 AH 无寄存器收益；SER hint 已用 material
+**理由**：否定 2 hitgroup + multi-record SBT 方案——CH/AH 独立入口与寄存器分配，opaque 不链 AH 无寄存器收益；SER hint 已用 material
 信息；BLAS geometry flag 是 OptiX 控制 anyhit 的原生机制。
 
 ---
@@ -307,10 +308,9 @@ exposure + tonemap 写全幅 display；VK blit 保持 1:1。
 
 ### Tonemap 与 Exposure
 
-**决策**：Khronos PBR Neutral。Exposure 语义为线性倍率；app 存 EV 并 `pow(2, ev)` 后传入 renderer，renderer 只做
-`color * exposure`。
+**决策**：Khronos PBR Neutral。`RenderSettings` 存 EV；`Renderer::submit_cuda` 转为线性倍率 `pow(2, ev)` 再传入 tonemap；kernel 只做 `color * exposure`。
 
-**理由**：PBR Neutral 在峰值下 1:1 还原 baseColor、仅压高光。EV 摄影概念留在 app，renderer 职责单一。
+**理由**：PBR Neutral 在峰值下 1:1 还原 baseColor、仅压高光。EV 作 UI 单位；转换集中在 submit 边界，device 侧只收线性倍率。
 
 ---
 
@@ -425,6 +425,5 @@ estimator → 时域/guide data）。全部源头完成前，不以最终 radian
 
 | 项                               | 理由                          |
 |---------------------------------|-----------------------------|
-| Firefly clamping                | 有 bias；降噪/DLSS-RR 可处理极亮点    |
 | `indirect_intensity` 乘数         | 非物理艺术控制                     |
 | Target sample count / auto-stop | DLSS-RR 内部管理时域历史，无有意义的收敛停止点 |
