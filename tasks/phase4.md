@@ -3,7 +3,9 @@
 > 目标：核心 Path Tracer（BRDF、多 bounce、IBL、NEE+MIS、累积收敛）
 >
 > **范围判据**：4000 spp 大致收敛是 Phase 4/4.5 特性归属判据，非项目终点。项目长期目标是实时 PT 渲染器（见 `docs/roadmap.md`）。
-> 详细设计见 `docs/current-phase.md`，决策记录见 `docs/phase4-discussion.md`，技术决策见 `docs/technical-decisions.md`。
+> 详细设计见 `docs/current-phase.md`，决策记录见 `docs/phase4-discussion.md`（D1-D41），技术决策见 `docs/technical-decisions.md`。
+>
+> **已完成项说明**：勾选完成的条目保留实现当时的措辞作为历史 checklist；终态以 `docs/current-phase.md` 与源码为准（例如 payload 现为 16 registers，Ray Cone 后扩至 18；per-slot 计数现为 `FrameSlot::sample_count`）。
 >
 > 每完成一个复选框暂停等待审查。一个 Step 结束时应请求用户在 CLion 中编译验证。
 

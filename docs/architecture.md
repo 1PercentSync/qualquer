@@ -94,7 +94,7 @@ MUSTREAD:4
 **与 Himalaya 的区别**：Himalaya 把渲染拆成 framework 与 pass 两层。Qualquer 不拆，原因：
 - PT 是单个 OptiX launch，不需要 Render Graph 编排多 Pass
 - CUDA stream 天然顺序执行，不需要复杂的依赖声明
-- "Pass" 就是 PT kernel + denoiser，无需独立抽象
+- "Pass" 就是 PT kernel + DLSS-RR（或 Separate Sum 回退），无需独立抽象
 
 ### app（应用层）
 
@@ -110,7 +110,7 @@ MUSTREAD:4
 
 与 Himalaya 不同，Qualquer 不需要 Render Graph：
 - Himalaya 有多个 Pass 需要声明式编排和 barrier 管理
-- Qualquer 的渲染是 OptiX launch → Denoiser → Vulkan blit 的线性流程
+- Qualquer 的渲染是 OptiX launch →（可选 DLSS-RR）→ tonemap → Vulkan blit 的线性流程
 - CUDA stream 保证顺序执行
 
 ### 材质系统
