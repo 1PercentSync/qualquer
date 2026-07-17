@@ -779,7 +779,8 @@ __forceinline__ __device__ float specular_probability(const float NdotV,
  *   - diffuse_weight: (1-metallic) * (1 - E_glossy_per_channel), where
  *     E_glossy uses the mixed specular F0 = lerp(0.04, base_color, metallic)
  *     per channel. Pure metals (metallic=1) have no diffuse, so E_glossy is
- *     skipped and diffuse_weight = 0.
+ *     always skipped and diffuse_weight = 0 (callers that need E_glossy for
+ *     aux G-buffer must compute it themselves).
  *
  * @param V              View direction (world, normalized, facing surface);
  *                       converted to tangent space and stored as V_ts.
@@ -790,15 +791,12 @@ __forceinline__ __device__ float specular_probability(const float NdotV,
  * @param metallic       Metallic factor in [0,1].
  * @param roughness      Linear roughness in [0,1] (glTF value, caller clamps >= 0.04).
  * @param alpha          roughness^2, caller-clamped >= 1e-4 (NaN guard at alpha=0).
- * @param dlss_enabled   Whether DLSS-RR is active (controls aux data needs).
- * @param bounce         Current bounce index (E_glossy needed at bounce 0 for aux).
  */
 __forceinline__ __device__ BrdfParams init_brdf_params(
         const float3 V, const float3 N,
         const float3 T_basis, const float3 B_basis,
         const float3 base_color, const float metallic,
-        const float roughness, const float alpha,
-        const uint32_t dlss_enabled, const uint32_t bounce) {
+        const float roughness, const float alpha) {
     BrdfParams p{};
     p.N = N;
     p.T = T_basis;
@@ -824,14 +822,11 @@ __forceinline__ __device__ BrdfParams init_brdf_params(
             turquin_compensation(p.F0.z, E_ss_val));
     }
 
-    // Pure metal: no diffuse lobe. Skip E_glossy unless DLSS bounce 0 needs
-    // it for aux specular albedo.
+    // Pure metal: no diffuse lobe. Always skip E_glossy here — BRDF shading
+    // does not need it, and pipeline aux consumers compute it at the write site.
     if (metallic >= 1.0f) {
         p.diffuse_weight = make_float3(0.0f, 0.0f, 0.0f);
         p.p_spec = 1.0f;
-        if (dlss_enabled && bounce == 0) {
-            p.E_glossy_rgb = compute_E_glossy_clamped(p.F0, roughness, p.NdotV);
-        }
         return p;
     }
 

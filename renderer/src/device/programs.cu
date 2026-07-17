@@ -619,8 +619,7 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
     build_orthonormal_basis(N_brdf, T_basis, B_basis);
     const BrdfParams bp = init_brdf_params(
         V, N_brdf, T_basis, B_basis,
-        base_color, metallic, roughness, alpha,
-        params.dlss_enabled, bounce);
+        base_color, metallic, roughness, alpha);
 
     const uint3 launch_idx = optixGetLaunchIndex();
     const uint32_t pixel_index = launch_idx.y * params.width + launch_idx.x;
@@ -659,7 +658,11 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
 
         // Specular albedo: E_glossy per channel (Turquin-compensated specular
         // directional reflectance, self-consistent with our energy compensation).
-        surf2Dwrite(make_float4(bp.E_glossy_rgb.x, bp.E_glossy_rgb.y, bp.E_glossy_rgb.z, 1.0f),
+        // Pure metals skip E_glossy inside init_brdf_params; compute it here.
+        const float3 E_glossy_aux = (metallic >= 1.0f)
+            ? compute_E_glossy_clamped(bp.F0, bp.r, bp.NdotV)
+            : bp.E_glossy_rgb;
+        surf2Dwrite(make_float4(E_glossy_aux.x, E_glossy_aux.y, E_glossy_aux.z, 1.0f),
                     params.aux_specular_albedo,
                     sx * static_cast<int>(sizeof(float4)), sy);
 
