@@ -173,19 +173,6 @@ object）均需重建。External semaphore 与分辨率无关，不需重建。
 - 首帧由 init 中的 pre-signal 闭合（reverse_sem 预先 signal，使首帧 CUDA wait 立即通过）
 - acquire 失败时 Vulkan submit 被跳过，drain submit 需代为 signal reverse semaphore（否则下一帧 CUDA wait 挂起）
 
-### 测试 Kernel 归属
-
-**决策**：测试 kernel 归 renderer 层，不归 optix 层。
-
-测试 kernel 是“画什么”（渲染内容），renderer 层职责。optix 层是 OptiX/CUDA 封装层，只提供纯能力（如导入后的 surface object
-句柄），不含渲染逻辑（遵循 `docs/architecture.md` 的层次约束）。renderer 拿 optix 提供的句柄 + 自己持有的帧号计数器去 launch
-kernel。
-
-**理由**：
-
-- optix 层不包含渲染逻辑是硬约束（编译期单向依赖的语义边界）
-- 帧号计数器是渲染状态（时间累积/噪声变化用途），天然归 renderer 层，与 Himalaya `Renderer::frame_counter_` 一致
-
 ### CUDA Stream 架构
 
 **决策**：双显式 stream（`compute_stream` + `display_stream`），均由 `optix::Context` 持有。
@@ -206,9 +193,6 @@ kernel。
   work；non-blocking display 的前置等待与 completion event 不覆盖该顺序，SER + 高帧率会放大时序敏感性。blocking display 恢复与
   default stream 的排序，且不取消 compute/display 并行。若后续再出现偶发崩溃，用标准 `optixTrace` 做稳定性对照后再决定是否关
   SER。
-
-**跨 stream 同步**：FrameSlot 内 production event（compute_stream raygen 完成后 record）和 consumption event（display_stream
-tonemap 完成后 record），按 ping-pong slot 双缓冲，保护跨帧读写依赖。
 
 ### Renderer 内拆分
 
@@ -238,20 +222,6 @@ command buffer 与 submit/present 的时序骨架。
   RenderInput / SceneRenderInput，不在成员中缓存。Renderer 自有状态包括 frame_counter_、FrameSlot
   ping-pong、pipeline/SBT、DlssRR 生命周期与 timing events 等——这些是渲染内容的所有者资源，不是对 Application 句柄的缓存。与
   Himalaya 缓存指针成员的做法不同——Qualquer 的所有权原则更严格
-
-### CUDA 每帧工作
-
-**参数传输**：`cudaMemcpyAsync`
-
-每帧更新的参数（相机矩阵、帧计数等）使用异步传输。同步版本会隐式等待 GPU 空闲，强制串行化。
-
-**Kernel 启动**：每帧 launch
-
-不使用 persistent kernel。launch 开销（~5-10 微秒）相比累积时间（~1ms）可忽略，不值得增加复杂度。
-
-**隐藏条件**：
-
-只要 T_CPU工作 < T_累积（CPU 的 memcpy 排队 + launch + Vulkan 录制在累积时间内完成），CPU 工作被完全隐藏。
 
 ---
 
@@ -528,12 +498,6 @@ engine 可能仍未消费上一次的 semaphore，导致对 signaled 状态的 b
 
 与 Himalaya 一致。
 
-### ImGui 渲染
-
-**决策**：直接渲染到 swapchain image。
-
-ImGui 作为 UI overlay，在 blit 之后绘制。
-
 ### 命令录制
 
 **决策**：不使用 CommandBuffer wrapper，直接使用裸 VkCommandBuffer。
@@ -584,16 +548,6 @@ present 返回 ∈ {OUT_OF_DATE, SUBOPTIMAL}              → present 后 recrea
 - 最小化时 GPU 不空转渲染、CPU 不忙循环轮询，省资源
 - Qualquer 无"最小化时仍需每帧执行的非渲染逻辑"，非阻塞跳帧（轮询但跳过渲染）的灵活性用不上
 
-### 错误处理
-
-**决策**：VK_CHECK 宏，失败时打印错误并立即 abort。
-
-**理由**：
-
-- Vulkan 错误通常不可恢复
-- 简单直接，错误发生时日志已打印
-- 与 Himalaya 一致
-
 ---
 
 ## 初始化
@@ -611,14 +565,5 @@ init 按选中 UUID 完成 device/queue/resource 创建。
 - CUDA 与 Vulkan 通过 UUID 对齐到同一物理 GPU
 - 早期“CUDA → Vulkan 单向”是软理由（省 CUDA 失败的 Vulkan init），但该场景选出的 CUDA 设备可能不可
   present，被三段式推翻——依据“决策可更新性”原则
-
-### 设备检测
-
-**决策**：CUDA 初始化时检测。
-
-**理由**：
-
-- CUDA init 自然检测 NVIDIA GPU 可用性和 compute capability
-- Vulkan 设备经 UUID 匹配 CUDA 选中的设备
 
 ---
