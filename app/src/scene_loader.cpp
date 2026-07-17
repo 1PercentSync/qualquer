@@ -294,6 +294,11 @@ namespace qualquer::app {
                 }
                 const auto &pos_accessor = gltf.accessors[pos_it->accessorIndex];
                 auto vertex_count = pos_accessor.count;
+                if (vertex_count == 0) {
+                    spdlog::warn("Mesh '{}' primitive skipped: empty (0 vertices)",
+                                 std::string(gltf_mesh.name));
+                    continue;
+                }
 
                 std::vector<renderer::Vertex> vertices(vertex_count);
 
@@ -451,6 +456,11 @@ namespace qualquer::app {
                                      std::string(gltf_mesh.name), idx, vertex_count);
                         idx = last_vertex;
                     }
+                }
+                if (indices.empty()) {
+                    spdlog::warn("Mesh '{}' primitive skipped: empty (0 triangles)",
+                                 std::string(gltf_mesh.name));
+                    continue;
                 }
 
                 // §1382: when normals are absent, compute flat normals.
