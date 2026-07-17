@@ -15,7 +15,7 @@
 
 ### 下一个任务
 
-Phase 4.5 Step 15 第一小项：刷新率查询（GLFW `glfwGetVideoMode`）
+Phase 4.5 Step 15 第一小项：刷新率查询
 
 ---
 
@@ -30,16 +30,6 @@ Phase 4.5 Step 15 第一小项：刷新率查询（GLFW `glfwGetVideoMode`）
 | `tasks/phase4.5.md` | Phase 4.5 可执行任务清单 |
 | `docs/architecture.md` | 渲染器架构与设计理念 |
 | `docs/technical-decisions.md` | 技术选型与决策（含 PT/BRDF/DLSS 终态决策） |
-
----
-
-## 按需文档
-
-| 文档 | 说明 |
-|------|------|
-| `docs/archive/phase4.md` | Phase 4 实现指南快照（已完成 PT/DLSS 细节） |
-| `docs/archive/phase4-discussion.md` | Phase 4/4.5 决策过程全文（D1–D41） |
-| `tasks/archive/phase4.md` | Phase 4 已完成 checklist |
 
 ---
 
