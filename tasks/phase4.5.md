@@ -14,7 +14,7 @@
 - [x] Firefly clamp
 - [x] DLSS ON 下 Sobol path sequence index
 - [x] 显示中间图 RGBA16F
-- [ ] 请求用户在 CLion 中编译验证（firefly clamp / sequence 噪声 / 阴影色阶问题消除）
+- [x] 请求用户在 CLion 中编译验证（firefly clamp / sequence 噪声 / 阴影色阶问题消除）
 
 ## Step 14.7：小修复与清理
 
