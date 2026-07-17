@@ -14,6 +14,7 @@
 - [ ] 刷新率查询：GLFW `glfwGetVideoMode` 获取当前显示器刷新率
 - [ ] 帧时间测量：CUDA events 测量 raygen kernel 执行时间
 - [ ] Mode 选择逻辑：根据实测帧时间判断 Mode 1 / 2 / 3，计算目标帧率
+MUSTREAD:4
 - [ ] Ping-pong / 串行切换：Mode 1 保持双 stream 并行，Mode 2/3 切换到单 stream 串行
 - [ ] UI：当前 mode 显示、手动/自动切换开关
 - [ ] 请求用户在 CLion 中编译验证（自适应切换正常，各 mode 帧率符合目标）
@@ -36,5 +37,3 @@
 - [ ] 基于 ray cone footprint 估算法线贴图方差（Kaplanyan 2016 方案）
 - [ ] 方差叠加到 roughness²：`roughness² += variance`，clamp 后重算 alpha
 - [ ] 请求用户在 CLion 中编译验证（法线贴图接缝处 specular 闪烁减少）
-
-MUSTREAD:2
