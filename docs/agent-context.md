@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4.5 — 自适应帧率 + 采样质量收尾
-- **进度**：Phase 4.5 Step 14.7 完成（Sobol [0,1)、空 mesh 跳过、索引日志汇总、kPosInf、pass-through 延迟 normalize、init_brdf_params 解耦）
+- **进度**：Phase 4.5 Step 14.8 第一小项完成：env alias table 降采样至目标上限 1024×512（自动 power-of-2 因子、box-filter、device 侧零修改）
 
 ### 下一个任务
 
-Phase 4.5 Step 14.8 第一小项：Env alias table 降采样
+Phase 4.5 Step 14.8 第二小项：OptiX payload type semantics
 
 ---
 
