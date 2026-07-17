@@ -108,6 +108,10 @@ T_呈现 = T_acquire + T_blit + T_ImGui + T_present
 - 单显示 buffer 在 T_raygen > T_呈现 时足够（典型 PT 场景）
 - DLSS 中间 HDR 仅在 ON 时使用，与 tonemap 同 stream 顺序执行
 
+**同槽所有权（FrameSlot）**：color、全部 aux 与 host metadata 必须同一 ping-pong slot 生产/消费。evaluate 由 read slot validity 驱动，而非「固定延迟一帧」或单份 aux + 额外串行化。单份 aux 会在双 stream 下被 compute 覆盖 display 正在读的 guide data；即便消除物理竞争，previous color 与 current aux/jitter/矩阵仍构成帧错配。
+
+**Separate Sum + per-slot 计数**：累积用 `sum_new = sum_old + frame_total`，tonemap 除以与 buffer 同槽的 sample count。全局 count + 清零两 buffer 在 reset 帧会与同帧 tonemap 读产生跨 stream 竞态并导致黑帧。reset 时 `chain_count = 0` 使 raygen 覆写 write slot（不读 read），等效清零且无 memset。`frame_counter_` 永不 reset（%2 选 slot，并上传为 device `frame_index` 作 RNG 时域源），不单设 `frame_seed_`。
+
 ### 显示 Buffer 细节
 
 **格式**：`VK_FORMAT_R8G8B8A8_UNORM`
@@ -163,14 +167,15 @@ CUDA 侧通过 `cudaExternalMemoryGetMappedMipmappedArray` → `cudaArray_t` →
 | `compute_stream` | params upload + optixLaunch（raygen） |
 | `display_stream` | DLSS-RR evaluate（ON 时）+ tonemap + signal interop semaphore |
 
-`compute_stream` 为 non-blocking stream；`display_stream` 为 blocking stream（恢复与 legacy default stream 的顺序，保证 NGX CUDA 路径的排序正确性，见 D38）。
+`compute_stream` 为 non-blocking stream；`display_stream` 为 blocking stream。
 
 **理由**：
 - 默认流会与所有显式流隐式同步，等于全局序列化点，堵死重叠空间
 - raygen 写 buf[X] 而 tonemap 读 buf[Y]（ping-pong），无数据依赖，可并行
 - 单 stream 下 tonemap 被迫串行等 raygen 完成，raygen 连续执行的间隙 = T_tonemap；双 stream 下间隙 ≈ 0
+- **display 必须 blocking**：DLSS-RR feature 绑在 display stream 上，其 CUDA 路径仍可能提交 legacy default-stream work；non-blocking display 的前置等待与 completion event 不覆盖该顺序，SER + 高帧率会放大时序敏感性。blocking display 恢复与 default stream 的排序，且不取消 compute/display 并行。若后续再出现偶发崩溃，用标准 `optixTrace` 做稳定性对照后再决定是否关 SER。
 
-**跨 stream 同步**：FrameSlot 内 production event（compute_stream raygen 完成后 record）和 consumption event（display_stream tonemap 完成后 record），按 ping-pong slot 双缓冲，保护跨帧读写依赖（详见 `current-phase.md`）。
+**跨 stream 同步**：FrameSlot 内 production event（compute_stream raygen 完成后 record）和 consumption event（display_stream tonemap 完成后 record），按 ping-pong slot 双缓冲，保护跨帧读写依赖。
 
 ### Renderer 内拆分
 
@@ -205,10 +210,180 @@ CUDA 侧通过 `cudaExternalMemoryGetMappedMipmappedArray` → `cudaArray_t` →
 
 只要 T_CPU工作 < T_累积（CPU 的 memcpy 排队 + launch + Vulkan 录制在累积时间内完成），CPU 工作被完全隐藏。
 
-### 后续改进方向
+---
 
-1. **单帧多 sample 累积**：Phase 4 已实现（D4），raygen 内 sample 循环，max 64 spp/frame
-2. **自适应采样**：Phase 4 仅手动参数（D16）；Phase 4.5 Step 15 纳入三级降级自适应（D34）
+## Path Tracer 内核
+
+### Kernel 架构
+
+**决策**：Megakernel + SER。演进：需要 ReSTIR 等全局同步时迁 Multi-launch；体积渲染再评估 Wavefront。
+
+**理由**：SER 消除 bounce 间 divergence，零中间 ray state buffer。Multi-launch / Wavefront 的全局 buffer 与实现复杂度在当前无 ReSTIR 时收益不足。
+
+### Payload
+
+**决策**：全信息 payload registers（当前 18：含 ray cone 预留 p16/p17），不走 global hit buffer。
+
+**理由**：SER 重排后 payload 随线程移动、零全局内存；global buffer 在重排后访问变为 non-coalesced，反而更差。OptiX 上限 32 registers。
+
+### Device 代码组织
+
+**决策**：单 `programs.cu` + 多 `.cuh`（`__forceinline__ __device__`），不做多 Module linking。
+
+**理由**：全局内联对 megakernel 性能关键；多 module 跨模块调用受限且构建复杂；单 module 千行级编译不构成瓶颈。
+
+### 每帧多 Sample
+
+**决策**：raygen 内 sample 循环（单次 `optixLaunch`，寄存器局部累积）。硬上限 `max_samples_per_frame = 64`（TDR 安全）。
+
+**理由**：相对每 sample 一次 launch 或 3D launch，带宽与 launch 开销最优；寄存器仅多约 3 floats + counter。
+
+### Multi-launch 迁移预留
+
+**决策**：三项零运行时开销的代码组织——`PathState` 结构体、payload pack/unpack helpers、bounce loop body 隔离为 device 函数。
+
+**理由**：Megakernel 阶段 PathState 是局部变量；迁 Multi-launch 时变为全局 buffer 元素类型，改布局与调用形态只动封装点。
+
+### SBT / Pipeline
+
+**决策**：2 miss（`__miss__env` + `__miss__shadow`）+ **1 hitgroup**（CH+AH）；stride=0；BLAS per-geometry flag 控制 anyhit（opaque: `DISABLE_ANYHIT`，non-opaque: `REQUIRE_SINGLE_ANYHIT_CALL`）。Shadow ray 用 `DISABLE_CLOSESTHIT`，与 bounce 共享 hitgroup。
+
+**理由**：否定 2 hitgroup + stride 方案——CH/AH 独立入口与寄存器分配，opaque 不链 AH 无寄存器收益；SER hint 已用 material 信息；BLAS geometry flag 是 OptiX 控制 anyhit 的原生机制。
+
+---
+
+## 着色与光照
+
+### BRDF 参数约定
+
+**决策**：specular 微面元原语接收 **alpha**（= roughness²）；EON / E_ss / E_FON / CLTC 接收 **linear roughness**。closesthit 单点算 alpha 并 clamp，原语内不重复 clamp。Visibility 命名为 `V_SmithGGXCorrelated`。
+
+**理由**：两套惯例来自不同数学源头（Heitz 微面元 vs 多项式拟合变量），无法统一。与 Himalaya「全收 roughness、函数内平方」不同：集中算 alpha 避免重复平方并让 NaN 防护可见。命名显式标注 height-correlated G2，避免与 separable 混淆。
+
+### 多散射能量补偿
+
+**决策**：Turquin 对 specular 乘增益；`E_ss` 用 Sforza 19 系数有理多项式（零 LUT）。Diffuse 权重为 `(1 - metallic) × (1 - E_glossy)`，`E_glossy` 为 Sforza 39 系数多项式。
+
+**理由**：Heitz 随机游走过慢；Kulla-Conty 需改采样；Turquin 不改采样，单向 PT 不要求互易。多项式精度足够且无预计算资源。`(1-F)` 忽略微面元多次弹跳后进入 diffuse 的能量，高 roughness + 掠射偏差大。
+
+### Diffuse 模型
+
+**决策**：EON（Energy-Preserving Oren–Nayar）+ CLTC 采样，不用 Lambertian / Burley。
+
+**理由**：能量守恒且保持、互易、粗糙回射、OpenPBR 采纳；CLTC 在掠射角相对 cosine 半球大幅降方差。GPU PT 上相对 Lambertian 开销可忽略。
+
+### Fresnel
+
+**决策**：仅标准 `F_Schlick(VdotH, F0)`（F90=1 隐含）。不做 F82-tint；不暴露 F90 参数重载。
+
+**理由**：F82-tint 依赖未解析的 KHR_materials_specular；涂层与 F90≠1 场景不在范围内；金属能量补偿走独立 Turquin 增益。
+
+### 光源范围
+
+**决策**：仅 IBL + emissive 三角形 NEE + MIS（power heuristic）。不实现 glTF punctual lights。Env alias table **全分辨率**（equirect 像素级）。
+
+**理由**：解析光源与 IBL/emissive 重复覆盖照明；全分辨率保持角度精度与 PDF 一致（Himalaya ÷2 是 VRAM 取舍，非业界默认）。hot pixel 过度集中时再评估降采样。
+
+### 环境贴图表示
+
+**决策**：equirect 加载后转 cubemap，`texCubemap` 采样。
+
+**理由**：硬件选面、无极地畸变、边界 filtering 优于 equirect 直采；代价为一次性转换与约 1.5× 显存。
+
+### 明确不纳入
+
+| 项 | 理由 |
+|----|------|
+| Firefly clamping | 有 bias；降噪/DLSS-RR 可处理极亮点 |
+| `indirect_intensity` 乘数 | 非物理艺术控制 |
+| Target sample count / auto-stop | DLSS-RR 内部管理时域历史，无有意义的收敛停止点 |
+
+### Stochastic Alpha 采样
+
+**决策**：`alpha_mode == Blend` 时用 **hash**（pixel / sample / primitive）与 texel alpha 比较决定 `optixIgnoreIntersection`，不用 Sobol 维度。
+
+**理由**：anyhit 调用次数与顺序不确定，Sobol 维度分配模式不适用。
+
+---
+
+## 采样与 RNG
+
+### RNG
+
+**决策**：Sobol（128 维 direction numbers）+ per-pixel **加法** Cranley-Patterson rotation + golden-ratio temporal offset（`frame_index * 2654435769u`）；dim ≥ 128 降级 xxhash32。**不用** blue noise 纹理。表以 `uint32_t sobol_directions[4096]` **内嵌 LaunchParams**，经 `optixLaunch` 进入 `__constant__`。
+
+**理由**：DLSS-RR 文档将 blue noise 列为应避免；加法 CP 保持低差异性（XOR 破坏分层）。OptiX 无公开 API 初始化非 LaunchParams 的 `__constant__`，内嵌是唯一把自定义表放进 constant memory 的方式。
+
+### 多 spp 与 jitter
+
+**决策**：DLSS ON 时帧内所有 sample **共享**同一 subpixel jitter（仅跨帧变化）；DLSS OFF 时 per-sample jitter。BRDF/NEE 维度始终 per-sample。
+
+**理由**：DLSS 每帧只收一组 aux 与一个 `InJitterOffset`；共享 jitter 使 primary 一致、aux 写一次。OFF 时 per-sample jitter 加速 MC 收敛。
+
+---
+
+## 降噪与分辨率
+
+### DLSS-RR
+
+**决策**：DLSS Ray Reconstruction（CUDA API）替代 OptiX Denoiser。管线：raygen → DLSS-RR → tonemap。Separate Sum 为 DLSS OFF 的长期 fallback。
+
+**理由**：DLSS-RR 同时做时域累积、去噪、放大，直接到达实时 PT 终态；OptiX Denoiser 只做去噪。
+
+### DLSS guide 关键约定
+
+**决策**：
+- specular albedo = 逐通道 `E_glossy`（与 Turquin 补偿后 specular 能量自洽）
+- specular hit distance 传 **nullptr**（不分配）
+- diffuse albedo 暂传 raw `base_color`（是否预乘 `1-metallic` 存疑；出现相关伪影时优先排查）
+
+**理由**：EnvBRDFApprox2 与项目多散射 specular 不一致时，guide 与 color 自洽优先于匹配训练分布。nullptr 比填 infinity 更诚实；SDK 在无 hit distance 时回退 2D MV 推导 specular motion。
+
+### 渲染 / 显示分辨率
+
+**决策**：渲染分辨率独立于 swapchain；display buffer 始终 swapchain 大小。缩放在 tonemap kernel 内、**线性 HDR（mean）** 上完成，再 exposure + tonemap 写全幅 display；VK blit 保持 1:1。
+
+**理由**：blit 滤波发生在 tonemap 后的 LDR，无法对缩小做 footprint 滤波，也无法在线性空间高质量放大。DLSS ON 时输出已是显示分辨率；OFF 时本路径为长期 fallback。
+
+### 自适应帧率（策略）
+
+**决策**：三级降级，通过调节 `samples_per_frame` 逼近目标帧率；与呈现模式（MAILBOX/FIFO）解耦。
+
+| Mode | 架构 | 条件 | 目标帧率 |
+|------|------|------|----------|
+| 1 | ping-pong 并行 | 1spp 足够快 | min { n×refresh ≥ 150 } |
+| 2 | 串行 | 无法达 Mode 1 | refresh（<150Hz）或 refresh/2（≥150Hz） |
+| 3 | 串行 | 无法达 Mode 2 | 反复减半；低于 60fps 则 1spp 放开跑 |
+
+**理由**：ping-pong 多一帧显示延迟，需 ≥150fps 才不可感知；达不到则串行换更低目标以消除额外延迟。整数倍刷新率避免微卡顿。
+
+---
+
+## 呈现与 UI
+
+### Tonemap 与 Exposure
+
+**决策**：Khronos PBR Neutral。Exposure 语义为线性倍率；app 存 EV 并 `pow(2, ev)` 后传入 renderer，renderer 只做 `color * exposure`。
+
+**理由**：PBR Neutral 在阈值下 1:1 还原 baseColor、仅压高光。EV 摄影概念留在 app，renderer 职责单一。
+
+### UI 领域结构
+
+**决策**：`RenderSettings`（可调旋钮）+ `SceneStats`（只读资产快照），DebugUIContext 组合引用；参数变化由 Renderer 比对前帧值检测。
+
+**理由**：避免 Context 散装标量膨胀。near/far 不暴露——perspective unproject 后 near/far 缩放在 normalize 中消失，PT 无深度缓冲消费 depth mapping。
+
+### 异步上传生命周期
+
+**决策**：host→device 异步 copy 按 host source **所有权批次**同步；同步点在任一局部 source 失效之前。不用 `cudaDeviceSynchronize`。
+
+**理由**：局部加载缓冲若在 stream copy 完成前析构，违反 upload 契约。批内共享一次同步保留并行；加载路径不值得上持久 staging + event 回收。
+
+### 数值正确性策略
+
+**决策**：按责任域在源头修正并验证（资产输入 → geometry/shading frame → BRDF/能量 → importance distribution → 直接光/path estimator → 时域/guide data）。全部源头完成前，不以最终 radiance clamp / 非有限清零作为统一兜底。
+
+**理由**：边界 sanitize 会掩盖真实错误，使单项修正无法验证。边界防御不承担修正物理模型的职责。
 
 ---
 

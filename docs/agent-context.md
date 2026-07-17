@@ -10,12 +10,12 @@
 
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
-- **Phase**：M1 Phase 4.5 — 收敛质量 + DLSS-RR + 自适应
-- **进度**：Phase 4.5 Step 14.5 数值正确性修复全部完成（资产输入校验 + 几何/shading frame 退化防御 + BRDF/能量模型输出合法性 + importance distribution 一致性审计 + 直接光照/path estimator 数值合法性 + 时域投影/DLSS guide data 合法性）
+- **Phase**：M1 Phase 4.5 — 自适应帧率 + 采样质量收尾
+- **进度**：Phase 4 已归档（含原 4.5 Step 9–14.5：Sobol、RR、分辨率解耦、DLSS-RR、数值正确性与结构重构）。当前待做 Step 15 起
 
 ### 下一个任务
 
-Phase 4.5 Step 14.5 请求用户在 CLion 中编译验证
+Phase 4.5 Step 15 第一小项：刷新率查询（GLFW `glfwGetVideoMode`）
 
 ---
 
@@ -26,11 +26,20 @@ Phase 4.5 Step 14.5 请求用户在 CLion 中编译验证
 | 文档 | 说明 |
 |------|------|
 | `docs/roadmap.md` | Phase 概览与顺序 |
-| `docs/current-phase.md` | 当前阶段目标、范围、实现指南（Phase 4 + 4.5） |
-| `tasks/phase4.md` | Phase 4 / 4.5 可执行任务清单 |
-| `docs/phase4-discussion.md` | Phase 4/4.5 决策记录（D1-D41） |
+| `docs/current-phase.md` | 当前阶段目标、范围、实现指南（Phase 4.5） |
+| `tasks/phase4.5.md` | Phase 4.5 可执行任务清单 |
 | `docs/architecture.md` | 渲染器架构与设计理念 |
-| `docs/technical-decisions.md` | 技术选型与决策 |
+| `docs/technical-decisions.md` | 技术选型与决策（含 PT/BRDF/DLSS 终态决策） |
+
+---
+
+## 按需文档
+
+| 文档 | 说明 |
+|------|------|
+| `docs/archive/phase4.md` | Phase 4 实现指南快照（已完成 PT/DLSS 细节） |
+| `docs/archive/phase4-discussion.md` | Phase 4/4.5 决策过程全文（D1–D41） |
+| `tasks/archive/phase4.md` | Phase 4 已完成 checklist |
 
 ---
 
@@ -44,6 +53,9 @@ Phase 4.5 Step 14.5 请求用户在 CLion 中编译验证
 | `tasks/archive/phase2.md` | Phase 2 可执行任务清单（已归档） |
 | `docs/archive/phase3.md` | Phase 3 目标、范围、实现指南（已归档） |
 | `tasks/archive/phase3.md` | Phase 3 可执行任务清单（已归档） |
+| `docs/archive/phase4.md` | Phase 4 目标、范围、实现指南（已归档） |
+| `tasks/archive/phase4.md` | Phase 4 可执行任务清单（已归档） |
+| `docs/archive/phase4-discussion.md` | Phase 4 讨论议程 D1–D41（已归档） |
 | `docs/archive/phase4-research-part1.md` | Phase 4 研究：Himalaya PT 特性差异清单（已归档） |
 | `docs/archive/phase4-research-part2.md` | Phase 4 研究：架构选项文档（已归档） |
 | `docs/archive/latest-nvidia-tech-deep-research-report.md` | NVIDIA 新技术影响分析（已归档） |

@@ -74,8 +74,8 @@ MUSTREAD:5
 | 1 | 基础设施 + 窗口 + CUDA Interop（vulkan/optix，swapchain，ImGui，CUDA 测试图案） |
 | 2 | OptiX 基础（Pipeline/SBT，raygen 输出纯色，累积 buffer ping-pong，双 Stream 流水线，替换测试 kernel） |
 | 3 | 场景 + 材质（glTF，BC 纹理，PBR 材质，BLAS/TLAS，交互式相机，ambient 着色） |
-| 4 | 核心 PT（Megakernel + SER，BRDF，多 bounce，IBL cubemap，NEE + MIS，Tonemap，4000 spp 收敛） |
-| 4.5 | 收敛质量 + DLSS-RR + 自适应（Sobol + hash 去相关，Ray Cone LOD，Russian Roulette，DLSS-RR，自适应帧率） |
+| 4 | 核心 PT + 实时前置（Megakernel + SER，BRDF，NEE + MIS，IBL，Tonemap，Sobol，RR，分辨率解耦，DLSS-RR，4000 spp 收敛） |
+| 4.5 | 自适应帧率 + 采样质量收尾（自适应 spp，Stochastic Alpha，Ray Cone LOD，Normal Map Specular AA） |
 
 ---
 
