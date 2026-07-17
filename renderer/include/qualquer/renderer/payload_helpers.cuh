@@ -12,7 +12,7 @@
 //   p9-p11  color (float3) — emissive + NEE radiance
 //   p12     hit_distance (float) — negative means miss
 //   p13     last_brdf_pdf (float)
-//   p14     sample_index (uint32) — raygen → closesthit for RNG
+//   p14     path sequence_index (uint32) — raygen → closesthit for Sobol
 //   p15     bounce index (uint32) — raygen → closesthit (read-only, not written back)
 
 #include <cstdint>
@@ -109,7 +109,7 @@ namespace qualquer::renderer {
         optixSetPayload_15(v);
     }
 
-    /** @brief Writes sample_index into p14 (raygen passes to closesthit for RNG). */
+    /** @brief Writes path sequence_index into p14 (Sobol; not sample_count). */
     __forceinline__ __device__ void payload_set_sample_index(const uint32_t v) {
         optixSetPayload_14(v);
     }
@@ -121,7 +121,7 @@ namespace qualquer::renderer {
         return optixGetPayload_15();
     }
 
-    /** @brief Reads sample_index from p14 (set by raygen before trace). */
+    /** @brief Reads path sequence_index from p14 (set by raygen before trace). */
     __forceinline__ __device__ uint32_t payload_get_sample_index() {
         return optixGetPayload_14();
     }

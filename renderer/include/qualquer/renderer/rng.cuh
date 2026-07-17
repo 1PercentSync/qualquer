@@ -155,9 +155,10 @@ __forceinline__ __device__ uint32_t sobol_sample(const uint32_t *directions,
  *
  * @param directions     Pointer to sobol_directions in LaunchParams (__constant__).
  * @param pixel_index    Linear pixel index (y * width + x).
- * @param sequence_index Sample index driving the Sobol sequence. For jitter dims
- *                       (0-1) this is frame_index (D37 per-frame jitter); for
- *                       BRDF/NEE dims (2+) this is the cumulative sample_index.
+ * @param sequence_index Index driving the Sobol sequence / xxhash. Both modes
+ *                       use frame_index * samples_per_frame + s so path dims
+ *                       never depend on Separate Sum sample_count (zero under
+ *                       DLSS). DLSS ON host jitter is separate (global_jitter).
  * @param frame_index    Monotonic frame counter for temporal decorrelation.
  * @param dimension      RNG dimension (see dimension allocation constants).
  * @return Uniform float in [0, 1).

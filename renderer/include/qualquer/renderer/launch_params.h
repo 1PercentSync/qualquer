@@ -237,6 +237,7 @@ struct LaunchParams {
      * 0 signals raygen to overwrite the write buffer directly (first sample
      * after reset/init) instead of accumulating from the read buffer.
      * Only used when dlss_enabled == 0 (Separate Sum fallback).
+     * Not a Sobol path sequence index — that is frame_index * samples_per_frame + s.
      */
     uint32_t sample_count;
 

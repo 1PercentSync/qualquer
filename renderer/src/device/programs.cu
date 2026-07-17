@@ -80,11 +80,14 @@ __forceinline__ __device__ void write_aux_no_surface(
 /// Traces one path from a primary ray, returning per-sample radiance.
 /// When capture_primary is true (first sample), writes primary hit/miss
 /// info into the output parameters for MV and sky aux-default computation.
+///
+/// @param sequence_index Path sequence index for Sobol (frame_index * spp + s);
+///                       independent of Separate Sum sample_count.
 __forceinline__ __device__ float3 trace_sample(
     const float3 cam_origin,
     const float3 primary_dir,
     const uint32_t pixel_index,
-    const uint32_t sample_index,
+    const uint32_t sequence_index,
     const bool capture_primary,
     float3 &primary_hit_pos,
     float3 &primary_sky_color,
@@ -98,7 +101,7 @@ __forceinline__ __device__ float3 trace_sample(
     path.throughput = make_float3(1.0f, 1.0f, 1.0f);
     path.radiance = make_float3(0.0f, 0.0f, 0.0f);
     path.pixel_index = pixel_index;
-    path.sample_index = sample_index;
+    path.sample_index = sequence_index;
     path.bounce = 0;
     path.alive = true;
 
@@ -111,7 +114,7 @@ __forceinline__ __device__ float3 trace_sample(
         if (path.bounce >= 2) {
             const uint32_t rr_dim = bounce_dim_base(path.bounce) + kBounceOffsetRR;
             const float rr_rand = sobol_rng(params.sobol_directions, pixel_index,
-                                           sample_index, params.frame_index, rr_dim);
+                                           sequence_index, params.frame_index, rr_dim);
             const float rr_prob = fminf(0.95f,
                 fmaxf(0.05f, fmaxf(path.throughput.x,
                                    fmaxf(path.throughput.y, path.throughput.z))));
@@ -122,7 +125,7 @@ __forceinline__ __device__ float3 trace_sample(
             path.throughput = path.throughput / rr_prob;
         }
 
-        p14 = sample_index;
+        p14 = sequence_index;
         p15 = path.bounce;
 
         optixTraverse(params.traversable,
@@ -263,9 +266,11 @@ __global__ void __raygen__rg() { // NOLINT(*-reserved-identifier)
         primary_dir_saved = primary_dir;
 
         for (uint32_t s = 0; s < params.samples_per_frame; ++s) {
-            const uint32_t sample_index = params.sample_count + s;
+            // Path sequence is independent of sample_count (always 0 under DLSS).
+            const uint32_t sequence_index =
+                params.frame_index * params.samples_per_frame + s;
             const float3 sample_radiance = apply_firefly_clamp(
-                trace_sample(cam_origin, primary_dir, pixel_index, sample_index,
+                trace_sample(cam_origin, primary_dir, pixel_index, sequence_index,
                              s == 0, primary_hit_pos, primary_sky_color,
                              primary_is_hit),
                 params.max_clamp);
@@ -275,16 +280,18 @@ __global__ void __raygen__rg() { // NOLINT(*-reserved-identifier)
         // DLSS OFF: per-pixel Sobol + CP rotation, per-sample jitter.
         // Each sample gets a different primary ray for Monte Carlo convergence.
         // No primary capture — aux data has no consumer when DLSS is off.
+        // Same sequence formula as DLSS ON so path dims never reuse sample_count.
         for (uint32_t s = 0; s < params.samples_per_frame; ++s) {
-            const uint32_t sample_index = params.sample_count + s;
+            const uint32_t sequence_index =
+                params.frame_index * params.samples_per_frame + s;
             const float jx = sobol_rng(params.sobol_directions, pixel_index,
-                                       sample_index, params.frame_index, kDimJitterX);
+                                       sequence_index, params.frame_index, kDimJitterX);
             const float jy = sobol_rng(params.sobol_directions, pixel_index,
-                                       sample_index, params.frame_index, kDimJitterY);
+                                       sequence_index, params.frame_index, kDimJitterY);
             const float3 primary_dir = compute_primary_dir(idx.x, idx.y, jx, jy);
 
             const float3 sample_radiance = apply_firefly_clamp(
-                trace_sample(cam_origin, primary_dir, pixel_index, sample_index,
+                trace_sample(cam_origin, primary_dir, pixel_index, sequence_index,
                              false, primary_hit_pos, primary_sky_color,
                              primary_is_hit),
                 params.max_clamp);
@@ -457,9 +464,11 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
         // pixels uncleared"). The pass-through surface has no meaningful
         // material attributes, so write "no surface" values matching the
         // sky/miss convention used by the reference projects.
+        // First sample of the frame batch: sequence_index == frame_index * spp.
         if (params.dlss_enabled
             && payload_get_bounce() == 0
-            && payload_get_sample_index() == params.sample_count) {
+            && payload_get_sample_index()
+                   == params.frame_index * params.samples_per_frame) {
             const uint3 li = optixGetLaunchIndex();
             write_aux_no_surface(static_cast<int>(li.x), static_cast<int>(li.y),
                                  make_float4(0.0f, 0.0f, 0.0f, 0.0f));
@@ -612,11 +621,12 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
 
     // ---- Aux G-buffer writes (first sample's bounce 0 only) ----
     // D37: all samples share per-frame jitter → primary ray identical →
-    // aux data identical. Write once at the first sample of the batch.
-    // DLSS OFF: no consumer for aux data, skip entirely (launch-uniform
-    // branch, no warp divergence).
+    // aux data identical. Write once at the first sample of the batch
+    // (sequence_index == frame_index * spp). DLSS OFF: no aux consumer.
     if (params.dlss_enabled
-        && bounce == 0 && payload_get_sample_index() == params.sample_count) {
+        && bounce == 0
+        && payload_get_sample_index()
+               == params.frame_index * params.samples_per_frame) {
         const int sx = static_cast<int>(launch_idx.x);
         const int sy = static_cast<int>(launch_idx.y);
 
