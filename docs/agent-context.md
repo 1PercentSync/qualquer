@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4.5 — 自适应帧率 + 采样质量收尾
-- **进度**：Phase 4.5 Step 14.7 第五小项完成：pass-through 用 N_face_raw，着色路径再 normalize 为 N_face
+- **进度**：Phase 4.5 Step 14.7 完成（Sobol [0,1)、空 mesh 跳过、索引日志汇总、kPosInf、pass-through 延迟 normalize、init_brdf_params 解耦）
 
 ### 下一个任务
 
-Phase 4.5 Step 14.7 第六小项：`init_brdf_params` 与管线关注点解耦
+Phase 4.5 Step 14.8 第一小项：Env alias table 降采样
 
 ---
 

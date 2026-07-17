@@ -23,8 +23,8 @@
 - [x] `scene_loader` 无效索引日志汇总
 - [x] `kPosInf` 具名常量
 - [x] closesthit pass-through 延迟 normalize
-- [ ] `init_brdf_params` 与管线关注点解耦
-- [ ] 请求用户在 CLion 中编译验证（契约与清理项无回归）
+- [x] `init_brdf_params` 与管线关注点解耦
+- [x] 请求用户在 CLion 中编译验证（契约与清理项无回归）
 
 ## Step 14.8：采样与光照优化
 
