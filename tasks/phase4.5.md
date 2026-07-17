@@ -19,7 +19,7 @@
 ## Step 14.7：小修复与清理
 
 - [x] `sobol_rng` Sobol 主路径 `[0,1)` 契约
-- [ ] `scene_loader` 空 mesh 索引验证
+- [x] `scene_loader` 空 mesh 索引验证
 - [ ] `scene_loader` 无效索引日志汇总
 - [ ] `kPosInf` 具名常量
 - [ ] closesthit pass-through 延迟 normalize

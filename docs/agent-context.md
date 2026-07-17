@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4.5 — 自适应帧率 + 采样质量收尾
-- **进度**：Phase 4.5 Step 14.7 第一小项完成：`sobol_rng` 主路径映射到 `[0,1)`
+- **进度**：Phase 4.5 Step 14.7 第二小项完成：空 mesh primitive 整段跳过
 
 ### 下一个任务
 
-Phase 4.5 Step 14.7 第二小项：`scene_loader` 空 mesh 索引验证
+Phase 4.5 Step 14.7 第三小项：`scene_loader` 无效索引日志汇总
 
 ---
 
