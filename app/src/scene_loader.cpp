@@ -449,13 +449,18 @@ namespace qualquer::app {
                     indices.resize(indices.size() - indices.size() % 3);
                 }
                 const auto last_vertex = static_cast<uint32_t>(vertex_count - 1);
+                size_t invalid_index_count = 0;
                 for (auto &idx : indices) {
                     if (idx >= vertex_count) {
-                        spdlog::warn("Mesh '{}': index {} exceeds vertex count {}, "
-                                     "clamping to last vertex",
-                                     std::string(gltf_mesh.name), idx, vertex_count);
+                        ++invalid_index_count;
                         idx = last_vertex;
                     }
+                }
+                if (invalid_index_count > 0) {
+                    spdlog::warn("Mesh '{}': {} invalid indices clamped to last vertex "
+                                 "(vertex count {})",
+                                 std::string(gltf_mesh.name), invalid_index_count,
+                                 vertex_count);
                 }
                 if (indices.empty()) {
                     spdlog::warn("Mesh '{}' primitive skipped: empty (0 triangles)",
