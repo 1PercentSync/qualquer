@@ -819,7 +819,7 @@ blit / record_vulkan 全幅不变，Vulkan 侧不感知渲染分辨率。DLSS-RR
 
 **异步上传 host source 生命周期**：`CudaBuffer::upload()` 的 host source 必须存活到对应 stream copy 完成。`SceneLoader` 按 source 所有权批次组织上传；同批 upload 共用一次 `cudaStreamSynchronize(stream)`，同步点位于任何局部 source 析构或提前返回之前。持久成员 source 不增加同步，不使用 `cudaDeviceSynchronize()`；无法延长到批次同步点的内层 source 在其所有权边界单独完成复制。
 
-#### Step 14.5 结构重构（草案，每项执行前需讨论确认）
+#### Step 14.5 结构重构（已完成）
 
 Step 11–14 实现过程中 Renderer 膨胀到 38 个成员、submit_cuda 超过 430 行、closesthit 超过 400 行。以下重构在正确性修复之后、Step 15 之前执行，防止后续特性（自适应 spp、Ray Cone、M2 ReSTIR）进一步恶化结构。各项方案为初步草案，执行前逐项与用户讨论确认。
 

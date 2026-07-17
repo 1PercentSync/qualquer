@@ -118,7 +118,7 @@ MUSTREAD:4
 复用 Himalaya 的材质数据结构思路：
 - GPU 材质数据（PBR 参数 + bindless 纹理索引）
 - 统一顶点格式
-- 无条件纹理采样（bindless + default 纹理）
+- 无条件纹理采样（bindless + default 纹理；emissive 纹理例外——非发光材质跳过采样）
 
 ### 场景表示
 
