@@ -30,17 +30,16 @@ namespace qualquer::renderer {
     };
 
     /**
-     * @brief Alpha blending mode, mirroring the glTF alphaMode field.
+     * @brief Alpha mode, mirroring the glTF alphaMode field.
      *
-     * Drives both CPU-side pass routing (opaque vs alpha-tested vs transparent)
-     * and GPU-side shader behavior (discard in Mask mode). The uint32_t
-     * underlying type lets the value be stored directly in the uint32
-     * alpha_mode slot of Material.
+     * Drives BLAS anyhit flags (non-Opaque → REQUIRE_SINGLE_ANYHIT_CALL) and
+     * anyhit shader behavior. The uint32_t underlying type lets the value be
+     * stored directly in the uint32 alpha_mode slot of Material.
      */
     enum class AlphaMode : uint32_t {
-        Opaque = 0, ///< Fully opaque; alpha ignored.
-        Mask = 1,   ///< Alpha test: discard fragments with alpha below alpha_cutoff.
-        Blend = 2,  ///< Alpha blending; drawn in a back-to-front transparent pass.
+        Opaque = 0, ///< Fully opaque; anyhit disabled on the BLAS geometry.
+        Mask = 1,   ///< Alpha test in anyhit: ignore when alpha is below alpha_cutoff.
+        Blend = 2,  ///< Stochastic alpha in anyhit (hash vs texel alpha).
     };
 
     /**

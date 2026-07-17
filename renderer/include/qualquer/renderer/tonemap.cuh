@@ -54,9 +54,9 @@ __forceinline__ __device__ float3 pbr_neutral_tonemap(float3 color) {
 /**
  * @brief Applies exposure then the Khronos PBR Neutral tone mapper.
  *
- * Exposure is a linear color multiplier (the app converts EV to this multiplier
- * via pow(2, ev) before upload). It is applied before tonemapping so the tone
- * curve compresses the exposed highlights.
+ * Exposure is a linear color multiplier. Host-side Renderer::submit_cuda converts
+ * EV stops to this multiplier via pow(2, ev) before launch. Applied before
+ * tonemapping so the tone curve compresses the exposed highlights.
  *
  * @param color    Linear HDR color (non-negative, Rec. 709).
  * @param exposure Linear multiplier applied to color before tonemapping.

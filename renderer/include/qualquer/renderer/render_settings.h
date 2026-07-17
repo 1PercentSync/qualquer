@@ -20,15 +20,19 @@ namespace qualquer::renderer {
      * samples_per_frame) do not. dlss_preset triggers feature recreation
      * (not accumulation reset) when it changes.
      *
-     * exposure_ev is stored in EV stops for the UI slider; Application
-     * converts to a linear multiplier (pow(2, ev)) before passing to
-     * the renderer, which multiplies color directly.
+     * exposure_ev is stored in EV stops for the UI slider; Renderer::submit_cuda
+     * converts it to a linear multiplier (pow(2, ev)) before the tonemap kernel,
+     * which multiplies color by that linear value.
      */
     struct RenderSettings {
         /** @brief Maximum bounce depth per path (1..32). */
         uint32_t max_bounces = 16;
 
-        /** @brief Samples traced per frame (1..64). */
+        /**
+         * @brief Samples traced per frame.
+         *
+         * UI clamps to 1..64 (TDR safety); the engine path does not re-clamp.
+         */
         uint32_t samples_per_frame = 1;
 
         /**
@@ -40,7 +44,11 @@ namespace qualquer::renderer {
          */
         uint32_t render_height = 1080;
 
-        /** @brief Exposure in EV stops; converted to linear pow(2, ev) at submit time. */
+        /**
+         * @brief Exposure in EV stops.
+         *
+         * Renderer::submit_cuda converts to linear pow(2, ev) for the tonemap kernel.
+         */
         float exposure_ev = 0.0f;
 
         /**
