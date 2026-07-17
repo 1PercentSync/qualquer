@@ -249,6 +249,15 @@ per-sample。
 **理由**：DLSS 每帧只收一组 aux 与一个 `InJitterOffset`；共享 jitter 使 primary 一致、aux 写一次。OFF 时 per-sample jitter
 加速 MC 收敛。
 
+### Path sequence index
+
+**决策**：Sobol / xxhash 的 path sequence index 为 `frame_index * samples_per_frame + s`（两模式统一）。与 Separate Sum 的
+`sample_count`（per-slot 链长；DLSS ON 每帧为 0）解耦。首 sample 写 aux 的门控改为
+`sequence_index == frame_index * samples_per_frame`，不再与 `sample_count` 比较。
+
+**理由**：DLSS 清零 `sample_count` 后若仍作 sequence index，每帧 path 维序列重复，跨维相关噪声被时域历史加深。
+`frame_index` 永不 reset，与 host 全局 jitter 同源，保证跨帧序号前进。
+
 ### Firefly Clamping
 
 **决策**：对每条 path 完成的 sample radiance 做**亮度等比缩放**（非 per-bounce、非按通道 min）。
