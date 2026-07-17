@@ -149,14 +149,16 @@ CUDA 侧通过 `cudaExternalMemoryGetMappedMipmappedArray` → `cudaArray_t` →
 | Stream | 每帧工作 |
 |--------|---------|
 | `compute_stream` | params upload + optixLaunch（raygen） |
-| `display_stream` | tonemap + signal interop semaphore |
+| `display_stream` | DLSS-RR evaluate（ON 时）+ tonemap + signal interop semaphore |
+
+`compute_stream` 为 non-blocking stream；`display_stream` 为 blocking stream（恢复与 legacy default stream 的顺序，保证 NGX CUDA 路径的排序正确性，见 D38）。
 
 **理由**：
 - 默认流会与所有显式流隐式同步，等于全局序列化点，堵死重叠空间
 - raygen 写 buf[X] 而 tonemap 读 buf[Y]（ping-pong），无数据依赖，可并行
 - 单 stream 下 tonemap 被迫串行等 raygen 完成，raygen 连续执行的间隙 = T_tonemap；双 stream 下间隙 ≈ 0
 
-**跨 stream 同步**：4 个 CUDA event（`renderer::Renderer` 持有，按 `frame_counter_ % 2` 双缓冲），保护 ping-pong buffer 的跨帧读写依赖（详见 `current-phase.md` 双 Stream 流水线节）。
+**跨 stream 同步**：FrameSlot 内 production event（compute_stream raygen 完成后 record）和 consumption event（display_stream tonemap 完成后 record），按 ping-pong slot 双缓冲，保护跨帧读写依赖（详见 `current-phase.md`）。
 
 ### Renderer 内拆分
 
