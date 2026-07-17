@@ -9,7 +9,7 @@
 **实时 Path Tracing 渲染器**：游戏级实时性能 + 物理正确性。
 
 - **M1** 移植 himalaya PT，建立物理正确的离线/准实时基础（OptiX RT + CUDA + Vulkan 呈现）。
-- **M2** 引入 ReSTIR DI/GI、SHaRC/NRC、NRD 等现代管线，达到游戏实时性能。
+- **M2** 引入 NRC、OMM、ReSTIR GI、Path Guiding、NEE-AT 等，达到游戏实时性能；ReSTIR PT 在前述完成后另议。
 
 所有 Phase 划分和特性取舍服务于这一长期目标。单个 Phase 的收敛指标（如 Phase 4 的 "4000 spp 大致收敛"）是 **Phase 范围划分判据**，不是项目终点——特性归属判据见各 Phase 文档。
 
@@ -20,7 +20,7 @@
 | Milestone | 主题 | 核心技术 |
 |-----------|------|----------|
 | M1 | 移植 himalaya PT | OptiX RT Pipeline, DLSS-RR, VK-CUDA interop |
-| M2 | 现代游戏 PT 管线 | ReSTIR DI/GI, SHaRC/NRC, NRD, temporal accumulation |
+| M2 | 现代游戏 PT 管线 | NRC, OMM, ReSTIR GI, Path Guiding, NEE-AT（ReSTIR PT 另议） |
 
 ---
 
@@ -81,6 +81,24 @@ MUSTREAD:5
 
 ## M2：现代游戏 PT 管线
 
-待定。
+在 M1 物理正确 PT + DLSS-RR 基础上，引入实时向采样与几何/缓存能力。
+
+### 范围
+
+| 项 | 角色 |
+|----|------|
+| NRC | 神经辐射缓存，降低间接光照方差 / 加速收敛 |
+| OMM | Opacity Micromap，加速 alpha-tested 几何遍历 |
+| ReSTIR GI | 时空复用间接光照样本 |
+| Path Guiding | 学习/引导次级路径方向，降低方差 |
+| NEE-AT | 下一事件估计的自适应/增强采样（具体方案实现期再定） |
+
+### 另议
+
+**ReSTIR PT**：不在上述主清单内。NRC、OMM、ReSTIR GI、Path Guiding、NEE-AT **全部完成之后**，再评估是否做、如何与既有管线衔接。
+
+### Phase 划分
+
+待 M1 结束后再拆。
 
 ---
