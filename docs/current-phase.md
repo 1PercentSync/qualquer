@@ -480,14 +480,17 @@ Phase 3 建纹理管线时，资产预处理和 CUDA 上传写在同一个 `text
 struct RenderSettings {
     uint32_t max_bounces = 16;
     uint32_t samples_per_frame = 1;
+    uint32_t render_height = 1080;  // 渲染分辨率高度，宽度按显示纵横比推导
     float exposure_ev = 0.0f;       // UI 展示 EV，Application 做 pow(2,ev) 转线性传 Renderer
     bool accumulation_enabled = true;
+    float env_rotation = 0.0f;      // IBL Y 轴旋转（弧度）
+    bool dlss_enabled = false;      // DLSS-RR 开关
+    DlssRenderPreset dlss_preset = DlssRenderPreset::E;  // DLSS render preset
 };
 
 // renderer 层
 struct SceneStats {
     uint32_t meshes = 0;
-    uint32_t blas_groups = 0;
     uint32_t instances = 0;
     uint32_t tlas_instances = 0;
     uint32_t materials = 0;
