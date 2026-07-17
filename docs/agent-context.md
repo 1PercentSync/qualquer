@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4.5 — 自适应帧率 + 采样质量收尾
-- **进度**：Phase 4.5 Step 14.7 第二小项完成：空 mesh primitive 整段跳过
+- **进度**：Phase 4.5 Step 14.7 第三小项完成：无效 mesh 索引日志汇总
 
 ### 下一个任务
 
-Phase 4.5 Step 14.7 第三小项：`scene_loader` 无效索引日志汇总
+Phase 4.5 Step 14.7 第四小项：`kPosInf` 具名常量
 
 ---
 
