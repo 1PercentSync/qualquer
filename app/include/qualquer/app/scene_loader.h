@@ -152,14 +152,14 @@ namespace qualquer::app {
         /** @brief Env cubemap GPU texture (owned; destroyed in destroy_env_map()). */
         optix::CudaTexture env_cubemap_texture_;
 
-        /** @brief Device alias table (one EnvAliasEntry per equirect pixel). */
+        /** @brief Device alias table (downsampled resolution). */
         optix::CudaBuffer<renderer::EnvAliasEntry> env_alias_table_;
 
-        /** @brief Equirect source width used for alias table dimensions. */
-        uint32_t env_equirect_width_ = 0;
+        /** @brief Alias table width (downsampled; may be smaller than source equirect). */
+        uint32_t env_alias_width_ = 0;
 
-        /** @brief Equirect source height used for alias table dimensions. */
-        uint32_t env_equirect_height_ = 0;
+        /** @brief Alias table height (downsampled; may be smaller than source equirect). */
+        uint32_t env_alias_height_ = 0;
 
         /** @brief Sin-weighted total luminance (alias table normalization constant). */
         float env_total_luminance_ = 0.0f;

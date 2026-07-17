@@ -116,16 +116,16 @@ struct EnvLightData {
     /** @brief Cubemap texture sampled on miss and for environment NEE (0 = unloaded). */
     cudaTextureObject_t cubemap;
 
-    /** @brief Device alias table over the equirect (one entry per pixel; null when unloaded). */
+    /** @brief Device alias table (downsampled resolution; null when unloaded). */
     const EnvAliasEntry *alias_table;
 
     /** @brief Number of entries in alias_table. */
     uint32_t alias_count;
 
-    /** @brief Alias-table width (equirect width). */
+    /** @brief Alias-table width (downsampled; may be smaller than the source equirect). */
     uint32_t alias_width;
 
-    /** @brief Alias-table height (equirect height). */
+    /** @brief Alias-table height (downsampled; may be smaller than the source equirect). */
     uint32_t alias_height;
 
     /** @brief Total luminance across the environment map (alias-table normalization). */

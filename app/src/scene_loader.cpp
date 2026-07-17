@@ -874,13 +874,13 @@ namespace qualquer::app {
 
         // Commit all resources
         env_cubemap_texture_ = std::move(cubemap);
-        env_equirect_width_ = equirect_w;
-        env_equirect_height_ = equirect_h;
+        env_alias_width_ = alias_result.width;
+        env_alias_height_ = alias_result.height;
         env_total_luminance_ = alias_result.total_luminance;
 
         spdlog::info("Env map ready: cubemap tex={}, alias table {}x{} ({} entries)",
                      env_cubemap_texture_.texture_object,
-                     equirect_w, equirect_h,
+                     alias_result.width, alias_result.height,
                      alias_result.entries.size());
         return true;
     }
@@ -888,8 +888,8 @@ namespace qualquer::app {
     void SceneLoader::destroy_env_map() {
         env_cubemap_texture_.destroy();
         env_alias_table_.free();
-        env_equirect_width_ = 0;
-        env_equirect_height_ = 0;
+        env_alias_width_ = 0;
+        env_alias_height_ = 0;
         env_total_luminance_ = 0.0f;
     }
 
@@ -950,8 +950,8 @@ namespace qualquer::app {
             .cubemap = env_cubemap_texture_.texture_object,
             .alias_table = env_alias_table_.data(),
             .alias_count = static_cast<uint32_t>(env_alias_table_.count()),
-            .alias_width = env_equirect_width_,
-            .alias_height = env_equirect_height_,
+            .alias_width = env_alias_width_,
+            .alias_height = env_alias_height_,
             .total_luminance = env_total_luminance_,
         };
     }
