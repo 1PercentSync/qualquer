@@ -249,6 +249,19 @@ per-sample。
 **理由**：DLSS 每帧只收一组 aux 与一个 `InJitterOffset`；共享 jitter 使 primary 一致、aux 写一次。OFF 时 per-sample jitter
 加速 MC 收敛。
 
+### Firefly Clamping
+
+**决策**：对每条 path 完成的 sample radiance 做**亮度等比缩放**（非 per-bounce、非按通道 min）。
+`lum = (r+g+b)/3`；若 `max_clamp > 0` 且 `lum > max_clamp`，则 `radiance *= max_clamp / lum`。默认
+`max_clamp = 10`（对齐 vk_gltf_renderer 静态默认）；`0` 关闭。阈值变更是 content-defining，触发累积 / DLSS history
+reset。UI 范围 0..100（上界为调节便利，不构成与对照项目的对齐约束）。
+
+**理由**：极亮低概率路径主导方差，在实时 / 低 spp 与 DLSS-RR 时域历史下形成稳定 firefly。亮度缩放保色相；默认
+10 与 vk_gltf_renderer 静态默认一致。有偏，故允许关闭以做无偏对照。与「数值正确性策略」不冲突——后者禁止把最终
+clamp 当作数值 bug 兜底；本项是显式方差控制旋钮。
+
+**相对早期决策**：Phase 4 D21 曾排除本项（偏置 + 降噪可处理）。审查中可见 firefly 后纳入，默认开启。
+
 ---
 
 ## 滤波与抗锯齿

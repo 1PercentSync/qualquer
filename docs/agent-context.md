@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4.5 — 自适应帧率 + 采样质量收尾
-- **进度**：Phase 4 已归档（含原 4.5 Step 9–14.5：Sobol、RR、分辨率解耦、DLSS-RR、数值正确性与结构重构）。当前待做 Step 14.6 起
+- **进度**：Phase 4.5 Step 14.6 第一小项完成：Firefly clamp（亮度等比缩放，默认 max_clamp=10，0 关闭）
 
 ### 下一个任务
 
-Phase 4.5 Step 14.6 第一小项：Firefly clamp
+Phase 4.5 Step 14.6 第二小项：DLSS ON 下 Sobol path sequence index
 
 ---
 
