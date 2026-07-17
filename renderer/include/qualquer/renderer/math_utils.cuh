@@ -7,6 +7,8 @@
 
 #include <qualquer/renderer/launch_params.h>
 
+#include <limits>
+
 using qualquer::renderer::float4x4;
 
 // ---- Mathematical constants --------------------------------------------------
@@ -15,6 +17,8 @@ constexpr float kPi       = 3.14159265358979323846f;
 constexpr float kTwoPi    = 6.28318530717958647692f;
 constexpr float kInvPi    = 0.31830988618379067154f;
 constexpr float kInvTwoPi = 0.15915494309189533577f;
+/// IEEE 754 +Inf (depth / solid-angle PDF sentinels).
+constexpr float kPosInf   = std::numeric_limits<float>::infinity();
 
 // ---- float3 / float2 / float4 arithmetic helpers ----------------------------
 

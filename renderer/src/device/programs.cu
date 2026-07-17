@@ -64,7 +64,7 @@ __constant__ qualquer::renderer::LaunchParams params;
 __forceinline__ __device__ void write_aux_no_surface(
     const int sx, const int sy, const float4 diffuse_albedo
 ) {
-    const float inf = __int_as_float(0x7f800000);
+    const float inf = kPosInf;
     surf2Dwrite(inf, params.aux_depth,
                 sx * static_cast<int>(sizeof(float)), sy);
     surf2Dwrite(diffuse_albedo, params.aux_diffuse_albedo,

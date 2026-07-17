@@ -238,7 +238,7 @@ __forceinline__ __device__ float emissive_light_pdf(
         return 0.0f;
     }
     if (cos_theta_light <= 0.0f) {
-        return __int_as_float(0x7f800000);  // +Inf
+        return kPosInf;
     }
     const float pdf_area = emission_luminance / total_power;
     return pdf_area * dist * dist / cos_theta_light;
