@@ -15,8 +15,10 @@ namespace qualquer::renderer {
      *        render-to-display resampling.
      *
      * Reads the float4 RGBA32F color buffer (CUDA array, texture object) at
-     * render resolution and writes the tone-mapped uchar4 result into the
-     * imported display surface (R8G8B8A8_UNORM) at display resolution.
+     * render resolution and writes tone-mapped linear LDR as packed half4
+     * (ushort4 bit pattern) into the imported display surface
+     * (R16G16B16A16_SFLOAT) at display resolution. sRGB encoding is deferred
+     * to the Vulkan blit into the B8G8R8A8_SRGB swapchain.
      *
      * Resampling runs in linear HDR (mean) space before exposure and tonemap:
      * equal resolutions read 1:1 via tex2D; upscaling uses Catmull-Rom bicubic
@@ -28,8 +30,8 @@ namespace qualquer::renderer {
      *
      * @param color_tex           Texture object for the float4 HDR color buffer
      *                            (render_width x render_height, point-sample read).
-     * @param display_surface     Surface object over the imported LDR display
-     *                            buffer (display_width x display_height, write).
+     * @param display_surface     Surface object over the imported linear LDR
+     *                            display buffer (RGBA16F, display resolution).
      * @param render_width        Color buffer width in pixels.
      * @param render_height       Color buffer height in pixels.
      * @param display_width       Display buffer width in pixels.

@@ -43,7 +43,7 @@ namespace qualquer::app {
 
         swapchain_.init(context_, VK_PRESENT_MODE_MAILBOX_KHR);
         display_buffer_.init(context_,
-                             VK_FORMAT_R8G8B8A8_UNORM,
+                             VK_FORMAT_R16G16B16A16_SFLOAT,
                              swapchain_.extent,
                              VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
         release_display_buffer_to_external();
@@ -503,7 +503,7 @@ namespace qualquer::app {
         // aspect-derived render width changes.
         display_buffer_.destroy(context_);
         display_buffer_.init(context_,
-                             VK_FORMAT_R8G8B8A8_UNORM,
+                             VK_FORMAT_R16G16B16A16_SFLOAT,
                              swapchain_.extent,
                              VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
         release_display_buffer_to_external();

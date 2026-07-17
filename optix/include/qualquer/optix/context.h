@@ -46,7 +46,8 @@ namespace qualquer::optix {
         /**
          * @brief Imports the Vulkan-allocated display buffer for CUDA access.
          *
-         * The resulting display_surface member is the write handle for the shared image.
+         * The resulting display_surface member is the write handle for the shared
+         * R16G16B16A16_SFLOAT linear LDR intermediate image.
          * @param win32_handle  NT handle exported by vulkan::InteropImage.
          * @param width         Image width in pixels, must match the Vulkan image.
          * @param height        Image height in pixels, must match the Vulkan image.

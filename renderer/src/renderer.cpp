@@ -997,8 +997,8 @@ namespace qualquer::renderer {
         };
         vkCmdPipelineBarrier2(cmd, &pre_blit_dep);
 
-        // --- Blit: display buffer (R8G8B8A8_UNORM) -> swapchain (B8G8R8A8_SRGB) ---
-        // Hardware handles UNORM->float, RGBA->BGRA channel swap, and sRGB encoding.
+        // --- Blit: display buffer (R16G16B16A16_SFLOAT) -> swapchain (B8G8R8A8_SRGB) ---
+        // Hardware handles float->UNORM, RGBA->BGRA channel swap, and sRGB encoding.
         const VkImageBlit2 region{
             .sType = VK_STRUCTURE_TYPE_IMAGE_BLIT_2,
             .srcSubresource =

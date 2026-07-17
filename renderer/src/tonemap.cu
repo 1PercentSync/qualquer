@@ -5,6 +5,7 @@
 
 #include <cstdint>
 
+#include <cuda_fp16.h>
 #include <cuda_runtime.h>
 
 #include <qualquer/optix/cuda_check_kernel.h>
@@ -18,6 +19,16 @@ namespace qualquer::renderer {
         // <algorithm> into device code.
         __device__ __forceinline__ float clamp01(const float v) {
             return fminf(1.0f, fmaxf(0.0f, v));
+        }
+
+        // CUDA has no half4 surface write type: pack IEEE half bits into ushort4
+        // (see CUDA programming guide / simpleSurfaceWrite half path).
+        __device__ __forceinline__ ushort4 pack_half4(const float4 v) {
+            return make_ushort4(
+                __half_as_ushort(__float2half(v.x)),
+                __half_as_ushort(__float2half(v.y)),
+                __half_as_ushort(__float2half(v.z)),
+                __half_as_ushort(__float2half(v.w)));
         }
 
         // 1D Catmull-Rom weights for the four taps at integer offsets -1..2
@@ -122,11 +133,12 @@ namespace qualquer::renderer {
             // change). Write black and return without touching the buffer;
             // raygen is concurrently filling the OTHER buffer with the first
             // valid sample, which tonemap will read next frame.
+            // Display is R16G16B16A16_SFLOAT: write ushort4 half-bit packs, 8 B/texel.
             if (sample_count == 0) {
-                constexpr uchar4 black{0, 0, 0, 255};
+                const ushort4 black = pack_half4(make_float4(0.0f, 0.0f, 0.0f, 1.0f));
                 surf2Dwrite(black,
                             display_surface,
-                            static_cast<int>(x * sizeof(uchar4)),
+                            static_cast<int>(x * sizeof(ushort4)),
                             static_cast<int>(y),
                             cudaBoundaryModeZero);
                 return;
@@ -169,16 +181,14 @@ namespace qualquer::renderer {
 
             const float3 ldr = apply_tonemap(mean, exposure);
 
-            const uchar4 pixel{
-                static_cast<uint8_t>(__float2uint_rn(clamp01(ldr.x) * 255.0f)),
-                static_cast<uint8_t>(__float2uint_rn(clamp01(ldr.y) * 255.0f)),
-                static_cast<uint8_t>(__float2uint_rn(clamp01(ldr.z) * 255.0f)),
-                static_cast<uint8_t>(__float2uint_rn(clamp01(alpha) * 255.0f)),
-            };
+            // Linear LDR in [0,1]; sRGB encode happens on blit to the swapchain.
+            // Half intermediate avoids 8-bit linear banding in shadows.
+            const ushort4 pixel = pack_half4(make_float4(
+                clamp01(ldr.x), clamp01(ldr.y), clamp01(ldr.z), clamp01(alpha)));
 
             surf2Dwrite(pixel,
                         display_surface,
-                        static_cast<int>(x * sizeof(uchar4)),
+                        static_cast<int>(x * sizeof(ushort4)),
                         static_cast<int>(y),
                         cudaBoundaryModeZero);
         }

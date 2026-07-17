@@ -27,7 +27,7 @@ namespace qualquer::vulkan {
          * @brief Creates the image, allocates and binds dedicated exportable memory,
          *        and exports the Win32 NT handle.
          * @param context Vulkan context providing the device and physical device.
-         * @param format  Image format (e.g. R8G8B8A8_UNORM for the display buffer).
+         * @param format  Image format (e.g. R16G16B16A16_SFLOAT for the display buffer).
          * @param extent  Image extent in pixels.
          * @param usage   Image usage flags (e.g. TRANSFER_SRC_BIT for a blit source).
          */

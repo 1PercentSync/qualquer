@@ -198,12 +198,9 @@ namespace qualquer::optix {
         // then level 0 is extracted as a plain cudaArray to back the surface object.
         // flags include cudaArrayColorAttachment because the Vulkan image is a color
         // target (interop requires the CUDA array flags to match the image usage).
-        cudaChannelFormatDesc fmt_desc{};
-        fmt_desc.x = 8;
-        fmt_desc.y = 8;
-        fmt_desc.z = 8;
-        fmt_desc.w = 8;
-        fmt_desc.f = cudaChannelFormatKindUnsigned;
+        // Channel layout matches VK_FORMAT_R16G16B16A16_SFLOAT (linear LDR intermediate).
+        // cudaCreateChannelDescHalf4 is the documented descriptor for half4 arrays.
+        const cudaChannelFormatDesc fmt_desc = cudaCreateChannelDescHalf4();
 
         cudaExtent cuda_ext{};
         cuda_ext.width = width;
