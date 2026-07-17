@@ -222,7 +222,7 @@ CUDA 侧通过 `cudaExternalMemoryGetMappedMipmappedArray` → `cudaArray_t` →
 
 ### Payload
 
-**决策**：全信息 payload registers（当前 18：含 ray cone 预留 p16/p17），不走 global hit buffer。
+**决策**：全信息 payload registers，不走 global hit buffer。当前 16 槽；Ray Cone LOD 落地时扩至 18（p16/p17 = cone_width / cone_spread）。
 
 **理由**：SER 重排后 payload 随线程移动、零全局内存；global buffer 在重排后访问变为 non-coalesced，反而更差。OptiX 上限 32 registers。
 
@@ -303,6 +303,12 @@ CUDA 侧通过 `cudaExternalMemoryGetMappedMipmappedArray` → `cudaArray_t` →
 **决策**：`alpha_mode == Blend` 时用 **hash**（pixel / sample / primitive）与 texel alpha 比较决定 `optixIgnoreIntersection`，不用 Sobol 维度。
 
 **理由**：anyhit 调用次数与顺序不确定，Sobol 维度分配模式不适用。
+
+### Normal Map Specular AA
+
+**决策**：用 ray cone footprint 估计法线贴图像素内方差，叠加到 `roughness²`（Kaplanyan 2016）。**不做** LEAN / LEADR。
+
+**理由**：接缝处 specular 闪烁来自法线在像素 footprint 内的变化，方差→roughness 与现有 cone LOD 数据同源、增量小。LEAN/LEADR 需额外预处理与存储，复杂度与收益不符。
 
 ---
 
