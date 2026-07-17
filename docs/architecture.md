@@ -70,7 +70,7 @@ Qualquer 是基于 CUDA + OptiX 的 Path Tracer，Vulkan 仅用于 swapchain 呈
 
 封装 OptiX 和 CUDA API，向上层提供简洁的 RT 接口。
 
-包含：Context 管理、Module/Pipeline/SBT 创建、加速结构（BLAS/TLAS）、Denoiser、CUDA 内存管理（CudaBuffer、CudaTexture、纹理上传）。
+包含：Context 管理、Module/Pipeline/SBT 创建、加速结构（BLAS/TLAS）、DLSS-RR 封装、CUDA 内存管理（CudaBuffer、CudaTexture、CudaArrayBuffer、纹理上传）。
 
 **设计原则**：不包含任何渲染逻辑。
 
@@ -87,7 +87,7 @@ MUSTREAD:4
 
 实现 PT 渲染管线和场景管理，负责**单帧渲染内容的决策**：PT kernel 调度、tone map、UI 面板内容（debug_ui 决定 ImGui 画什么）。
 
-包含：PT 着色逻辑、材质系统、场景数据结构、累积 buffer、降噪调度、UI 面板逻辑。
+包含：PT 着色逻辑、材质系统、场景数据结构、累积 buffer、DLSS-RR 调度、UI 面板逻辑。
 
 **不持有帧循环**：acquire/submit/present、fence/semaphore 同步、swapchain 重建都在 app 层。renderer 只暴露 “渲染内容” 接口（CUDA 提交 + Vulkan 命令录制），由 app 编排好时序后调用。理由：一帧的渲染内容横跨 optix（CUDA 着色）和 vulkan（blit/呈现/ImGui 录制），有内部数据依赖和时序编排，只有同时依赖两者的 renderer 能承载；但帧循环骨架（编排+同步）属于”驱动时序”，与”画什么”正交，归 app。这条切法来自 Himalaya 的实证——其 Renderer 是 Application 帧循环膨胀后抽出的”渲染内容”，编排+同步始终留在 Application。
 
