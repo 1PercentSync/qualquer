@@ -444,11 +444,14 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
     // Single-sided back-face pass-through needs only positions (face normal),
     // ray direction, and double_sided. Check before the full interpolation to
     // skip normal/UV/color/tangent work on the pass-through path.
+    // is_back_face only needs the sign of the face normal: use unnormalized
+    // N_face_raw here; unit N_face is built only on the shading path.
     const float3 face_normal_obj = cross(v1.position - v0.position,
                                          v2.position - v0.position);
-    float3 N_face = normalize(optixTransformNormalFromObjectToWorldSpace(face_normal_obj));
+    const float3 N_face_raw =
+        optixTransformNormalFromObjectToWorldSpace(face_normal_obj);
     const float3 ray_dir = optixGetWorldRayDirection();
-    const bool is_back_face = dot(N_face, ray_dir) > 0.0f;
+    const bool is_back_face = dot(N_face_raw, ray_dir) > 0.0f;
 
     if (is_back_face && mat.double_sided == 0u) {
         // Single-sided material hit from behind: pass through the surface.
@@ -487,6 +490,9 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
         payload_set_last_brdf_pdf(0.0f);
         return;
     }
+
+    // Unit geometric normal for shading (N_interp fallback, flips, NEE).
+    float3 N_face = normalize(N_face_raw);
 
     // ---- Full barycentric interpolation (only reached for shaded surfaces) ----
     const float2 bary = optixGetTriangleBarycentrics();
