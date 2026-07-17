@@ -31,12 +31,11 @@ MUSTREAD:8
 
 ## Step 14.6：审查优先修复
 
-**验证**：firefly / sequence index / 中间图精度问题消除；决策变更写入 `technical-decisions.md`。
+**验证**：firefly clamp / sequence index / 中间图精度问题消除；决策变更写入 `technical-decisions.md`。
 
 ### Firefly clamp
 
-路径贡献中的极高亮度样本（firefly）需 clamp。确定阈值、应用位置（per-bounce contribution / path radiance）及 bias 边界；与
-DLSS-RR 对极亮点的处理分工写入决策。
+实现 firefly clamp。
 
 ### DLSS ON 下 Sobol path sequence index
 
