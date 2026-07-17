@@ -15,10 +15,10 @@ namespace qualquer::renderer {
      *
      * Owned by Application as a runtime-only live state (not persisted to
      * config.json). Passed to the renderer each frame via SceneRenderInput.
-     * Content-defining fields (env_rotation, dlss_enabled) trigger accumulation
-     * reset when they change; quality/throughput knobs (max_bounces,
-     * samples_per_frame) do not. dlss_preset triggers feature recreation
-     * (not accumulation reset) when it changes.
+     * Content-defining fields (env_rotation, dlss_enabled, max_clamp) trigger
+     * accumulation reset when they change; quality/throughput knobs
+     * (max_bounces, samples_per_frame) do not. dlss_preset triggers feature
+     * recreation (not accumulation reset) when it changes.
      *
      * exposure_ev is stored in EV stops for the UI slider; Renderer::submit_cuda
      * converts it to a linear multiplier (pow(2, ev)) before the tonemap kernel,
@@ -34,6 +34,16 @@ namespace qualquer::renderer {
          * UI clamps to 1..64 (TDR safety); the engine path does not re-clamp.
          */
         uint32_t samples_per_frame = 1;
+
+        /**
+         * @brief Firefly clamp threshold on per-sample radiance luminance.
+         *
+         * When > 0, each path sample with average RGB luminance above this
+         * value is scaled so luminance equals the threshold (hue preserved).
+         * 0 disables clamping. Default 10 matches vk_gltf_renderer.
+         * Content-defining: changes reset accumulation.
+         */
+        float max_clamp = 10.0f;
 
         /**
          * @brief Render resolution height in pixels; the width derives from the

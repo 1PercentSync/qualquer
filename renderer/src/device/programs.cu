@@ -264,9 +264,12 @@ __global__ void __raygen__rg() { // NOLINT(*-reserved-identifier)
 
         for (uint32_t s = 0; s < params.samples_per_frame; ++s) {
             const uint32_t sample_index = params.sample_count + s;
-            frame_radiance = frame_radiance + trace_sample(
-                cam_origin, primary_dir, pixel_index, sample_index,
-                s == 0, primary_hit_pos, primary_sky_color, primary_is_hit);
+            const float3 sample_radiance = apply_firefly_clamp(
+                trace_sample(cam_origin, primary_dir, pixel_index, sample_index,
+                             s == 0, primary_hit_pos, primary_sky_color,
+                             primary_is_hit),
+                params.max_clamp);
+            frame_radiance = frame_radiance + sample_radiance;
         }
     } else {
         // DLSS OFF: per-pixel Sobol + CP rotation, per-sample jitter.
@@ -280,9 +283,12 @@ __global__ void __raygen__rg() { // NOLINT(*-reserved-identifier)
                                        sample_index, params.frame_index, kDimJitterY);
             const float3 primary_dir = compute_primary_dir(idx.x, idx.y, jx, jy);
 
-            frame_radiance = frame_radiance + trace_sample(
-                cam_origin, primary_dir, pixel_index, sample_index,
-                false, primary_hit_pos, primary_sky_color, primary_is_hit);
+            const float3 sample_radiance = apply_firefly_clamp(
+                trace_sample(cam_origin, primary_dir, pixel_index, sample_index,
+                             false, primary_hit_pos, primary_sky_color,
+                             primary_is_hit),
+                params.max_clamp);
+            frame_radiance = frame_radiance + sample_radiance;
         }
     }
 

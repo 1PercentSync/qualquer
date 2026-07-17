@@ -180,4 +180,29 @@ __forceinline__ __device__ float shadow_terminator_factor(const float3 N_geo,
     return G + G * G - G * G * G;
 }
 
+// ---- Firefly clamp ----------------------------------------------------------
+
+/**
+ * @brief Scales per-sample radiance so average RGB luminance does not exceed
+ *        @p max_clamp (vk_gltf_renderer-style luminance clamp).
+ *
+ * Hue is preserved by uniform scale. @p max_clamp <= 0 disables clamping.
+ *
+ * @param radiance  Path sample radiance.
+ * @param max_clamp Luminance threshold; 0 or negative leaves radiance unchanged.
+ * @return Clamped radiance.
+ */
+__forceinline__ __device__ float3 apply_firefly_clamp(const float3 radiance,
+                                                     const float max_clamp) {
+    if (max_clamp <= 0.0f) {
+        return radiance;
+    }
+    // Equal-weight luminance matches vk_gltf_renderer (not Rec.709).
+    const float lum = (radiance.x + radiance.y + radiance.z) * (1.0f / 3.0f);
+    if (lum > max_clamp) {
+        return radiance * (max_clamp / lum);
+    }
+    return radiance;
+}
+
 } // namespace qualquer::renderer

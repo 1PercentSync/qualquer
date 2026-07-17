@@ -631,23 +631,32 @@ namespace qualquer::renderer {
         // chain_count becomes 0 through that path, not through needs_reset.
         // max_bounces / samples_per_frame are intentionally absent: quality /
         // throughput knobs that do not redefine the integral object.
+        // max_clamp is content-defining: it biases the path estimator.
+        const bool max_clamp_changed =
+            scene.settings.max_clamp != prev_max_clamp_;
         const bool content_changed =
             scene.settings.env_rotation != prev_env_rotation_ ||
-            scene.settings.dlss_enabled != prev_dlss_enabled_;
+            scene.settings.dlss_enabled != prev_dlss_enabled_ ||
+            max_clamp_changed;
         const bool needs_reset = camera_changed || content_changed || reset_requested_;
         if (has_new_samples) {
             reset_requested_ = false;
+            // Estimator bias change must not mix with prior DLSS temporal history.
+            if (dlss_active && max_clamp_changed) {
+                invalidate_dlss_history();
+            }
         } else if (camera_changed || content_changed) {
             // Preserve automatic reset causes until a frame is actually produced.
             reset_requested_ = true;
             // Camera/projection change during pause is a temporal discontinuity:
             // the old DLSS input slots no longer match the new viewpoint. Mark
             // them invalid and request history reset so the first resumed frame
-            // starts a fresh temporal sequence. Content changes (env rotation,
-            // dlss toggle) only set reset_requested_ — they do not invalidate
-            // DLSS history here. The cached DLSS output stays displayable as a
-            // frozen frame until new data arrives.
-            if (dlss_active && camera_changed) {
+            // starts a fresh temporal sequence. max_clamp likewise changes the
+            // estimator and must not resume into mixed history. Other content
+            // changes (env rotation, dlss toggle) only set reset_requested_ —
+            // they do not invalidate DLSS history here. The cached DLSS output
+            // stays displayable as a frozen frame until new data arrives.
+            if (dlss_active && (camera_changed || max_clamp_changed)) {
                 invalidate_dlss_history();
             }
         }
@@ -669,6 +678,7 @@ namespace qualquer::renderer {
         prev_env_rotation_ = scene.settings.env_rotation;
         prev_dlss_enabled_ = scene.settings.dlss_enabled;
         prev_dlss_preset_ = scene.settings.dlss_preset;
+        prev_max_clamp_ = scene.settings.max_clamp;
 
         // Global per-frame jitter for DLSS mode (no per-pixel CP rotation).
         const float jitter_x = global_jitter(kSobolDirectionData, frame_counter_, 0);
@@ -718,6 +728,7 @@ namespace qualquer::renderer {
             .dlss_enabled = dlss_active ? 1u : 0u,
             .jitter_x = jitter_x,
             .jitter_y = jitter_y,
+            .max_clamp = scene.settings.max_clamp,
             // Scene light resources (packed by SceneLoader via SceneRenderInput).
             // Rotation is a launch constant: copy scene env data, then fill
             // sin/cos so device code reads orientation from the same env block.

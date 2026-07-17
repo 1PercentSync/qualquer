@@ -410,6 +410,15 @@ namespace qualquer::renderer {
             ctx.settings.samples_per_frame = static_cast<uint32_t>(spp);
         }
 
+        // Content-defining: changing the threshold restarts accumulation.
+        // 0 disables the clamp. Default 10 aligns with vk_gltf_renderer;
+        // the upper bound is a UI convenience, not part of that alignment.
+        slider_float_deferred("Firefly Clamp", &ctx.settings.max_clamp,
+                              0.0f, 100.0f, "%.1f");
+        if (ctx.settings.max_clamp == 0.0f && ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Firefly clamping disabled");
+        }
+
         // On-release commit: each render-height change reallocates the
         // accumulation buffers, so live application during a drag would
         // thrash device memory.

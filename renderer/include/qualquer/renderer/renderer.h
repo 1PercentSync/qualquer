@@ -251,7 +251,7 @@ namespace qualquer::renderer {
          * history-reset token in its slot metadata.
          * Used for scene switch, camera teleport, env map reload, manual Reset.
          * Continuous camera motion and content changes (env rotation, DLSS
-         * toggle) trigger accumulation reset through camera_changed /
+         * toggle, max_clamp) trigger accumulation reset through camera_changed /
          * content_changed in submit_cuda, which intentionally does NOT discard
          * DLSS history. Quality/throughput knobs (max_bounces, samples_per_frame)
          * do not reset accumulation.
@@ -549,6 +549,14 @@ namespace qualquer::renderer {
          * during pause (continuous lighting change; DLSS adapts temporally).
          */
         float prev_env_rotation_ = 0.0f;
+
+        /**
+         * @brief Previous-frame max_clamp (content-change reset detection).
+         *
+         * Firefly threshold changes bias the path estimator and must restart
+         * the Separate Sum chain / DLSS temporal history on the next produced frame.
+         */
+        float prev_max_clamp_ = 10.0f;
 
         /**
          * @brief Previous-frame dlss_enabled (content-change reset detection).

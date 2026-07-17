@@ -261,6 +261,14 @@ struct LaunchParams {
     float jitter_x;
     float jitter_y;
 
+    /**
+     * @brief Firefly clamp threshold (average RGB luminance); 0 disables.
+     *
+     * Applied to each finished path sample: if luminance exceeds the
+     * threshold, radiance is scaled by threshold / luminance.
+     */
+    float max_clamp;
+
     // ---- Scene light resources (packed; see EnvLightData / EmissiveLightData) ----
 
     /**
