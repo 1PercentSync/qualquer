@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4.5 — 自适应帧率 + 采样质量收尾
-- **进度**：Phase 4.5 Step 14.6 第二小项完成：Sobol path sequence index 与 sample_count 解耦（frame_index * spp + s）
+- **进度**：Phase 4.5 Step 14.6 第三小项完成：显示中间图 RGBA16F（线性 LDR half 中间，blit 再 sRGB）
 
 ### 下一个任务
 
-Phase 4.5 Step 14.6 第三小项：显示中间图 RGBA16F
+Phase 4.5 Step 14.6 第四小项：请求用户在 CLion 中编译验证（firefly clamp / sequence 噪声 / 阴影色阶问题消除）
 
 ---
 

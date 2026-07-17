@@ -81,9 +81,9 @@ MUSTREAD:8
 
 ### 显示 Buffer
 
-**决策**：`R8G8B8A8_UNORM` + `OPTIMAL` tiling；export 内存手写 `vkAllocateMemory`（dedicated + Win32 HANDLE），不走 VMA。Swapchain 为 `B8G8R8A8_SRGB`（blit 时硬件 swizzle + sRGB）。
+**决策**：中间图 `R16G16B16A16_SFLOAT` + `OPTIMAL` tiling；export 内存手写 `vkAllocateMemory`（dedicated + Win32 HANDLE），不走 VMA。Swapchain 为 `B8G8R8A8_SRGB`（blit 时硬件 swizzle + 线性→sRGB 编码）。tonemap 写**线性 LDR** float/half，不在 CUDA 侧做 8-bit 量化或 sRGB 编码。
 
-**理由**：与 HDR 累积通道序一致、免 kernel swizzle；LINEAR 限制多；带 `VkExportMemoryAllocateInfo` 的分配不宜走 VMA 常规路径。
+**理由**：`R8G8B8A8_UNORM` 在 sRGB 编码前对线性 LDR 做 8-bit 量化，阴影易出现色阶断层。RGBA16F 保留线性中间精度；最终 8-bit 量化与 sRGB 编码发生在 blit 到 swapchain 的一步。与 HDR 累积同为 float 通道序、免 kernel swizzle；LINEAR tiling 限制多；带 `VkExportMemoryAllocateInfo` 的分配不宜走 VMA 常规路径。
 
 ### Interop 同步
 
