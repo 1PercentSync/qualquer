@@ -20,43 +20,6 @@
 
 ## 3. 已确认问题
 
-### QRP-001：CUDA 外部图像缺少 surface load/store array flag
-
-- 严重度：高
-- 置信度：高
-- 类型：API 契约 / CUDA–Vulkan interop
-
-#### 代码证据
-
-- `app/src/application.cpp:48`、`app/src/application.cpp:508` 以 `VK_IMAGE_USAGE_TRANSFER_SRC_BIT` 创建共享显示图像。
-- `vulkan/src/interop.cpp:21-42` 将该 usage 原样写入 `VkImageCreateInfo::usage`；该图像不是 Vulkan color attachment。
-- `optix/src/context.cpp:199-215` 将映射标志设为 `cudaArrayColorAttachment`。
-- `optix/src/context.cpp:218-223` 随后基于该 array 创建 CUDA surface object，tonemap 通过 surface 写入。
-
-#### 判断
-
-CUDA 官方 graphics interop 契约规定：
-
-- 只有图像在图形 API 中作为 color target 使用时，映射描述符才需要 `cudaArrayColorAttachment`；
-- 要通过 CUDA surface reference/object 对 array mip level 执行读写，array 必须具有 `cudaArraySurfaceLoadStore`。
-
-当前代码设置了不匹配 Vulkan 用途的 `cudaArrayColorAttachment`，却遗漏实际 surface 写入所需的 `cudaArraySurfaceLoadStore`。
-
-#### 触发条件
-
-创建 CUDA–Vulkan 共享显示图像并调用 `cudaCreateSurfaceObject` 或 tonemap surface 写入时。
-
-#### 影响
-
-可能导致 surface object 创建或访问失败，也可能形成依赖驱动容忍度的未定义/不可移植行为。错误检查会在 API 明确返回错误时中止程序，但不能把标志组合本身变为合法。
-
-#### 官方依据
-
-- CUDA Programming Guide，Graphics Interoperability：<https://docs.nvidia.com/cuda/cuda-programming-guide/04-special-topics/graphics-interop.html>
-- CUDA Runtime API，`cudaExternalMemoryMipmappedArrayDesc` 与 array flags：<https://docs.nvidia.com/cuda/pdf/CUDA_Runtime_API.pdf>
-
----
-
 ### QRP-002：缺失 emissive texture 时绑定黑纹理，抹除 `emissiveFactor`
 
 - 严重度：高
