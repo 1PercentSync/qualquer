@@ -31,7 +31,7 @@
 - [x] Env alias table 降采样
 - [x] OptiX payload type semantics
 - [x] 单策略 NEE 混合
-- [ ] 请求用户在 CLion 中编译验证（采样/光照优化无偏回归；决策已更新）
+- [x] 请求用户在 CLion 中编译验证（采样/光照优化无偏回归；决策已更新）
 
 ## Step 14.9：吞吐与收敛
 

@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4.5 — 自适应帧率 + 采样质量收尾
-- **进度**：Phase 4.5 Step 14.8 第三小项完成：单策略 NEE 混合已实现（两侧廉价采样 + 亮度比随机选一侧追踪 shadow ray、BRDF hit 端 MIS 权重同步调整、kDimsPerBounce 12→13）
+- **进度**：Phase 4.5 Step 14.8 完成（env alias table 降采样、typed payload semantics、单策略 NEE 混合）
 
 ### 下一个任务
 
-Phase 4.5 Step 14.8 第四小项：请求用户在 CLion 中编译验证
+Phase 4.5 Step 14.9 第一小项：DLSS ON 多 spp primary 复用
 
 ---
 
