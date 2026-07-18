@@ -196,8 +196,9 @@ namespace qualquer::optix {
         // CUDA's Vulkan interop exposes only the mipmapped-array mapping path
         // (GetMappedBuffer is for 1D). For a single-mip image this is numLevels=1,
         // then level 0 is extracted as a plain cudaArray to back the surface object.
-        // flags include cudaArrayColorAttachment because the Vulkan image is a color
-        // target (interop requires the CUDA array flags to match the image usage).
+        // The Vulkan image is a transfer source (not a color attachment), so
+        // cudaArrayColorAttachment does not apply. cudaArraySurfaceLoadStore is
+        // required because tonemap writes to this array through a surface object.
         // Channel layout matches VK_FORMAT_R16G16B16A16_SFLOAT (linear LDR intermediate).
         // cudaCreateChannelDescHalf4 is the documented descriptor for half4 arrays.
         const cudaChannelFormatDesc fmt_desc = cudaCreateChannelDescHalf4();
@@ -212,7 +213,7 @@ namespace qualquer::optix {
         mip_desc.formatDesc = fmt_desc;
         mip_desc.extent = cuda_ext;
         mip_desc.numLevels = 1;
-        mip_desc.flags = cudaArrayColorAttachment;
+        mip_desc.flags = cudaArraySurfaceLoadStore;
         CUDA_CHECK(cudaExternalMemoryGetMappedMipmappedArray(&mipmap_array_, external_memory_, &mip_desc));
 
         CUDA_CHECK(cudaGetMipmappedArrayLevel(&array_, mipmap_array_, 0));
