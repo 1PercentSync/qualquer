@@ -127,7 +127,33 @@ bounce payload 16 register 语义：
 
 ### 单策略 NEE 混合
 
-待重写
+每 bounce 双 shadow ray（env + emi）遍历代价高。改为随机选一条——两种光源都存在时 50:50 选一条、结果 ×2 补偿；MIS 权重用有效
+PDF（`nee_pdf_scale * p_nee`）反映竞争策略的实际出现频率。选择用 hash（不消耗 Sobol 维度），NEE 维度共享，`kDimsPerBounce`
+12→8。
+
+**LaunchParams 新增**：`float nee_pdf_scale`（host 预算：两种光源共存 0.5，否则 1.0）。
+
+**RNG 维度布局**：
+
+| 偏移 | 用途 |
+|------|------|
+| 0 | lobe select |
+| 1 | BRDF ξ₀ |
+| 2 | BRDF ξ₁ |
+| 3 | RR |
+| 4–7 | NEE（共享 4 dims） |
+
+`kDimsPerBounce` = 8，`kBounceOffsetNee` = 4（替代原 `kBounceOffsetEnvNee` / `kBounceOffsetEmissiveNee`）。Sobol 覆盖
+(128−2)/8 = 15 bounces（原 10）。
+
+**call site（closesthit）**：hash 选择（`pcg_hash(pixel ^ sample ^ bounce)` 低位）；只调用选中的 evaluate 函数，结果 ×2；仅一种光源时直接调用对应函数，权重 1。
+
+**MIS 权重调整**（`nee_pdf_scale` 统一作用）：
+
+- NEE 侧：`mis_power_heuristic(light_pdf * params.nee_pdf_scale, brdf_pdf)`
+- BSDF 侧（miss env / closesthit emissive-hit）：`mis_power_heuristic(brdf_pdf, light_pdf * params.nee_pdf_scale)`
+
+仅一种光源时 `nee_pdf_scale = 1.0`，公式退化为原始二策略 MIS。
 
 ---
 

@@ -236,6 +236,25 @@ ray 用零 payload `optixTraverse` + `optixHitObjectIsHit()` 判遮挡，不调 
 - **全分辨率**：L2 共享预算下代价过大，importance 精度的边际收益不足以抵消
 - **Hierarchical mipmap sampling**：存储最优且天然适配任意分辨率，但需重构采样与 PDF 路径，留待 M2 更复杂光源策略时评估
 
+### NEE 策略混合
+
+**决策**：两种光源（env + emissive）共存时，每 bounce 50:50 随机选一条 shadow ray（单策略），结果 ×2 补偿；MIS 权重使用有效
+PDF（`nee_pdf_scale * p_nee`，`nee_pdf_scale` = 0.5）。仅一种光源时直接调用对应策略，`nee_pdf_scale` = 1.0。选择用 PCG hash
+（不消耗 Sobol 维度）。env 与 emissive 共享同一组 4 个 Sobol NEE 维度。
+
+**理由**：
+
+- 双 shadow ray 的遍历开销是 NEE 的主导代价；单策略减半遍历量
+- Veach 多样本 power heuristic 中有效样本数 0.5 反映为 MIS 竞争 PDF ×0.5，给 BSDF 侧更大权重——正确补偿 NEE 出现频率降低
+- 维度共享（`kDimsPerBounce` 12→8）使 Sobol 低差异覆盖从 10 bounces 提升至 15 bounces
+- Hash 选择：二值决策不受益于低差异序列，省 1 个 Sobol 维度
+- Unbiased：E[0.5 × 2 × NEE_result] = E[NEE_result]
+
+**备选（已排除）**：
+
+- **双策略（原方案）**：两条 shadow ray 始终发射；方差最低但遍历代价翻倍，性价比不足
+- **Power 加权选择**（按 env_power / total_power 分配概率）：理论方差更优但 host 预算依赖场景功率比，且 50:50 在多数场景下足够——留待 M2 NEE-AT 再评估
+
 ### 环境贴图表示
 
 **决策**：equirect 加载后转 cubemap，`texCubemap` 采样。
