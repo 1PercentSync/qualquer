@@ -15,7 +15,7 @@
 
 ### 下一个任务
 
-Phase 4.5 Step 14.9 第一小项：DLSS ON 多 spp primary 复用
+Phase 4.5 Step 14.9 第一小项：Catmull-Rom tonemap 16→4 fetch
 
 ---
 

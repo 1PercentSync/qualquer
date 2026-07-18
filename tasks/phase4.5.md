@@ -35,7 +35,6 @@
 
 ## Step 14.9：吞吐与收敛
 
-- [ ] DLSS ON 多 spp primary 复用
 - [ ] Catmull-Rom tonemap 16→4 fetch
 - [ ] Sobol temporal offset 收敛验证
 - [ ] 请求用户在 CLion 中编译验证（吞吐优化无画质回退；A/B 结论已记录）

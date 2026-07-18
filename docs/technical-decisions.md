@@ -173,6 +173,15 @@ registers。Typed payload 让编译器区分 bounce（16 reg）和 shadow（0 re
 
 **理由**：相对每 sample 一次 launch 或 3D launch，带宽与 launch 开销最优；寄存器仅多约 3 floats + counter。上限由 UI 约定，非独立硬编码常量。
 
+**潜在优化点（多 spp primary 复用）**：DLSS ON 时帧内所有 sample 共享 primary ray 方向，理论上可缓存 primary hit
+数据跳过后续 sample 的遍历。缓存方式有三种权衡维度，需 profiling 数据判断净收益：
+
+- **全局内存 G-buffer**（缓存着色结果）：跳过遍历 + closesthit，但写入量（70+ MB）流过 L2，可能驱逐 BVH/纹理 page
+- **寄存器缓存 hit 数据**：跳过遍历，closesthit 仍执行，但 hit 数据跨 sample 循环 live 增加每 bounce continuation 开销
+- **local memory 缓存**（28 字节/像素，L1 栈）+ `optixMakeHitObject`：零 per-bounce 寄存器开销，跳过遍历，closesthit 仍执行
+
+Step 15 adaptive spp 落地后，若 profiling 显示 primary 遍历是瓶颈，可从此处重新评估。
+
 ### SBT / Pipeline
 
 **决策**：1 miss（`__miss__env`）+ **1 hitgroup**（CH+AH）；单 hitgroup record（`hitgroupRecordCount = 1`，无 per-material
