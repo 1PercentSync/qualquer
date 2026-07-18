@@ -20,35 +20,6 @@
 
 ## 3. 已确认问题
 
-### QRP-002：缺失 emissive texture 时绑定黑纹理，抹除 `emissiveFactor`
-
-- 严重度：高
-- 置信度：高
-- 类型：材质正确性 / glTF 语义
-
-#### 代码证据
-
-- `app/src/scene_loader.cpp:683-688` 正确读取 `emissiveFactor`。
-- `app/src/scene_loader.cpp:712-715` 在材质没有 emissive texture 时先留下无效索引。
-- `app/src/scene_loader.cpp:723-726` 将缺失 emissive texture 替换为默认黑纹理。
-- `renderer/src/device/programs.cu:564-576` 计算发光值时始终执行 `emissive texture × emissive factor`。
-
-#### 判断
-
-缺失 emissive texture 时，纹理乘数应等价于白色；当前默认黑纹理使任意非零 `emissiveFactor` 的最终辐射度变为零。
-
-#### 触发条件
-
-材质具有非零 `emissiveFactor`，但没有 `emissiveTexture`。
-
-#### 影响
-
-- 相机直接看到的表面不发光；
-- emissive alias table 仍可能依据 CPU 材质信息把三角形列为光源；
-- NEE 继续采样并发射 shadow ray，但 device 端取得零 `Le`，浪费工作且造成直接照明缺失。
-
----
-
 ### QRP-003：单策略 NEE 的选择概率在 NEE 与 BRDF-hit 两侧不一致，破坏 MIS 互补性
 
 - 严重度：高
