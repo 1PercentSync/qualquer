@@ -127,22 +127,7 @@ bounce payload 16 register 语义：
 
 ### 单策略 NEE 混合
 
-env 与 emissive 并存时，两条 shadow ray 中非主导策略的遍历开销高而 radiance 贡献低。随机选一种策略，每 bounce 至多一条
-shadow ray。
-
-**采样流程**：两种策略均做廉价采样（alias table + 纹理取色），用采样到的 radiance 亮度比算选择概率 （
-`p_env = lum_env / (lum_env + lum_emi)`），仅对选中策略追踪 shadow ray，贡献除以选择概率保持无偏。仅一种光源存在时退化
-为直接调用。
-
-**MIS 调整**：NEE 端的 effective PDF 包含选择概率（`p_select × strategy_pdf`）。BRDF hit 端的竞争 PDF 同步调整——miss shader
-中 env MIS 权重用 `p_env × env_pdf`，closesthit emissive MIS 用 `(1-p_env) × emissive_light_pdf`。`p_env` 从 LaunchParams
-已有的 `env.total_luminance` 和 `emissive.total_power` 实时可算，不需额外 payload。
-
-**RNG 维度**：env 4 维 + emissive 4 维仍全部消耗（两种策略都要采样），加 1 维选择随机数，共 9 维。`kDimsPerBounce` 从 12 增至
-13。128 维 Sobol 表内 (128-2)/13 ≈ 9 bounce，够用。
-
-**A/B 验证**：`LaunchParams` 加 `nee_single_strategy` 标志 + UI 开关。同场景同总渲染时间比较 RMSE 曲线，确认 fixed-time
-RMSE 更低后默认启用。场景选择覆盖 env/emissive 强度悬殊（典型收益）与势均力敌（最差情况）。
+待重写
 
 ---
 
