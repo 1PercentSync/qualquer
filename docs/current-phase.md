@@ -94,13 +94,48 @@ cubemap 保持全分辨率。非 power-of-2 输入维度产生非最优降采样
 
 ### OptiX payload type semantics
 
-当前 `OptixProgramGroupOptions` 零初始化（无 payloadType），编译器可能跨 shadow trace 保守保存全部 payload。声明
-bounce-ray / shadow-ray payload type（caller-read / callee-write 等）；shadow 仅 p0。降低 continuation stack 压力。
+当前 `OptixProgramGroupOptions` 零初始化（无 payloadType），编译器跨 shadow trace 保守保存全部 16 个 payload register。 声明单一
+bounce payload type + shadow 改为零 payload `optixTraverse`，降低 continuation stack 压力。
+
+**方案**（对齐 SDK optixPathTracer 示例模式）：
+
+- `OptixPipelineCompileOptions::numPayloadValues` 置 0；`OptixModuleCompileOptions` 声明 `numPayloadTypes=1`（bounce，16
+  register）
+- `Pipeline::init` 增加 `payload_types` / `num_payload_types` 参数（renderer 定义语义，optix 层透传）
+- `OptixProgramGroupOptions` 保持零初始化（单一 type 可唯一推导）
+- shadow 光线从 `optixTrace(..., visible)` 改为 `optixTraverse(...)` + `!optixHitObjectIsHit()`（零 payload、AH 仍在遍历中执行）
+- 移除 `__miss__shadow`，程序组 4→3，SBT miss 记录 2→1
+- bounce trace 改为 typed `optixTraverse(kPayloadTypeBounce, ...)` + typed `optixInvoke(kPayloadTypeBounce, ...)`
+
+bounce payload 16 register 语义：
+
+| 寄存器 | 内容                            | Caller     | CH         | MS    | AH |
+|--------|---------------------------------|------------|------------|-------|----|
+| p0-p8  | origin / direction / throughput | READ       | WRITE      | —     | —  |
+| p9-p11 | color                           | READ       | WRITE      | WRITE | —  |
+| p12    | hit_distance                    | READ       | WRITE      | WRITE | —  |
+| p13    | last_brdf_pdf                   | READ_WRITE | READ_WRITE | READ  | —  |
+| p14    | sequence_index                  | WRITE      | READ       | —     | —  |
+| p15    | bounce                          | WRITE      | READ       | —     | —  |
 
 ### 单策略 NEE 混合
 
-env 与 emissive 并存时按功率比随机选一种策略（PDF 含选择概率，无偏），每 bounce 至多一条 shadow ray。需 fixed-time RMSE A/B
-确认收益后再默认启用。
+env 与 emissive 并存时，两条 shadow ray 中非主导策略的遍历开销高而 radiance 贡献低。随机选一种策略，每 bounce 至多一条
+shadow ray。
+
+**采样流程**：两种策略均做廉价采样（alias table + 纹理取色），用采样到的 radiance 亮度比算选择概率 （
+`p_env = lum_env / (lum_env + lum_emi)`），仅对选中策略追踪 shadow ray，贡献除以选择概率保持无偏。仅一种光源存在时退化
+为直接调用。
+
+**MIS 调整**：NEE 端的 effective PDF 包含选择概率（`p_select × strategy_pdf`）。BRDF hit 端的竞争 PDF 同步调整——miss shader
+中 env MIS 权重用 `p_env × env_pdf`，closesthit emissive MIS 用 `(1-p_env) × emissive_light_pdf`。`p_env` 从 LaunchParams
+已有的 `env.total_luminance` 和 `emissive.total_power` 实时可算，不需额外 payload。
+
+**RNG 维度**：env 4 维 + emissive 4 维仍全部消耗（两种策略都要采样），加 1 维选择随机数，共 9 维。`kDimsPerBounce` 从 12 增至
+13。128 维 Sobol 表内 (128-2)/13 ≈ 9 bounce，够用。
+
+**A/B 验证**：`LaunchParams` 加 `nee_single_strategy` 标志 + UI 开关。同场景同总渲染时间比较 RMSE 曲线，确认 fixed-time
+RMSE 更低后默认启用。场景选择覆盖 env/emissive 强度悬殊（典型收益）与势均力敌（最差情况）。
 
 ---
 
@@ -182,7 +217,7 @@ mip 基础设施已就绪；当前固定 LOD 0 的采样点改为 cone 驱动 LO
 当前 pipeline 为 16 个 payload 寄存器。本小项将 `numPayloadValues` 扩至 18，并在 `payload_helpers` 中增加 cone 字段读写：
 
 | Register | 内容                 |
-|----------|--------------------|
+|----------|----------------------|
 | p16      | cone_width（float）  |
 | p17      | cone_spread（float） |
 
