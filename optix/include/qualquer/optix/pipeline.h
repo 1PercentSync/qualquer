@@ -25,8 +25,8 @@ namespace qualquer::optix {
         /**
          * @brief Builds the pipeline from a compiled .optixir file.
          *
-         * Reads the file, creates the Module, creates four program groups
-         * (raygen, two miss, hitgroup containing closest-hit + any-hit), links
+         * Reads the file, creates the Module, creates three program groups
+         * (raygen, miss, hitgroup containing closest-hit + any-hit), links
          * the pipeline, and configures the stack size.
          * @param device_context              OptiX device context to build against.
          * @param optixir_path                Path to the compiled .optixir file.
@@ -37,11 +37,18 @@ namespace qualquer::optix {
          *                                    header (single-direction dependency).
          * @param launch_params_variable_name Name of the device-side
          *                                    extern __constant__ launch-params variable.
+         * @param payload_types               Payload type definitions (per-register
+         *                                    read/write semantics); renderer defines
+         *                                    the content, this layer forwards to
+         *                                    OptixModuleCompileOptions.
+         * @param num_payload_types           Number of payload type definitions.
          */
         void init(OptixDeviceContext device_context,
                   const std::string &optixir_path,
                   std::size_t launch_params_size,
-                  const char *launch_params_variable_name);
+                  const char *launch_params_variable_name,
+                  const OptixPayloadType *payload_types,
+                  unsigned int num_payload_types);
 
         /**
          * @brief Releases the pipeline, program groups, and module.
@@ -59,9 +66,6 @@ namespace qualquer::optix {
 
         /** @brief Environment miss program group (missIndex=0); null before init and after destroy. */
         OptixProgramGroup miss_env_program = nullptr;
-
-        /** @brief Shadow miss program group (missIndex=1); null before init and after destroy. */
-        OptixProgramGroup miss_shadow_program = nullptr;
 
         /** @brief Hit-group program (closest-hit + any-hit); null before init and after destroy. */
         OptixProgramGroup hitgroup_program = nullptr;

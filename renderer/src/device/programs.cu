@@ -128,7 +128,8 @@ __forceinline__ __device__ float3 trace_sample(
         p14 = sequence_index;
         p15 = path.bounce;
 
-        optixTraverse(params.traversable,
+        optixTraverse(kPayloadTypeBounce,
+                      params.traversable,
                       path.origin,
                       path.direction,
                       0.0f, // tmin
@@ -158,7 +159,8 @@ __forceinline__ __device__ float3 trace_sample(
             }
             optixReorder(reorder_hint & 0x3FFu, 10);
         }
-        optixInvoke(p0, p1, p2, p3, p4, p5,
+        optixInvoke(kPayloadTypeBounce,
+                    p0, p1, p2, p3, p4, p5,
                     p6, p7, p8, p9, p10, p11,
                     p12, p13, p14, p15);
 
@@ -728,13 +730,6 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
     payload_set_next_direction(bs.next_dir);
     payload_set_throughput_update(bs.throughput_update);
     payload_set_last_brdf_pdf(bs.pdf_combined);
-}
-
-/// Shadow miss (missIndex=1): the shadow ray reached tMax without hitting
-/// geometry, so the light source is visible (not occluded). Sets visible=1
-/// via payload register p0. The caller initializes p0=0 before tracing.
-__global__ void __miss__shadow() { // NOLINT(*-reserved-identifier)
-    optixSetPayload_0(1);
 }
 
 /// Any-hit alpha test for non-opaque geometry.

@@ -148,8 +148,9 @@ __forceinline__ __device__ float env_pdf(
 /**
  * @brief Traces a shadow ray and returns visibility (1 = visible, 0 = occluded).
  *
- * Uses TERMINATE_ON_FIRST_HIT | DISABLE_CLOSESTHIT for maximum efficiency.
- * missIndex=1 invokes __miss__shadow which sets payload_0 = 1.
+ * Zero-payload optixTraverse + optixHitObjectIsHit(): shadow only needs a
+ * hit/miss answer, no data transfer via payload registers. Any-hit (alpha
+ * testing) still executes during traversal. No miss program is invoked.
  *
  * @param traversable TLAS handle.
  * @param origin      Ray origin (offset from surface).
@@ -162,20 +163,18 @@ __forceinline__ __device__ uint32_t trace_shadow_ray(
         const float3 origin, const float3 direction,
         const float tmax) {
 
-    uint32_t visible = 0;
-    optixTrace(traversable,
-               origin, direction,
-               0.0f,   // tmin
-               tmax,
-               0.0f,   // rayTime
-               0xFF,   // visibilityMask
-               OPTIX_RAY_FLAG_TERMINATE_ON_FIRST_HIT
-                   | OPTIX_RAY_FLAG_DISABLE_CLOSESTHIT,
-               0,      // SBT offset
-               0,      // SBT stride
-               1,      // missIndex (shadow miss)
-               visible);
-    return visible;
+    optixTraverse(traversable,
+                  origin, direction,
+                  0.0f,   // tmin
+                  tmax,
+                  0.0f,   // rayTime
+                  0xFF,   // visibilityMask
+                  OPTIX_RAY_FLAG_TERMINATE_ON_FIRST_HIT
+                      | OPTIX_RAY_FLAG_DISABLE_CLOSESTHIT,
+                  0,      // SBT offset
+                  0,      // SBT stride
+                  0);     // missIndex (not invoked; must be valid index)
+    return optixHitObjectIsHit() ? 0 : 1;
 }
 
 // ---- Emissive triangle sampling ---------------------------------------------

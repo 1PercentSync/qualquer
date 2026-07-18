@@ -20,6 +20,9 @@
 #include <optix_device.h>
 
 namespace qualquer::renderer {
+    /** @brief Payload type ID for bounce traces (typed optixTraverse/optixInvoke). */
+    constexpr OptixPayloadTypeID kPayloadTypeBounce = OPTIX_PAYLOAD_TYPE_ID_0;
+
     // ---- Unpacked payload (raygen reads after optixTrace) -----------------------
 
     /**

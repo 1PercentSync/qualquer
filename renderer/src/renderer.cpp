@@ -347,26 +347,73 @@ namespace qualquer::renderer {
         // the renderer usable (feature create is deferred to submit_cuda).
         dlss_rr_.init(cuda_context.device_id());
 
+        // Bounce payload: 16 registers with per-register read/write semantics.
+        // The compiler uses this table to know which registers to save/restore
+        // across trace calls — shadow traces pass zero payload, so the compiler
+        // skips saving all 16 bounce registers across them.
+        //
+        // Layout: p0-p2 origin, p3-p5 direction, p6-p8 throughput,
+        //         p9-p11 color, p12 hit_distance, p13 last_brdf_pdf,
+        //         p14 sequence_index, p15 bounce.
+        constexpr unsigned int kBouncePayloadSemantics[16] = {
+            // p0-p2: next_origin — caller reads after trace, CH writes
+            OPTIX_PAYLOAD_SEMANTICS_TRACE_CALLER_READ | OPTIX_PAYLOAD_SEMANTICS_CH_WRITE,
+            OPTIX_PAYLOAD_SEMANTICS_TRACE_CALLER_READ | OPTIX_PAYLOAD_SEMANTICS_CH_WRITE,
+            OPTIX_PAYLOAD_SEMANTICS_TRACE_CALLER_READ | OPTIX_PAYLOAD_SEMANTICS_CH_WRITE,
+            // p3-p5: next_direction — caller reads after trace, CH writes
+            OPTIX_PAYLOAD_SEMANTICS_TRACE_CALLER_READ | OPTIX_PAYLOAD_SEMANTICS_CH_WRITE,
+            OPTIX_PAYLOAD_SEMANTICS_TRACE_CALLER_READ | OPTIX_PAYLOAD_SEMANTICS_CH_WRITE,
+            OPTIX_PAYLOAD_SEMANTICS_TRACE_CALLER_READ | OPTIX_PAYLOAD_SEMANTICS_CH_WRITE,
+            // p6-p8: throughput_update — caller reads after trace, CH writes
+            OPTIX_PAYLOAD_SEMANTICS_TRACE_CALLER_READ | OPTIX_PAYLOAD_SEMANTICS_CH_WRITE,
+            OPTIX_PAYLOAD_SEMANTICS_TRACE_CALLER_READ | OPTIX_PAYLOAD_SEMANTICS_CH_WRITE,
+            OPTIX_PAYLOAD_SEMANTICS_TRACE_CALLER_READ | OPTIX_PAYLOAD_SEMANTICS_CH_WRITE,
+            // p9-p11: color — caller reads after trace, CH writes, MS writes
+            OPTIX_PAYLOAD_SEMANTICS_TRACE_CALLER_READ | OPTIX_PAYLOAD_SEMANTICS_CH_WRITE
+                | OPTIX_PAYLOAD_SEMANTICS_MS_WRITE,
+            OPTIX_PAYLOAD_SEMANTICS_TRACE_CALLER_READ | OPTIX_PAYLOAD_SEMANTICS_CH_WRITE
+                | OPTIX_PAYLOAD_SEMANTICS_MS_WRITE,
+            OPTIX_PAYLOAD_SEMANTICS_TRACE_CALLER_READ | OPTIX_PAYLOAD_SEMANTICS_CH_WRITE
+                | OPTIX_PAYLOAD_SEMANTICS_MS_WRITE,
+            // p12: hit_distance — caller reads after trace, CH writes, MS writes
+            OPTIX_PAYLOAD_SEMANTICS_TRACE_CALLER_READ | OPTIX_PAYLOAD_SEMANTICS_CH_WRITE
+                | OPTIX_PAYLOAD_SEMANTICS_MS_WRITE,
+            // p13: last_brdf_pdf — caller reads+writes, CH reads+writes, MS reads
+            OPTIX_PAYLOAD_SEMANTICS_TRACE_CALLER_READ_WRITE | OPTIX_PAYLOAD_SEMANTICS_CH_READ_WRITE
+                | OPTIX_PAYLOAD_SEMANTICS_MS_READ,
+            // p14: sequence_index — caller writes before trace, CH reads
+            OPTIX_PAYLOAD_SEMANTICS_TRACE_CALLER_WRITE | OPTIX_PAYLOAD_SEMANTICS_CH_READ,
+            // p15: bounce — caller writes before trace, CH reads
+            OPTIX_PAYLOAD_SEMANTICS_TRACE_CALLER_WRITE | OPTIX_PAYLOAD_SEMANTICS_CH_READ,
+        };
+
+        const OptixPayloadType bounce_payload_type{
+            .numPayloadValues = 16,
+            .payloadSemantics = kBouncePayloadSemantics,
+        };
+
         // The launch-params constant name ("params") and its size are device-side
         // facts this layer cannot take from the renderer header (single-direction
         // dependency).
         pipeline_.init(cuda_context.device_context,
                        optixir_path,
                        sizeof(LaunchParams),
-                       "params");
+                       "params",
+                       &bounce_payload_type,
+                       1);
 
         // SBT records are header-only (global data via LaunchParams).
-        // Miss SBT has 2 entries: env (missIndex=0) and shadow (missIndex=1).
+        // Miss SBT has 1 entry: env (missIndex=0). Shadow rays use zero-payload
+        // optixTraverse + optixHitObjectIsHit() and do not invoke any miss program.
         SbtRecord record{};
         OPTIX_CHECK(optixSbtRecordPackHeader(pipeline_.raygen_program, &record));
         sbt_raygen_.alloc(1);
         sbt_raygen_.upload(&record, 1, cuda_context.compute_stream);
 
-        std::array<SbtRecord, 2> miss_records{};
-        OPTIX_CHECK(optixSbtRecordPackHeader(pipeline_.miss_env_program, &miss_records[0]));
-        OPTIX_CHECK(optixSbtRecordPackHeader(pipeline_.miss_shadow_program, &miss_records[1]));
-        sbt_miss_.alloc(2);
-        sbt_miss_.upload(miss_records.data(), 2, cuda_context.compute_stream);
+        SbtRecord miss_record{};
+        OPTIX_CHECK(optixSbtRecordPackHeader(pipeline_.miss_env_program, &miss_record));
+        sbt_miss_.alloc(1);
+        sbt_miss_.upload(&miss_record, 1, cuda_context.compute_stream);
 
         OPTIX_CHECK(optixSbtRecordPackHeader(pipeline_.hitgroup_program, &record));
         sbt_hit_.alloc(1);
@@ -776,7 +823,7 @@ namespace qualquer::renderer {
                 .exceptionRecord = 0,
                 .missRecordBase = sbt_miss_.device_ptr(),
                 .missRecordStrideInBytes = sizeof(SbtRecord),
-                .missRecordCount = 2,
+                .missRecordCount = 1,
                 .hitgroupRecordBase = sbt_hit_.device_ptr(),
                 .hitgroupRecordStrideInBytes = sizeof(SbtRecord),
                 .hitgroupRecordCount = 1,

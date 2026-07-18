@@ -56,26 +56,29 @@ namespace qualquer::optix {
     void Pipeline::init(OptixDeviceContext device_context,
                         const std::string &optixir_path,
                         const std::size_t launch_params_size,
-                        const char *launch_params_variable_name) {
+                        const char *launch_params_variable_name,
+                        const OptixPayloadType *payload_types,
+                        const unsigned int num_payload_types) {
         const std::string optixir = read_file(optixir_path);
 
-        constexpr OptixModuleCompileOptions module_options{
+        const OptixModuleCompileOptions module_options{
             .maxRegisterCount = OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
             .optLevel = OPTIX_COMPILE_OPTIMIZATION_DEFAULT,
             .debugLevel = kModuleDebugLevel,
+            .numPayloadTypes = num_payload_types,
+            .payloadTypes = payload_types,
         };
 
         // traversableGraphFlags selects single-level instancing (TLAS->BLAS), the
         // graph shape used for instanced geometry, over the broader ALLOW_ANY so
         // the traversal shader compiles for the actual graph depth rather than the
         // most general one.
-        // numPayloadValues=16: the full path payload carried between raygen,
-        // closesthit, and miss (next origin/direction, throughput update,
-        // radiance, hit distance, BRDF PDF, sample index, bounce index).
+        // numPayloadValues=0: typed payload mode — per-register read/write
+        // semantics are declared via numPayloadTypes instead (mutually exclusive).
         // numAttributeValues=2: triangle barycentrics (built-in).
         const OptixPipelineCompileOptions pipeline_options{
             .traversableGraphFlags = OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
-            .numPayloadValues = 16,
+            .numPayloadValues = 0,
             .numAttributeValues = 2,
             .pipelineLaunchParamsVariableName = launch_params_variable_name,
             .pipelineLaunchParamsSizeInBytes = launch_params_size,
@@ -92,10 +95,11 @@ namespace qualquer::optix {
 
         // Entry function names are the extern "C" symbols defined in the device
         // program source; OptiX resolves each program group by matching these
-        // symbol names. Two miss programs: environment (missIndex=0) and shadow
-        // (missIndex=1). The hit group pairs closest-hit with any-hit; BLAS
-        // per-geometry flags control whether any-hit is invoked.
-        const std::array<OptixProgramGroupDesc, 4> program_descs{{
+        // symbol names. One miss program: environment (missIndex=0). Shadow rays
+        // use zero-payload optixTraverse + optixHitObjectIsHit() and do not
+        // invoke any miss program. The hit group pairs closest-hit with any-hit;
+        // BLAS per-geometry flags control whether any-hit is invoked.
+        const std::array<OptixProgramGroupDesc, 3> program_descs{{
             {
                 .kind = OPTIX_PROGRAM_GROUP_KIND_RAYGEN,
                 .raygen = {.module = module_, .entryFunctionName = "__raygen__rg"},
@@ -103,10 +107,6 @@ namespace qualquer::optix {
             {
                 .kind = OPTIX_PROGRAM_GROUP_KIND_MISS,
                 .miss = {.module = module_, .entryFunctionName = "__miss__env"},
-            },
-            {
-                .kind = OPTIX_PROGRAM_GROUP_KIND_MISS,
-                .miss = {.module = module_, .entryFunctionName = "__miss__shadow"},
             },
             {
                 .kind = OPTIX_PROGRAM_GROUP_KIND_HITGROUP,
@@ -119,10 +119,10 @@ namespace qualquer::optix {
             },
         }};
 
-        std::array<OptixProgramGroup, 4> program_groups{};
+        std::array<OptixProgramGroup, 3> program_groups{};
         // optixProgramGroupCreate dereferences the options pointer; null crashes.
         // A zero-initialized options leaves payloadType null, letting OptiX deduce
-        // a unique payload type.
+        // a unique payload type (single type → unambiguous).
         constexpr OptixProgramGroupOptions program_options{};
         OPTIX_CHECK(optixProgramGroupCreate(device_context,
                                             program_descs.data(),
@@ -133,8 +133,7 @@ namespace qualquer::optix {
                                             program_groups.data()));
         raygen_program = program_groups[0];
         miss_env_program = program_groups[1];
-        miss_shadow_program = program_groups[2];
-        hitgroup_program = program_groups[3];
+        hitgroup_program = program_groups[2];
 
         // maxTraceDepth=2: raygen traces the primary/bounce ray (depth 1), and
         // closesthit may trace a shadow ray for NEE (depth 2). The bounce loop
@@ -182,10 +181,6 @@ namespace qualquer::optix {
         if (miss_env_program != nullptr) {
             OPTIX_CHECK(optixProgramGroupDestroy(miss_env_program));
             miss_env_program = nullptr;
-        }
-        if (miss_shadow_program != nullptr) {
-            OPTIX_CHECK(optixProgramGroupDestroy(miss_shadow_program));
-            miss_shadow_program = nullptr;
         }
         if (hitgroup_program != nullptr) {
             OPTIX_CHECK(optixProgramGroupDestroy(hitgroup_program));
