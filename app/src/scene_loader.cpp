@@ -719,10 +719,7 @@ namespace qualquer::app {
                 constexpr uint32_t kDefaultFlatNormalIdx = 1;
                 data.normal_tex = kDefaultFlatNormalIdx;
             }
-            if (data.emissive_tex == UINT32_MAX) {
-                constexpr uint32_t kDefaultBlackIdx = 2;
-                data.emissive_tex = kDefaultBlackIdx;
-            }
+            if (data.emissive_tex == UINT32_MAX) { data.emissive_tex = kDefaultWhiteIdx; }
 
             gpu_materials_.push_back(data);
         }
