@@ -154,11 +154,12 @@ MUSTREAD:8
 
 ### Payload
 
-**决策**：全信息 payload registers，不走 global hit buffer。当前 16 槽；Ray Cone LOD 使用时扩至 18（p16/p17 = cone_width /
-cone_spread）。
+**决策**：全信息 payload registers，不走 global hit buffer。当前 16 槽（typed payload，per-register 读写语义声明）；Ray
+Cone LOD 使用时扩至 18（p16/p17 = cone_width / cone_spread）。Shadow ray 零 payload（`optixTraverse` +
+`optixHitObjectIsHit()`），编译器跨 shadow trace 不保存/恢复 bounce 寄存器。
 
 **理由**：SER 重排后 payload 随线程移动、零全局内存；global buffer 在重排后访问变为 non-coalesced，反而更差。OptiX 上限 32
-registers。
+registers。Typed payload 让编译器区分 bounce（16 reg）和 shadow（0 reg），消除跨 shadow trace 的保守寄存器保存。
 
 ### Device 代码组织
 
@@ -174,12 +175,13 @@ registers。
 
 ### SBT / Pipeline
 
-**决策**：2 miss（`__miss__env` + `__miss__shadow`）+ **1 hitgroup**（CH+AH）；单 hitgroup record（`hitgroupRecordCount = 1`，无 per-material SBT 索引）；BLAS per-geometry flag 控制
-anyhit（opaque: `DISABLE_ANYHIT`，non-opaque: `REQUIRE_SINGLE_ANYHIT_CALL`）。Shadow ray 用 `DISABLE_CLOSESTHIT`，与 bounce
-共享 hitgroup。
+**决策**：1 miss（`__miss__env`）+ **1 hitgroup**（CH+AH）；单 hitgroup record（`hitgroupRecordCount = 1`，无 per-material
+SBT 索引）；BLAS per-geometry flag 控制 anyhit（opaque: `DISABLE_ANYHIT`，non-opaque: `REQUIRE_SINGLE_ANYHIT_CALL`）。Shadow
+ray 用零 payload `optixTraverse` + `optixHitObjectIsHit()` 判遮挡，不调 `optixInvoke`，不需要 miss 程序。
 
 **理由**：否定 2 hitgroup + multi-record SBT 方案——CH/AH 独立入口与寄存器分配，opaque 不链 AH 无寄存器收益；SER hint 已用 material
-信息；BLAS geometry flag 是 OptiX 控制 anyhit 的原生机制。
+信息；BLAS geometry flag 是 OptiX 控制 anyhit 的原生机制。Shadow ray 只需 hit/miss 判定，`optixHitObjectIsHit()` 直接回答，
+无需通过 payload 寄存器或 miss 程序传递可见性标志。
 
 ---
 
