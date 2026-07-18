@@ -97,15 +97,22 @@ cubemap 保持全分辨率。非 power-of-2 输入维度产生非最优降采样
 当前 `OptixProgramGroupOptions` 零初始化（无 payloadType），编译器跨 shadow trace 保守保存全部 16 个 payload register。 声明单一
 bounce payload type + shadow 改为零 payload `optixTraverse`，降低 continuation stack 压力。
 
-**方案**（对齐 SDK optixPathTracer 示例模式）：
+**方案**：
 
-- `OptixPipelineCompileOptions::numPayloadValues` 置 0；`OptixModuleCompileOptions` 声明 `numPayloadTypes=1`（bounce，16
-  register）
-- `Pipeline::init` 增加 `payload_types` / `num_payload_types` 参数（renderer 定义语义，optix 层透传）
-- `OptixProgramGroupOptions` 保持零初始化（单一 type 可唯一推导）
-- shadow 光线从 `optixTrace(..., visible)` 改为 `optixTraverse(...)` + `!optixHitObjectIsHit()`（零 payload、AH 仍在遍历中执行）
-- 移除 `__miss__shadow`，程序组 4→3，SBT miss 记录 2→1
-- bounce trace 改为 typed `optixTraverse(kPayloadTypeBounce, ...)` + typed `optixInvoke(kPayloadTypeBounce, ...)`
+1. 定义寄存器读写表（16 行，每行说明该寄存器在 caller/CH/MS/AH 中谁读谁写），通过 `OptixModuleCompileOptions`
+   的 `numPayloadTypes=1` 传给编译器（`numPayloadValues` 置 0，两者互斥）。`Pipeline::init` 增加
+   `payload_types` / `num_payload_types` 参数（renderer 定义内容，optix 层透传）。编译器拿到这张表后，能区分 typed bounce
+   trace（16 个寄存器）和 untyped shadow trace（零寄存器），跨 shadow trace 时不再保存/恢复 bounce 寄存器
+2. Shadow ray 改为零 payload `optixTraverse(...)` + `!optixHitObjectIsHit()`——shadow 只需要知道「有没有撞到东西」，
+   `optixHitObjectIsHit()` 直接回答，不需要通过寄存器传数据。AH（alpha 测试）在遍历阶段执行，不属于 invoke 阶段，
+   零 payload 不影响 AH 触发
+3. 移除 `__miss__shadow`——它唯一的作用是往寄存器写 `visible=1`，shadow 不再用寄存器后没有存在意义。程序组 4→3，SBT
+   miss 记录 2→1
+4. Bounce trace 的 `optixTraverse` / `optixInvoke` 加 type 参数 `kPayloadTypeBounce`（= `OPTIX_PAYLOAD_TYPE_ID_0`），
+   告诉 OptiX 这次 trace 用 bounce 的寄存器布局；shadow trace 不传 type——这是编译器区分两者的依据
+5. `OptixProgramGroupOptions` 保持零初始化（单一 type 可唯一推导）
+6. 单一 type 下 `optixSetPayloadTypes`（程序内部声明支持哪些 type 的 API）不需要——编译器从模块选项中已知唯一 type
+   的语义，SDK 示例在 CH/MS 中调用它是多 type 场景的惯例，单 type 下无效果
 
 bounce payload 16 register 语义：
 
