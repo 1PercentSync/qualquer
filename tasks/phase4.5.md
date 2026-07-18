@@ -29,7 +29,7 @@
 ## Step 14.8：采样与光照优化
 
 - [x] Env alias table 降采样
-- [ ] OptiX payload type semantics
+- [x] OptiX payload type semantics
 - [ ] 单策略 NEE 混合
 - [ ] 请求用户在 CLion 中编译验证（采样/光照优化无偏回归；决策已更新）
 
