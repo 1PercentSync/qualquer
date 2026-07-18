@@ -11,7 +11,7 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4.5 — 自适应帧率 + 采样质量收尾
-- **进度**：Phase 4.5 Step 14.8 完成（env alias table 降采样、typed payload semantics、单策略 NEE 混合）
+- **进度**：Phase 4.5 Step 14.9 第二小项完成：Sobol temporal offset 移除（A/B 验证结论：偏移破坏收敛率，sequence_index 前进已承担帧间去相关）
 
 ### 下一个任务
 

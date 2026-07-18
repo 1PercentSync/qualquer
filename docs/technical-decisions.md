@@ -259,12 +259,11 @@ ray 用零 payload `optixTraverse` + `optixHitObjectIsHit()` 判遮挡，不调 
 
 ### RNG
 
-**决策**：Sobol（128 维 direction numbers）+ per-pixel **加法** Cranley-Patterson rotation + golden-ratio temporal offset（
-`frame_index * 2654435769u`）；dim ≥ 128 降级 xxhash32。**不用** blue noise 纹理。表以 `uint32_t sobol_directions[4096]` *
-*内嵌 LaunchParams**，经 `optixLaunch` 进入 `__constant__`。
+**决策**：Sobol（128 维 direction numbers）+ per-pixel **加法** Cranley-Patterson rotation，**不加** per-frame temporal offset；dim ≥ 128 降级 xxhash32。**不用** blue noise 纹理。表以 `uint32_t sobol_directions[4096]` **内嵌 LaunchParams**，经 `optixLaunch` 进入 `__constant__`。
 
-**理由**：DLSS-RR 文档将 blue noise 列为应避免；加法 CP 保持低差异性（XOR 破坏分层）。OptiX 无公开 API 初始化非 LaunchParams
-的 `__constant__`，内嵌是唯一把自定义表放进 constant memory 的方式。
+**理由**：DLSS-RR 文档将 blue noise 列为应避免；加法 CP 保持低差异性（XOR 破坏分层）。OptiX 无公开 API 初始化非 LaunchParams 的 `__constant__`，内嵌是唯一把自定义表放进 constant memory 的方式。
+
+**Temporal offset 已移除（A/B 验证）**：golden-ratio 逐帧漂移（`frame_index * 2654435769u`）破坏 Sobol 指数和的精确零因子——K≠0 Fourier 分量的阻尼从 O(1/n) 退化到 ~exp(c·√log n)/n，实用范围内收敛率从 ~n⁻¹ 打回 ~n⁻⁰·⁵（n=65536 时 RMSE 最大差 589×）。帧间去相关由 `sequence_index = frame_index * spp + s` 的前进保证，偏移无残余职责。K=0 反对角型病态投影（本表实测最卡模式）偏移严格无作用（比值恒 1.00）。
 
 ### 多 spp 与 jitter
 
