@@ -406,14 +406,16 @@ __global__ void __miss__env() { // NOLINT(*-reserved-identifier)
     }
 
     // Env MIS: when this miss follows a BRDF sample (last_brdf_pdf > 0)
-    // and env NEE is active, weight by power_heuristic(brdf_pdf, env_pdf)
-    // to avoid double-counting with the closesthit NEE strategy.
+    // and env NEE is active, weight by power_heuristic(brdf_pdf, p * env_pdf)
+    // where p is the NEE selection probability for env (1.0 when emissive is
+    // absent). Avoids double-counting with the closesthit NEE strategy.
     // Primary ray (bounce 0), pass-through, or invalid BRDF sample:
     // last_brdf_pdf == 0 → weight stays 1.0.
     const float last_brdf_pdf = payload_get_last_brdf_pdf();
     if (last_brdf_pdf > 0.0f && params.env.alias_table != nullptr) {
         const float pdf_env = env_pdf(params.env, world_dir);
-        env_color = env_color * mis_power_heuristic(last_brdf_pdf, pdf_env);
+        const float p = nee_global_p_env();
+        env_color = env_color * mis_power_heuristic(last_brdf_pdf, p * pdf_env);
     }
 
     payload_set_color(env_color);
@@ -575,7 +577,8 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
 
         // Bounce 0 (direct view): weight 1.0 — primary ray is not a BRDF sample.
         // Bounce > 0 with emissive NEE active: BRDF hit emissive is one of two MIS
-        // strategies, weight by power_heuristic(brdf_pdf, light_pdf).
+        // strategies, weight by power_heuristic(brdf_pdf, p * light_pdf) where
+        // p is the NEE selection probability for emissive (1.0 when env is absent).
         // Bounce > 0 without emissive NEE: weight 1.0 — no competing strategy.
         if (bounce > 0 && params.emissive.count > 0) {
             const float last_brdf_pdf = payload_get_last_brdf_pdf();
@@ -588,7 +591,8 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
                 const float hit_dist = optixGetRayTmax();
                 const float light_pdf = emissive_light_pdf(
                     emi_lum, hit_dist, cos_theta_l, params.emissive.total_power);
-                const float mis_w = mis_power_heuristic(last_brdf_pdf, light_pdf);
+                const float p = 1.0f - nee_global_p_env();
+                const float mis_w = mis_power_heuristic(last_brdf_pdf, p * light_pdf);
                 emissive = emissive * mis_w;
             }
         }
@@ -681,13 +685,12 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
     const uint32_t sample_index = payload_get_sample_index();
     const uint32_t dim_base = bounce_dim_base(bounce);
 
-    // ---- NEE: environment + emissive (full evaluation lives in nee.cuh) ----
-    // NEE is valid on every bounce including the last (direct light contribution).
+    // ---- NEE: combined strategy selection (full evaluation in nee.cuh) ----
+    // When both env and emissive are present, one strategy is randomly selected
+    // per bounce based on sampled luminance, reducing from two shadow rays to one.
     const float3 nee_radiance =
-        evaluate_env_nee(bp, offset_pos, N_face, N_brdf,
-                         pixel_index, sample_index, dim_base)
-        + evaluate_emissive_nee(bp, offset_pos, N_face, N_brdf,
-                                pixel_index, sample_index, dim_base);
+        evaluate_nee_combined(bp, offset_pos, N_face, N_brdf,
+                              pixel_index, sample_index, dim_base);
 
     // ---- Write common payload ----
     payload_set_next_origin(offset_pos);

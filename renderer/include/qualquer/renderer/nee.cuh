@@ -243,15 +243,43 @@ __forceinline__ __device__ float emissive_light_pdf(
     return pdf_area * dist * dist / cos_theta_light;
 }
 
-// ---- Full NEE evaluations (env / emissive) ----------------------------------
+// ---- NEE strategy selection probability -------------------------------------
+
+/**
+ * @brief Global env selection probability for BRDF-hit MIS weights.
+ *
+ * Approximates the per-sample selection probability used at the NEE site
+ * from scene-wide totals (env total_luminance vs emissive total_power).
+ * Used at BRDF-hit MIS sites (miss shader, closesthit emissive) where
+ * per-sample values are unavailable.
+ *
+ * @return Selection probability for env in [0, 1]. 1.0 when emissive is
+ *         absent, 0.0 when env is absent.
+ */
+__forceinline__ __device__ float nee_global_p_env() {
+    const float env_l = params.env.total_luminance;
+    const float emi_p = params.emissive.total_power;
+    if (env_l <= 0.0f) {
+        return 0.0f;
+    }
+    if (emi_p <= 0.0f) {
+        return 1.0f;
+    }
+    return env_l / (env_l + emi_p);
+}
+
+// ---- Full NEE evaluations (env / emissive / combined) -----------------------
 //
-// Env and emissive stay as two functions: their resource parameter sets differ
-// enough that a single entry would force a dishonest or bloated signature.
-// Both read scene resources from the programs.cu LaunchParams constant and take
-// only shading-point inputs as explicit arguments.
+// Env and emissive have separate evaluators for single-source paths;
+// evaluate_nee_combined selects one strategy when both are present.
+// All three read scene resources from the programs.cu LaunchParams constant
+// and take only shading-point inputs as explicit arguments.
 
 /**
  * @brief Environment NEE: alias-sample a direction, shadow-test, BRDF eval, MIS.
+ *
+ * Precondition: env cubemap, alias table, and total_luminance are valid
+ * (guaranteed by evaluate_nee_combined before delegation).
  *
  * @param bp           Shading-point BRDF parameters (from init_brdf_params).
  * @param offset_pos   Ray origin offset from the hit surface.
@@ -270,11 +298,6 @@ __forceinline__ __device__ float3 evaluate_env_nee(
         const uint32_t pixel_index,
         const uint32_t sample_index,
         const uint32_t dim_base) {
-
-    if (params.env.cubemap == 0 || params.env.alias_table == nullptr
-        || params.env.total_luminance <= 0.0f) {
-        return make_float3(0.0f, 0.0f, 0.0f);
-    }
 
     const float env_r1 = sobol_rng(params.sobol_directions, pixel_index,
                                    sample_index, params.frame_index,
@@ -330,6 +353,9 @@ __forceinline__ __device__ float3 evaluate_env_nee(
 /**
  * @brief Emissive-triangle NEE: alias-sample a triangle, shadow-test, BRDF eval, MIS.
  *
+ * Precondition: emissive count > 0 and triangles pointer valid
+ * (guaranteed by evaluate_nee_combined before delegation).
+ *
  * @param bp           Shading-point BRDF parameters (from init_brdf_params).
  * @param offset_pos   Ray origin offset from the hit surface.
  * @param N_face       Geometric face normal (for shadow-terminator correction).
@@ -347,10 +373,6 @@ __forceinline__ __device__ float3 evaluate_emissive_nee(
         const uint32_t pixel_index,
         const uint32_t sample_index,
         const uint32_t dim_base) {
-
-    if (params.emissive.count == 0 || params.emissive.triangles == nullptr) {
-        return make_float3(0.0f, 0.0f, 0.0f);
-    }
 
     const float emi_r1 = sobol_rng(params.sobol_directions, pixel_index,
                                    sample_index, params.frame_index,
@@ -445,6 +467,235 @@ __forceinline__ __device__ float3 evaluate_emissive_nee(
 
     return Le * bep_emi.value * NdotL_emi * mis_w_emi * st_factor_emi
         / light_pdf_emi;
+}
+
+/**
+ * @brief Combined NEE evaluator with single-strategy selection.
+ *
+ * When both environment and emissive sources are present, randomly selects
+ * one strategy per bounce based on sampled radiance luminance, tracing one
+ * shadow ray instead of two. Selection probability is proportional to the
+ * cheap-sampled radiance (cubemap texel for env, emission texture for
+ * emissive), and the contribution is divided by the selection probability
+ * to maintain an unbiased estimator.
+ *
+ * MIS weights use the effective PDF (p_select × strategy_pdf). At the
+ * competing BRDF-hit sites (miss shader, closesthit emissive), the global
+ * nee_global_p_env() approximates the per-sample selection probability;
+ * this mismatch affects only MIS variance distribution, not bias.
+ *
+ * When only one source exists, delegates to the single-source evaluator
+ * with zero overhead.
+ *
+ * @param bp           Shading-point BRDF parameters (from init_brdf_params).
+ * @param offset_pos   Ray origin offset from the hit surface.
+ * @param N_face       Geometric face normal (for shadow-terminator correction).
+ * @param N_shading    Shading normal (must match bp.N).
+ * @param pixel_index  Linear pixel index for RNG.
+ * @param sample_index Cumulative sample index for RNG.
+ * @param dim_base     Per-bounce RNG dimension base (from bounce_dim_base).
+ * @return NEE radiance contribution (not yet multiplied by path throughput).
+ */
+__forceinline__ __device__ float3 evaluate_nee_combined(
+        const BrdfParams &bp,
+        const float3 offset_pos,
+        const float3 N_face,
+        const float3 N_shading,
+        const uint32_t pixel_index,
+        const uint32_t sample_index,
+        const uint32_t dim_base) {
+
+    const bool has_env = params.env.cubemap != 0
+                      && params.env.alias_table != nullptr
+                      && params.env.total_luminance > 0.0f;
+    const bool has_emi = params.emissive.count > 0
+                      && params.emissive.triangles != nullptr;
+
+    // Single source: delegate directly (zero selection overhead).
+    if (!has_env && !has_emi) {
+        return make_float3(0.0f, 0.0f, 0.0f);
+    }
+    if (!has_env) {
+        return evaluate_emissive_nee(bp, offset_pos, N_face, N_shading,
+                                     pixel_index, sample_index, dim_base);
+    }
+    if (!has_emi) {
+        return evaluate_env_nee(bp, offset_pos, N_face, N_shading,
+                                pixel_index, sample_index, dim_base);
+    }
+
+    // ---- Both sources present: cheap-sample both, select one ----
+
+    // -- Env cheap phase: alias table → direction + PDF + hemisphere checks --
+    const float env_r1 = sobol_rng(params.sobol_directions, pixel_index,
+                                   sample_index, params.frame_index,
+                                   dim_base + kBounceOffsetEnvNee);
+    const float env_r2 = sobol_rng(params.sobol_directions, pixel_index,
+                                   sample_index, params.frame_index,
+                                   dim_base + kBounceOffsetEnvNee + 1);
+    const float env_r3 = sobol_rng(params.sobol_directions, pixel_index,
+                                   sample_index, params.frame_index,
+                                   dim_base + kBounceOffsetEnvNee + 2);
+    const float env_r4 = sobol_rng(params.sobol_directions, pixel_index,
+                                   sample_index, params.frame_index,
+                                   dim_base + kBounceOffsetEnvNee + 3);
+
+    const EnvSample es = sample_env_alias_table(
+        params.env, env_r1, env_r2, env_r3, env_r4);
+
+    bool env_valid = es.pdf > 0.0f && isfinite(es.pdf)
+                  && dot(N_face, es.world_dir) > 0.0f;
+    float env_NdotL = 0.0f;
+    if (env_valid) {
+        env_NdotL = dot(N_shading, es.world_dir);
+        env_valid = env_NdotL > 0.0f;
+    }
+
+    float env_lum = 0.0f;
+    float3 env_color = make_float3(0.0f, 0.0f, 0.0f);
+    if (env_valid) {
+        const auto env_texel = texCubemap<float4>(
+            params.env.cubemap, es.env_dir.x, es.env_dir.y, es.env_dir.z);
+        env_color = make_float3(env_texel.x, env_texel.y, env_texel.z);
+        env_lum = luminance(env_color);
+        if (env_lum <= 0.0f) {
+            env_valid = false;
+        }
+    }
+
+    // -- Emissive cheap phase: alias table → triangle point + geometry checks --
+    const float emi_r1 = sobol_rng(params.sobol_directions, pixel_index,
+                                   sample_index, params.frame_index,
+                                   dim_base + kBounceOffsetEmissiveNee);
+    const float emi_r2 = sobol_rng(params.sobol_directions, pixel_index,
+                                   sample_index, params.frame_index,
+                                   dim_base + kBounceOffsetEmissiveNee + 1);
+    const float emi_r3 = sobol_rng(params.sobol_directions, pixel_index,
+                                   sample_index, params.frame_index,
+                                   dim_base + kBounceOffsetEmissiveNee + 2);
+    const float emi_r4 = sobol_rng(params.sobol_directions, pixel_index,
+                                   sample_index, params.frame_index,
+                                   dim_base + kBounceOffsetEmissiveNee + 3);
+
+    const uint32_t tri_idx = sample_emissive_alias_table(
+        params.emissive.alias_table, params.emissive.count, emi_r1, emi_r2);
+    const EmissiveTriangle &tri = params.emissive.triangles[tri_idx];
+
+    const float3 light_bary = triangle_barycentric(emi_r3, emi_r4);
+    const float3 light_pos = tri.v0 + tri.edge1 * light_bary.y
+                           + tri.edge2 * light_bary.z;
+    const float3 to_light = light_pos - offset_pos;
+    const float dist2 = dot(to_light, to_light);
+
+    bool emi_valid = dist2 > 0.0f;
+    float emi_dist = 0.0f;
+    float3 emi_L = make_float3(0.0f, 0.0f, 0.0f);
+    float emi_cos_theta_light = 0.0f;
+    float emi_NdotL = 0.0f;
+    float emi_lum = 0.0f;
+    float3 Le = make_float3(0.0f, 0.0f, 0.0f);
+
+    if (emi_valid) {
+        emi_dist = sqrtf(dist2);
+        emi_L = to_light * (1.0f / emi_dist);
+
+        const float3 light_normal = make_float3(
+            tri.normal_x, tri.normal_y, tri.normal_z);
+        emi_cos_theta_light = dot(light_normal, -emi_L);
+        if (tri.double_sided == 1u) {
+            emi_cos_theta_light = fabsf(emi_cos_theta_light);
+        }
+
+        if (emi_cos_theta_light <= 0.0f || dot(N_face, emi_L) <= 0.0f) {
+            emi_valid = false;
+        }
+    }
+    if (emi_valid) {
+        emi_NdotL = dot(N_shading, emi_L);
+        if (emi_NdotL <= 0.0f) {
+            emi_valid = false;
+        }
+    }
+    if (emi_valid) {
+        const float2 light_uv = make_float2(
+            tri.uv0.x + (tri.uv1.x - tri.uv0.x) * light_bary.y
+                       + (tri.uv2.x - tri.uv0.x) * light_bary.z,
+            tri.uv0.y + (tri.uv1.y - tri.uv0.y) * light_bary.y
+                       + (tri.uv2.y - tri.uv0.y) * light_bary.z);
+        const auto le_texel = tex2D<float4>(
+            params.texture_objects[tri.emissive_tex], light_uv.x, light_uv.y);
+        Le = make_float3(
+            le_texel.x * tri.emission.x,
+            le_texel.y * tri.emission.y,
+            le_texel.z * tri.emission.z);
+        emi_lum = luminance(Le);
+        if (emi_lum <= 0.0f) {
+            emi_valid = false;
+        }
+    }
+
+    // ---- Selection ----
+    if (!env_valid && !emi_valid) {
+        return make_float3(0.0f, 0.0f, 0.0f);
+    }
+
+    float p_env;
+    if (!emi_valid) {
+        p_env = 1.0f;
+    } else if (!env_valid) {
+        p_env = 0.0f;
+    } else {
+        p_env = env_lum / (env_lum + emi_lum);
+    }
+
+    const float select_rand = sobol_rng(params.sobol_directions, pixel_index,
+                                        sample_index, params.frame_index,
+                                        dim_base + kBounceOffsetNeeSelect);
+
+    if (select_rand < p_env) {
+        // ---- Selected env: shadow ray + BRDF eval + MIS ----
+        const float3 L = es.world_dir;
+
+        const uint32_t visible = trace_shadow_ray(
+            params.traversable, offset_pos, L, 1e16f);
+        if (!visible) {
+            return make_float3(0.0f, 0.0f, 0.0f);
+        }
+
+        const BrdfEvalResult bep = brdf_eval_and_pdf(bp, L, env_NdotL);
+        const float effective_pdf = p_env * es.pdf;
+        const float mis_w = mis_power_heuristic(effective_pdf, bep.pdf);
+        const float st_factor = shadow_terminator_factor(N_face, N_shading, L);
+
+        return env_color * bep.value * env_NdotL * mis_w * st_factor
+            / effective_pdf;
+    }
+
+    // ---- Selected emissive: shadow ray + BRDF eval + MIS ----
+    const uint32_t visible = trace_shadow_ray(
+        params.traversable, offset_pos, emi_L, emi_dist * (1.0f - 1e-4f));
+    if (!visible) {
+        return make_float3(0.0f, 0.0f, 0.0f);
+    }
+
+    const BrdfEvalResult bep_emi = brdf_eval_and_pdf(bp, emi_L, emi_NdotL);
+
+    const float emission_lum = luminance(tri.emission);
+    const float light_pdf_emi = emissive_light_pdf(
+        emission_lum, emi_dist, emi_cos_theta_light,
+        params.emissive.total_power);
+    if (light_pdf_emi <= 0.0f || !isfinite(light_pdf_emi)) {
+        return make_float3(0.0f, 0.0f, 0.0f);
+    }
+
+    const float p_emi = 1.0f - p_env;
+    const float effective_pdf = p_emi * light_pdf_emi;
+    const float mis_w_emi = mis_power_heuristic(effective_pdf, bep_emi.pdf);
+    const float st_factor_emi = shadow_terminator_factor(
+        N_face, N_shading, emi_L);
+
+    return Le * bep_emi.value * emi_NdotL * mis_w_emi * st_factor_emi
+        / effective_pdf;
 }
 
 } // namespace qualquer::renderer
