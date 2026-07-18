@@ -300,16 +300,16 @@ __forceinline__ __device__ float3 evaluate_env_nee(
         const uint32_t dim_base) {
 
     const float env_r1 = sobol_rng(params.sobol_directions, pixel_index,
-                                   sample_index, params.frame_index,
+                                   sample_index,
                                    dim_base + kBounceOffsetEnvNee);
     const float env_r2 = sobol_rng(params.sobol_directions, pixel_index,
-                                   sample_index, params.frame_index,
+                                   sample_index,
                                    dim_base + kBounceOffsetEnvNee + 1);
     const float env_r3 = sobol_rng(params.sobol_directions, pixel_index,
-                                   sample_index, params.frame_index,
+                                   sample_index,
                                    dim_base + kBounceOffsetEnvNee + 2);
     const float env_r4 = sobol_rng(params.sobol_directions, pixel_index,
-                                   sample_index, params.frame_index,
+                                   sample_index,
                                    dim_base + kBounceOffsetEnvNee + 3);
 
     const EnvSample es = sample_env_alias_table(
@@ -375,16 +375,16 @@ __forceinline__ __device__ float3 evaluate_emissive_nee(
         const uint32_t dim_base) {
 
     const float emi_r1 = sobol_rng(params.sobol_directions, pixel_index,
-                                   sample_index, params.frame_index,
+                                   sample_index,
                                    dim_base + kBounceOffsetEmissiveNee);
     const float emi_r2 = sobol_rng(params.sobol_directions, pixel_index,
-                                   sample_index, params.frame_index,
+                                   sample_index,
                                    dim_base + kBounceOffsetEmissiveNee + 1);
     const float emi_r3 = sobol_rng(params.sobol_directions, pixel_index,
-                                   sample_index, params.frame_index,
+                                   sample_index,
                                    dim_base + kBounceOffsetEmissiveNee + 2);
     const float emi_r4 = sobol_rng(params.sobol_directions, pixel_index,
-                                   sample_index, params.frame_index,
+                                   sample_index,
                                    dim_base + kBounceOffsetEmissiveNee + 3);
 
     const uint32_t tri_idx = sample_emissive_alias_table(
@@ -528,16 +528,16 @@ __forceinline__ __device__ float3 evaluate_nee_combined(
 
     // -- Env cheap phase: alias table → direction + PDF + hemisphere checks --
     const float env_r1 = sobol_rng(params.sobol_directions, pixel_index,
-                                   sample_index, params.frame_index,
+                                   sample_index,
                                    dim_base + kBounceOffsetEnvNee);
     const float env_r2 = sobol_rng(params.sobol_directions, pixel_index,
-                                   sample_index, params.frame_index,
+                                   sample_index,
                                    dim_base + kBounceOffsetEnvNee + 1);
     const float env_r3 = sobol_rng(params.sobol_directions, pixel_index,
-                                   sample_index, params.frame_index,
+                                   sample_index,
                                    dim_base + kBounceOffsetEnvNee + 2);
     const float env_r4 = sobol_rng(params.sobol_directions, pixel_index,
-                                   sample_index, params.frame_index,
+                                   sample_index,
                                    dim_base + kBounceOffsetEnvNee + 3);
 
     const EnvSample es = sample_env_alias_table(
@@ -565,16 +565,16 @@ __forceinline__ __device__ float3 evaluate_nee_combined(
 
     // -- Emissive cheap phase: alias table → triangle point + geometry checks --
     const float emi_r1 = sobol_rng(params.sobol_directions, pixel_index,
-                                   sample_index, params.frame_index,
+                                   sample_index,
                                    dim_base + kBounceOffsetEmissiveNee);
     const float emi_r2 = sobol_rng(params.sobol_directions, pixel_index,
-                                   sample_index, params.frame_index,
+                                   sample_index,
                                    dim_base + kBounceOffsetEmissiveNee + 1);
     const float emi_r3 = sobol_rng(params.sobol_directions, pixel_index,
-                                   sample_index, params.frame_index,
+                                   sample_index,
                                    dim_base + kBounceOffsetEmissiveNee + 2);
     const float emi_r4 = sobol_rng(params.sobol_directions, pixel_index,
-                                   sample_index, params.frame_index,
+                                   sample_index,
                                    dim_base + kBounceOffsetEmissiveNee + 3);
 
     const uint32_t tri_idx = sample_emissive_alias_table(
@@ -649,7 +649,7 @@ __forceinline__ __device__ float3 evaluate_nee_combined(
     }
 
     const float select_rand = sobol_rng(params.sobol_directions, pixel_index,
-                                        sample_index, params.frame_index,
+                                        sample_index,
                                         dim_base + kBounceOffsetNeeSelect);
 
     if (select_rand < p_env) {

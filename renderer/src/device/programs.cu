@@ -114,7 +114,7 @@ __forceinline__ __device__ float3 trace_sample(
         if (path.bounce >= 2) {
             const uint32_t rr_dim = bounce_dim_base(path.bounce) + kBounceOffsetRR;
             const float rr_rand = sobol_rng(params.sobol_directions, pixel_index,
-                                           sequence_index, params.frame_index, rr_dim);
+                                           sequence_index, rr_dim);
             const float rr_prob = fminf(0.95f,
                 fmaxf(0.05f, fmaxf(path.throughput.x,
                                    fmaxf(path.throughput.y, path.throughput.z))));
@@ -287,9 +287,9 @@ __global__ void __raygen__rg() { // NOLINT(*-reserved-identifier)
             const uint32_t sequence_index =
                 params.frame_index * params.samples_per_frame + s;
             const float jx = sobol_rng(params.sobol_directions, pixel_index,
-                                       sequence_index, params.frame_index, kDimJitterX);
+                                       sequence_index, kDimJitterX);
             const float jy = sobol_rng(params.sobol_directions, pixel_index,
-                                       sequence_index, params.frame_index, kDimJitterY);
+                                       sequence_index, kDimJitterY);
             const float3 primary_dir = compute_primary_dir(idx.x, idx.y, jx, jy);
 
             const float3 sample_radiance = apply_firefly_clamp(
@@ -709,11 +709,11 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
 
     // ---- BRDF sampling (not last bounce) ----
     const float u_lobe = sobol_rng(params.sobol_directions, pixel_index,
-                                   sample_index, params.frame_index, dim_base + kBounceOffsetLobeSelect);
+                                   sample_index, dim_base + kBounceOffsetLobeSelect);
     const float u0 = sobol_rng(params.sobol_directions, pixel_index,
-                               sample_index, params.frame_index, dim_base + kBounceOffsetBrdfXi0);
+                               sample_index, dim_base + kBounceOffsetBrdfXi0);
     const float u1 = sobol_rng(params.sobol_directions, pixel_index,
-                               sample_index, params.frame_index, dim_base + kBounceOffsetBrdfXi1);
+                               sample_index, dim_base + kBounceOffsetBrdfXi1);
 
     const BrdfSample bs = brdf_sample(bp, u_lobe, u0, u1);
 

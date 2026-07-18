@@ -60,15 +60,15 @@ namespace qualquer::renderer {
         /**
          * @brief Computes global per-frame jitter for DLSS-RR mode.
          *
-         * Uses Sobol dim 0/1 with golden-ratio temporal offset but NO
-         * per-pixel Cranley-Patterson rotation. Returns [0,1) in pixel space.
+         * Uses Sobol dim 0/1 with NO per-pixel Cranley-Patterson rotation
+         * (all pixels share the same sub-pixel offset). No temporal offset —
+         * frame_index as sequence_index already advances through the Sobol
+         * (0,2)-sequence.
          */
         float global_jitter(const uint32_t *directions,
                             const uint32_t frame_index,
                             const uint32_t dimension) {
-            uint32_t sobol_val = sobol_sample_host(directions, dimension, frame_index);
-            // Golden-ratio temporal offset (same as device rng, 2654435769 ≈ φ × 2^32)
-            sobol_val += frame_index * 2654435769u;
+            const uint32_t sobol_val = sobol_sample_host(directions, dimension, frame_index);
             return static_cast<float>(sobol_val >> 8) * 0x1p-24f;
         }
 

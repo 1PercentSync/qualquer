@@ -6,11 +6,9 @@
  */
 
 // 128-dimension Sobol low-discrepancy sequence with per-pixel additive
-// Cranley-Patterson rotation (pcg_hash) and golden-ratio temporal offset.
+// Cranley-Patterson rotation (pcg_hash). No per-frame temporal offset —
+// frame-to-frame decorrelation is handled by the advancing sequence_index.
 // Dimensions >= 128 fall back to xxhash32.
-//
-// Replaces the Phase 4 PCG-only RNG. Dimension allocation is unchanged so
-// call-site dimension indices remain valid.
 
 #include <cstdint>
 
@@ -151,8 +149,12 @@ __forceinline__ __device__ uint32_t sobol_sample(const uint32_t *directions,
  * @brief Generates a decorrelated quasi-random sample for path tracing.
  *
  * For dim < 128: Sobol sequence + additive Cranley-Patterson rotation (per-pixel
- * pcg_hash offset) + golden-ratio temporal offset. The additive shift preserves
- * Sobol low-discrepancy (XOR would break the stratification structure).
+ * pcg_hash offset). The additive shift preserves Sobol low-discrepancy (XOR
+ * would break the stratification structure). No per-frame temporal offset —
+ * the advancing sequence_index already provides frame-to-frame decorrelation,
+ * and a per-frame additive offset destroys the Fourier-mode cancellation that
+ * gives Sobol its ~n^-1 convergence rate (A/B verified: up to 589x RMSE
+ * regression at n=65536).
  *
  * For dim >= 128: falls back to xxhash32 (96-bit multi-dimensional mixing).
  *
@@ -162,14 +164,12 @@ __forceinline__ __device__ uint32_t sobol_sample(const uint32_t *directions,
  *                       use frame_index * samples_per_frame + s so path dims
  *                       never depend on Separate Sum sample_count (zero under
  *                       DLSS). DLSS ON host jitter is separate (global_jitter).
- * @param frame_index    Monotonic frame counter for temporal decorrelation.
  * @param dimension      RNG dimension (see dimension allocation constants).
  * @return Uniform float in [0, 1).
  */
 __forceinline__ __device__ float sobol_rng(const uint32_t *directions,
                                            const uint32_t pixel_index,
                                            const uint32_t sequence_index,
-                                           const uint32_t frame_index,
                                            const uint32_t dimension) {
     if (dimension >= kSobolDims) {
         const uint32_t h = xxhash32(pixel_index, sequence_index, dimension);
@@ -178,9 +178,7 @@ __forceinline__ __device__ float sobol_rng(const uint32_t *directions,
     uint32_t sobol_val = sobol_sample(directions, dimension, sequence_index);
     // Cranley-Patterson rotation: additive shift preserves low-discrepancy.
     const uint32_t pixel_offset = pcg_hash(pixel_index * 0x1f1f1f1fu ^ dimension);
-    // Golden-ratio temporal offset (2654435769 ≈ φ × 2^32).
-    const uint32_t temporal_offset = frame_index * 2654435769u;
-    sobol_val += pixel_offset + temporal_offset;
+    sobol_val += pixel_offset;
     // >> 8 * 2^-24 maps uint32 to [0,1); division by 0xFFFFFFFF can yield 1.0.
     return static_cast<float>(sobol_val >> 8) * 0x1p-24f;
 }
