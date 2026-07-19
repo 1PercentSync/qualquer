@@ -1,32 +1,5 @@
 ## 3. 已确认问题
 
-### QRP-013：single-sided primary pass-through 生成互相矛盾的 DLSS guides
-
-- 严重度：高
-- 置信度：高
-- 类型：DLSS-RR guide 一致性
-
-#### 代码证据
-
-- `renderer/src/device/programs.cu:172-181` 只依据 bounce 0 返回的 `hit_distance >= 0` 判定 `primary_is_hit`，并保存 `cam_origin + primary_dir * hit_distance` 作为 motion-vector 世界位置。
-- `renderer/src/device/programs.cu:460-488` 的 single-sided 背面 pass-through 返回正的 `hit_t`，因此 raygen 会把不可见背面判定为 primary surface。
-- 同一路径在 `renderer/src/device/programs.cu:468-482` 把 depth、normal、roughness 和 albedo 写成“无表面”默认值。
-- 真正可见的后方表面位于后续 bounce，而正常 aux 写入被 `renderer/src/device/programs.cu:633-640` 的 `bounce == 0` 条件排除。
-
-#### 触发条件
-
-DLSS-RR 开启，primary ray 先从背面命中 single-sided 三角形，并继续命中后方表面或环境。
-
-#### 影响
-
-同一像素的 guides 描述了三个不同对象：
-
-- motion vector 使用不可见背面的世界位置；
-- depth/normal/roughness/albedo 表示“无表面”；
-- noisy color 来自后方可见表面或环境。
-
-这种不一致会破坏 DLSS-RR 的重投影和表面分类，可能造成拖影、边缘闪烁、错误历史接受或拒绝。
-
 ### QRP-014：合法的无材质 glTF primitive 被当作加载错误
 
 - 严重度：中
