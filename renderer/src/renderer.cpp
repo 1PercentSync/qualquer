@@ -509,6 +509,7 @@ namespace qualquer::renderer {
         if (meshes.empty()) {
             // No geometry to trace; submit_cuda must keep the traversable at 0 so
             // raygen skips optixTrace.
+            tlas_instance_count_ = 0;
             spdlog::warn("Renderer::load_scene: empty scene, no acceleration structures built");
             return;
         }
