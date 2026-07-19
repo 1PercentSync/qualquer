@@ -110,6 +110,12 @@ namespace qualquer::app {
          */
         [[nodiscard]] renderer::EnvLightData env_light() const;
 
+        /** @brief Source equirect width (0 when no env loaded). */
+        [[nodiscard]] uint32_t env_source_width() const { return env_source_width_; }
+
+        /** @brief Source equirect height (0 when no env loaded). */
+        [[nodiscard]] uint32_t env_source_height() const { return env_source_height_; }
+
         /**
          * @brief Packed emissive-triangle light resources for SceneRenderInput / LaunchParams.
          *
@@ -160,6 +166,12 @@ namespace qualquer::app {
 
         /** @brief Alias table height (downsampled; may be smaller than source equirect). */
         uint32_t env_alias_height_ = 0;
+
+        /** @brief Source equirect width (for UI display; unaffected by alias downsampling). */
+        uint32_t env_source_width_ = 0;
+
+        /** @brief Source equirect height (for UI display; unaffected by alias downsampling). */
+        uint32_t env_source_height_ = 0;
 
         /** @brief Sin-weighted total luminance (alias table normalization constant). */
         float env_total_luminance_ = 0.0f;

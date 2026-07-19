@@ -922,6 +922,8 @@ namespace qualquer::app {
         env_cubemap_texture_ = std::move(cubemap);
         env_alias_width_ = alias_result.alias_width;
         env_alias_height_ = alias_result.alias_height;
+        env_source_width_ = equirect_w;
+        env_source_height_ = equirect_h;
         env_total_luminance_ = alias_result.total_luminance;
 
         spdlog::info("Env map ready: cubemap tex={}, alias table {}x{} ({} entries)",
@@ -936,6 +938,8 @@ namespace qualquer::app {
         env_alias_table_.free();
         env_alias_width_ = 0;
         env_alias_height_ = 0;
+        env_source_width_ = 0;
+        env_source_height_ = 0;
         env_total_luminance_ = 0.0f;
     }
 

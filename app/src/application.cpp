@@ -599,8 +599,8 @@ namespace qualquer::app {
             .triangles = total_triangles,
             .vertices = total_vertices,
             .emissive_triangles = scene_loader_.emissive_light().count,
-            .env_map_width = scene_loader_.env_light().alias_width,
-            .env_map_height = scene_loader_.env_light().alias_height,
+            .env_map_width = scene_loader_.env_source_width(),
+            .env_map_height = scene_loader_.env_source_height(),
         };
     }
 
