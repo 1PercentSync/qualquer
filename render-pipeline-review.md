@@ -1,31 +1,5 @@
 ## 3. 已确认问题
 
-### QRP-017：Blend alpha 当前按完全 opaque 渲染，同时仍支付无效 any-hit 成本
-
-- 严重度：高（材质正确性）/ 中（性能）
-- 置信度：高
-- 类型：glTF alpha semantics / 确定的无效 GPU 工作
-
-#### 代码证据
-
-- `app/src/scene_loader.cpp:533-534` 只有 `Opaque` 材质标为 opaque；`Blend` 与 `Mask` 都进入非 opaque 路径。
-- `optix/src/accel_structure.cpp:27-30` 对所有非 opaque geometry 设置 `OPTIX_GEOMETRY_FLAG_REQUIRE_SINGLE_ANYHIT_CALL`。
-- `renderer/src/device/programs.cu:745-772` 的 any-hit 在检查 `alpha_mode` 前无条件读取 index/vertex、插值 UV/alpha 并执行 bindless `tex2D`。
-- `renderer/src/device/programs.cu:774-778` 只有 Mask 模式会依据 alpha 调用 `optixIgnoreIntersection()`；Blend 模式当前不改变遍历结果。
-- `tasks/phase4.5.md:52-55` 明确把 Blend stochastic alpha 留到尚未完成的 Step 16。
-
-#### 触发条件
-
-当前版本加载含 `alphaMode = BLEND` 的材质。
-
-#### 影响
-
-每个 Blend candidate intersection（包括 shadow ray）都会执行 any-hit、随机纹理访问与插值，但无论 alpha 值为何都接受命中：半透明/透明 texel 在 camera、indirect 与 shadow rays 中均表现为完全不透明，错误遮挡背景与光照。与此同时，该成本会削弱 RT core traversal、增加纹理/L1/L2 压力和 warp divergence；大量树叶、粒子或叠层 Blend 几何时尤其明显。
-
-#### 判断边界
-
-这是任务清单已知、尚未完成的 Step 16，不是隐藏的规划遗漏；但以当前 HEAD 为审查对象时，仍是确定的 glTF 呈现缺口和无效工作。完成 stochastic alpha 后才具有正确的期望透射语义；实际性能损失幅度需用 Nsight 实测。
-
 ### QRP-018：single-sided pass-through 的起点推进量随相机到命中点距离线性增长
 
 - 严重度：中高
