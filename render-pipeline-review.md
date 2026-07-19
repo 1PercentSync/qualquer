@@ -1,24 +1,5 @@
 ## 3. 已确认问题
 
-### QRP-018：single-sided pass-through 的起点推进量随相机到命中点距离线性增长
-
-- 严重度：中高
-- 置信度：高
-- 类型：光线起点鲁棒性 / 几何漏穿
-
-#### 代码证据
-
-- `renderer/src/device/programs.cu:463-466` 计算 `pass_eps = max(hit_t * 1e-4, 1e-6)`，随后把新起点设置为 `ray_origin + ray_dir * (hit_t + pass_eps)`。
-- 同文件其他正常 surface bounce 已使用尺度鲁棒的 `offset_ray_origin()`；pass-through 没有采用等价的 ULP/坐标尺度方法。
-
-#### 触发条件
-
-primary 或 secondary ray 从背面命中较远的 single-sided 三角形，且它后方 `hit_t × 1e-4` 距离内还有应被命中的几何。命中距离为 10,000 world units 时，推进空隙达到 1 world unit。
-
-#### 影响
-
-新光线起点可能直接越过后方薄层、贴近表面或小尺度模型，造成几何消失、漏光或路径不连续。
-
 ### QRP-019：世界空间 tangent 保留模型缩放长度，导致 normal map 强度随实例缩放改变
 
 - 严重度：高
