@@ -140,51 +140,6 @@ __forceinline__ __device__ float mis_power_heuristic(const float pdf_a,
     return 1.0f / (1.0f + r * r);
 }
 
-// ---- Shadow terminator correction (Chiang et al. 2019) ---------------------
-
-/**
- * @brief Smooth geometry factor to eliminate hard shadow-terminator artifacts.
- *
- * Low-poly meshes with smooth shading normals create a mismatch between the
- * geometric and shading hemispheres. Near the geometric terminator (where
- * N_geo·L ≈ 0 but N_shading·L > 0), the shadow ray origin sits close to the
- * geometric surface and gets self-occluded, producing hard shadow edges.
- *
- * This factor smoothly attenuates the NEE contribution as the geometric
- * cosine drops below the shading cosine, eliminating the hard cutoff.
- *
- * @param N_geo     Geometric (face) normal (normalized).
- * @param N_shading Shading normal (post-normal-map, normalized).
- * @param L         Light direction (normalized, facing away from surface).
- * @return Correction factor in [0, 1]; multiply into the NEE contribution.
- */
-__forceinline__ __device__ float shadow_terminator_factor(const float3 N_geo,
-                                                          const float3 N_shading,
-                                                          const float3 L) {
-    const float NgdotL = dot(N_geo, L);
-    const float NdotL  = dot(N_shading, L);
-
-    // Geometric normal sees no light at all.
-    if (NgdotL <= 0.0f) {
-        return 0.0f;
-    }
-    // Geometric agrees with or exceeds shading — no correction needed.
-    if (NgdotL >= NdotL) {
-        return 1.0f;
-    }
-
-    // ensure_normal_consistency references N_face, guaranteeing
-    // dot(N_face, N_shading) >= 0 by construction.
-    const float NgdotNs = dot(N_geo, N_shading);
-
-    // Chiang 2019 Eq. 1: min(1, ratio) before Hermite smoothing.
-    const float G = fminf(NgdotL / (NdotL * NgdotNs), 1.0f);
-
-    // Smooth polynomial: G + G² − G³ = G(1 + G(1 − G)).
-    // Monotonic 0→1, derivative at G=1 is 0 (smooth arrival).
-    return G + G * G - G * G * G;
-}
-
 // ---- Firefly clamp ----------------------------------------------------------
 
 /**

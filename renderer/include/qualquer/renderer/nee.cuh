@@ -258,8 +258,7 @@ __forceinline__ __device__ float emissive_light_pdf(
  *
  * @param bp         Shading-point BRDF parameters (from init_brdf_params).
  * @param offset_pos Ray origin offset from the hit surface.
- * @param N_face     Geometric face normal (for shadow-terminator correction).
- * @param N_shading  Shading normal (must match bp.N).
+ * @param N_face     Geometric face normal (hemisphere gate).
  * @param u0         Uniform random [0,1) — alias bin selection.
  * @param u1         Uniform random [0,1) — alias accept/reject.
  * @param u2         Uniform random [0,1) — horizontal sub-pixel jitter.
@@ -271,7 +270,6 @@ __forceinline__ __device__ float3 evaluate_env_nee(
         const BrdfParams &bp,
         const float3 offset_pos,
         const float3 N_face,
-        const float3 N_shading,
         const float u0, const float u1, const float u2, const float u3,
         const float q) {
 
@@ -286,7 +284,7 @@ __forceinline__ __device__ float3 evaluate_env_nee(
         return make_float3(0.0f, 0.0f, 0.0f);
     }
 
-    const float NdotL = dot(N_shading, L);
+    const float NdotL = dot(bp.N, L);
     if (NdotL <= 0.0f) {
         return make_float3(0.0f, 0.0f, 0.0f);
     }
@@ -304,9 +302,8 @@ __forceinline__ __device__ float3 evaluate_env_nee(
     const BrdfEvalResult bep = brdf_eval_and_pdf(bp, L, NdotL);
 
     const float mis_w = mis_power_heuristic(es.pdf * q, bep.pdf);
-    const float st_factor = shadow_terminator_factor(N_face, N_shading, L);
 
-    return env_color * bep.value * NdotL * mis_w * st_factor / (es.pdf * q);
+    return env_color * bep.value * NdotL * mis_w / (es.pdf * q);
 }
 
 /**
@@ -314,8 +311,7 @@ __forceinline__ __device__ float3 evaluate_env_nee(
  *
  * @param bp         Shading-point BRDF parameters (from init_brdf_params).
  * @param offset_pos Ray origin offset from the hit surface.
- * @param N_face     Geometric face normal (for shadow-terminator correction).
- * @param N_shading  Shading normal (must match bp.N).
+ * @param N_face     Geometric face normal (hemisphere gate).
  * @param u0         Uniform random [0,1) — alias bin selection.
  * @param u1         Uniform random [0,1) — alias accept/reject.
  * @param u2         Uniform random [0,1) — barycentric ξ₀.
@@ -327,7 +323,6 @@ __forceinline__ __device__ float3 evaluate_emissive_nee(
         const BrdfParams &bp,
         const float3 offset_pos,
         const float3 N_face,
-        const float3 N_shading,
         const float u0, const float u1, const float u2, const float u3,
         const float q) {
 
@@ -364,7 +359,7 @@ __forceinline__ __device__ float3 evaluate_emissive_nee(
         return make_float3(0.0f, 0.0f, 0.0f);
     }
 
-    const float NdotL_emi = dot(N_shading, L);
+    const float NdotL_emi = dot(bp.N, L);
     if (NdotL_emi <= 0.0f) {
         return make_float3(0.0f, 0.0f, 0.0f);
     }
@@ -397,9 +392,8 @@ __forceinline__ __device__ float3 evaluate_emissive_nee(
     }
 
     const float mis_w_emi = mis_power_heuristic(light_pdf_emi * q, bep_emi.pdf);
-    const float st_factor_emi = shadow_terminator_factor(N_face, N_shading, L);
 
-    return Le * bep_emi.value * NdotL_emi * mis_w_emi * st_factor_emi
+    return Le * bep_emi.value * NdotL_emi * mis_w_emi
         / (light_pdf_emi * q);
 }
 

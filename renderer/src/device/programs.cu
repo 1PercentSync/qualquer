@@ -717,18 +717,18 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
             if (u0 < 0.5f) {
                 u0 = 2.0f * u0;
                 nee_radiance = evaluate_env_nee(
-                    bp, offset_pos, N_face, N_brdf, u0, u1, u2, u3, q);
+                    bp, offset_pos, N_face, u0, u1, u2, u3, q);
             } else {
                 u0 = 2.0f * u0 - 1.0f;
                 nee_radiance = evaluate_emissive_nee(
-                    bp, offset_pos, N_face, N_brdf, u0, u1, u2, u3, q);
+                    bp, offset_pos, N_face, u0, u1, u2, u3, q);
             }
         } else if (env_active) {
             nee_radiance = evaluate_env_nee(
-                bp, offset_pos, N_face, N_brdf, u0, u1, u2, u3, 1.0f);
+                bp, offset_pos, N_face, u0, u1, u2, u3, 1.0f);
         } else {
             nee_radiance = evaluate_emissive_nee(
-                bp, offset_pos, N_face, N_brdf, u0, u1, u2, u3, 1.0f);
+                bp, offset_pos, N_face, u0, u1, u2, u3, 1.0f);
         }
     }
 
