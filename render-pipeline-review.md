@@ -31,42 +31,6 @@ host 侧 `submit_cuda()` 可能在参数上传处等待此前 compute-stream 工
 
 QRP-O05 关注 16 KiB 不变 Sobol 表的 constant-cache 与重复传输收益；本项进一步确认重复传输还走 pageable staging。可将不变 Sobol 数据改为一次上传的独立只读/constant 资源，并为真正变化的小型参数使用持久 pinned staging ring；若直接把当前栈地址注册或改成临时 pinned 对象，则必须重新保证其生命周期覆盖异步 copy。
 
-### QRP-024：present semaphore 的 signal stage 没有与最终 PRESENT layout transition 建立完整依赖
-
-- 严重度：高
-- 置信度：中高
-- 类型：Vulkan Synchronization2 / presentation
-
-#### 代码证据
-
-- `renderer/src/renderer.cpp:1163-1190` 最终 barrier 把 swapchain image 从 `COLOR_ATTACHMENT_OPTIMAL` 转为 `PRESENT_SRC_KHR`，其 `srcStageMask = COLOR_ATTACHMENT_OUTPUT`，`dstStageMask = BOTTOM_OF_PIPE`。
-- 在 Synchronization2 中，`BOTTOM_OF_PIPE` 用于第二 synchronization scope 时等价于 `NONE`。
-- `app/src/application.cpp:416-422` 随后 signal `render_finished`，但 signal stage 仅为 `VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT`，不是 `ALL_COMMANDS`。
-
-#### 官方依据
-
-Khronos Synchronization2 指南给出两种完整链：
-
-1. signal 使用 `ALL_COMMANDS`，则 semaphore 自动覆盖其前的最终 layout transition；或
-2. signal 收窄到 `COLOR_ATTACHMENT_OUTPUT` 时，render-pass 外部依赖的两侧 stage 都调整为 `COLOR_ATTACHMENT_OUTPUT`，让最终 transition 与 signal stage 对接。
-
-`vkQueueSubmit2` 的 signal first synchronization scope 虽包含同 batch 中更早的 commands，但仍受 signal `stageMask` 及其逻辑更早 stages 限制。当前代码混合了两种写法：最终 transition 的第二 scope 是 `NONE`，signal 又收窄为 graphics stage，没有按指南建立 transition → signal 的明确执行依赖。
-
-- <https://docs.vulkan.org/guide/latest/synchronization_examples.html>
-- <https://docs.vulkan.org/refpages/latest/refpages/source/VkPipelineStageFlagBits2.html>
-
-#### 触发条件
-
-GPU/driver 把最终 layout transition 推迟到 color output 完成之后，而 `ALL_GRAPHICS` signal 已满足；present queue 随后消费已 signal 的 semaphore。
-
-#### 影响
-
-presentation engine 可能在 image 完成 `PRESENT_SRC_KHR` transition 前开始使用它。表现依赖实现，可能是同步验证 hazard、间歇画面异常，或在当前驱动上因保守调度而暂时不可见。
-
-#### 修复方向
-
-最清晰的修复是将 `render_finished` signal stage 设为 `VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT`。若确需收窄，应严格按 Khronos 示例让最终外部依赖/explicit barrier 与 signal stage 对接，并用 synchronization validation 复核。
-
 ### QRP-025：DLSS 关闭或不可用时仍常驻分配双份完整 guides 与 DLSS output
 
 - 严重度：高（VRAM / 可用性）
