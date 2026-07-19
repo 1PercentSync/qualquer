@@ -1,24 +1,5 @@
 ## 3. 已确认问题
 
-### QRP-016：glTF `magFilter` 被完全忽略
-
-- 严重度：低至中
-- 置信度：高
-- 类型：纹理采样兼容性
-
-#### 代码证据
-
-- `app/src/scene_loader.cpp:168-196` 的 `convert_gltf_sampler()` 只检查 `sampler.minFilter`，从未读取 `sampler.magFilter`。
-- CUDA texture object 只有一个 `filterMode` 同时服务放大与单 mip 内过滤；当前实现选择 minification 的 base filter，未记录这一不可表示性或采用显式退化策略。
-
-#### 触发条件
-
-glTF sampler 显式指定的 `magFilter` 与当前由 `minFilter` 推导出的 base filter 不同，或只指定 `magFilter = NEAREST`。
-
-#### 影响
-
-纹理放大时使用错误的 nearest/linear 模式，表现为本应像素化的纹理被平滑，或本应平滑的纹理出现块状边缘。glTF 2.0 要求实现遵循 wrapping，并建议遵循显式 filtering mode；这里属于可观测的材质呈现偏差。
-
 ### QRP-017：Blend alpha 当前按完全 opaque 渲染，同时仍支付无效 any-hit 成本
 
 - 严重度：高（材质正确性）/ 中（性能）
