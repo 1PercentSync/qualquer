@@ -2,42 +2,6 @@
 
 ---
 
-### QRP-005：动态修改 spp 会重复或回退 Sobol sequence index
-
-- 严重度：中高
-- 置信度：高
-- 类型：采样序列正确性
-
-#### 代码证据
-
-- `renderer/src/device/programs.cu:270-273` 与 `renderer/src/device/programs.cu:286-288` 均计算：`sequence_index = frame_index * samples_per_frame + s`。
-- `renderer/include/qualquer/renderer/rng.cuh:163-178` 将该值直接用作 Sobol index / hash 输入。
-- `renderer/src/renderer.cpp:659-681` 允许 `samples_per_frame` 动态改变而不 reset。
-- `Renderer::frame_counter_` 在暂停/空场景等没有新 sample 的 frame 也继续递增，而 sequence index 不使用真实累计 sample base；暂停后恢复会跳过整段 Sobol points。
-
-#### 判断
-
-只有 spp 固定时，`frame_index * spp + s` 才形成连续且唯一的样本索引。spp 改变后，该公式可以回退、重复或跳过索引。
-
-#### 触发示例
-
-前两帧 spp 为 2 时使用索引 `2,3`、`4,5`；后续帧把 spp 改为 1 时，公式可重新生成已使用的索引。
-
-#### 影响
-
-- 重复路径样本降低有效样本数并破坏 Sobol 序列质量；
-- 当前 UI 手动调节 spp 可触发；
-- 暂停 accumulation、长时间使用 DLSS 后切回 fallback，或空场景停留后加载场景会形成与实际收集样本数无关的大段跳跃；
-- 后续自适应 spp 若逐帧变化会持续触发。
-
-#### 长时运行边界
-
-`frame_index * samples_per_frame` 与 `sample_count + effective_spp` 都在 `uint32_t` 中运算。即使 spp 固定，累计到 `2^32` samples 后也会回绕；64 spp、60 FPS 下约 13 天即可达到。sequence 会重复，Separate Sum 的 count 还会变成 0，使 tonemap 短暂输出黑并让后续 raygen误进入覆盖模式。
-
-#### 与 temporal offset 提交的关系
-
-该问题与移除 golden-ratio temporal offset 相互独立。`cc05ace` 已正确同步全部调用点；问题在于作为跨帧推进来源的 `sequence_index` 未保存累计样本基数，且缺少明确的溢出策略。
-
 ---
 
 ### QRP-006：单面材质背面在 bounce ray 与 shadow ray 中语义不一致
