@@ -1,39 +1,5 @@
 ## 3. 已确认问题
 
----
-
----
-
----
-
----
-
----
-
----
-
-### QRP-010：环境 alias 的 cell 内纬度 jitter 与返回 solid-angle PDF 不一致
-
-- 严重度：中
-- 置信度：高
-- 类型：采样 PDF 一致性
-
-#### 代码证据
-
-- `renderer/include/qualquer/renderer/nee.cuh:71-81` 在选中 alias cell 后，对 equirectangular `u/v` 均匀 jitter，并以 jitter 后的 `theta` 生成方向。
-- 环境 alias 权重由 cell 中心或块代表纬度的 `sin(theta)` 建立：`app/src/env_alias_table.cpp:73-90`。
-- 返回 PDF 使用 cell 离散概率到 solid angle 的换算，但未补偿 cell 内均匀 `v` jitter 对应的 `sin(theta_center) / sin(theta_sample)` 差异。
-
-#### 触发条件
-
-环境 importance sampling；alias 分辨率较低或样本靠近极区时误差增大。
-
-#### 影响
-
-实际方向采样密度与报告给 MIS/估计器的 PDF 不完全一致，形成小幅偏差。alias 下采样越激进，单 cell 纬度跨度越大。
-
----
-
 ### QRP-011：空场景早退保留上一场景的 TLAS instance 统计
 
 - 严重度：低
