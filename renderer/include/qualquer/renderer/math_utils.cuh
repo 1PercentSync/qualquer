@@ -143,15 +143,21 @@ __forceinline__ __device__ float3 get_shading_normal(
     const float tz = sqrtf(fmaxf(0.0f, 1.0f - tx * tx - ty * ty));
 
     // Degenerate tangent guard
-    if (dot(T_world, T_world) < 1e-6f) {
+    const float T_len_sq = dot(T_world, T_world);
+    if (T_len_sq < 1e-6f) {
         return N;
     }
 
-    // TBN uses unnormalized interpolated tangent per MikkTSpace requirement
-    // (mikktspace.h:120) and glTF spec §1386 formula. No Gram-Schmidt.
-    const float3 B = cross(N, T_world) * tangent_w;
+    // Normalize T to remove instance scale. MikkTSpace (mikktspace.h:120)
+    // recommends unnormalized interpolated T to preserve area-weighted
+    // averaging at shared vertices, but glTF stores unit tangents (spec
+    // §1289), so interpolation-induced magnitude variation is negligible.
+    // Instance scale however can be arbitrarily large and would otherwise
+    // make normal map perturbation strength vary with instance transform.
+    const float3 T_norm = T_world * rsqrtf(T_len_sq);
+    const float3 B = cross(N, T_norm) * tangent_w;
 
-    return normalize(T_world * tx + B * ty + N * tz);
+    return normalize(T_norm * tx + B * ty + N * tz);
 }
 
 } // namespace
