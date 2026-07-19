@@ -202,8 +202,14 @@ struct LaunchParams {
     /** @brief Render resolution height in pixels (raygen launch Y dimension). */
     uint32_t height;
 
-    /** @brief Monotonic frame counter; uploaded for device-side temporal variation (e.g. RNG seed). */
-    uint32_t frame_index;
+    /**
+     * @brief Base Sobol sequence index for this frame's first sample.
+     *
+     * Raygen computes per-sample index as sequence_base + s. Advances by
+     * samples_per_frame after each frame that produces samples; reset to 0
+     * on accumulation reset. Monotonically increasing regardless of spp changes.
+     */
+    uint32_t sequence_base;
 
     /** @brief TLAS handle for optixTrace traversal. */
     OptixTraversableHandle traversable;
@@ -237,7 +243,7 @@ struct LaunchParams {
      * 0 signals raygen to overwrite the write buffer directly (first sample
      * after reset/init) instead of accumulating from the read buffer.
      * Only used when dlss_enabled == 0 (Separate Sum fallback).
-     * Not a Sobol path sequence index — that is frame_index * samples_per_frame + s.
+     * Not a Sobol path sequence index — that is sequence_base + s.
      */
     uint32_t sample_count;
 

@@ -81,7 +81,7 @@ __forceinline__ __device__ void write_aux_no_surface(
 /// When capture_primary is true (first sample), writes primary hit/miss
 /// info into the output parameters for MV and sky aux-default computation.
 ///
-/// @param sequence_index Path sequence index for Sobol (frame_index * spp + s);
+/// @param sequence_index Path sequence index for Sobol (sequence_base + s);
 ///                       independent of Separate Sum sample_count.
 __forceinline__ __device__ float3 trace_sample(
     const float3 cam_origin,
@@ -268,9 +268,7 @@ __global__ void __raygen__rg() { // NOLINT(*-reserved-identifier)
         primary_dir_saved = primary_dir;
 
         for (uint32_t s = 0; s < params.samples_per_frame; ++s) {
-            // Path sequence is independent of sample_count (always 0 under DLSS).
-            const uint32_t sequence_index =
-                params.frame_index * params.samples_per_frame + s;
+            const uint32_t sequence_index = params.sequence_base + s;
             const float3 sample_radiance = apply_firefly_clamp(
                 trace_sample(cam_origin, primary_dir, pixel_index, sequence_index,
                              s == 0, primary_hit_pos, primary_sky_color,
@@ -282,10 +280,8 @@ __global__ void __raygen__rg() { // NOLINT(*-reserved-identifier)
         // DLSS OFF: per-pixel Sobol + CP rotation, per-sample jitter.
         // Each sample gets a different primary ray for Monte Carlo convergence.
         // No primary capture — aux data has no consumer when DLSS is off.
-        // Same sequence formula as DLSS ON so path dims never reuse sample_count.
         for (uint32_t s = 0; s < params.samples_per_frame; ++s) {
-            const uint32_t sequence_index =
-                params.frame_index * params.samples_per_frame + s;
+            const uint32_t sequence_index = params.sequence_base + s;
             const float jx = sobol_rng(params.sobol_directions, pixel_index,
                                        sequence_index, kDimJitterX);
             const float jy = sobol_rng(params.sobol_directions, pixel_index,
@@ -470,11 +466,10 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
         // pixels uncleared"). The pass-through surface has no meaningful
         // material attributes, so write "no surface" values matching the
         // sky/miss convention used by the reference projects.
-        // First sample of the frame batch: sequence_index == frame_index * spp.
+        // First sample of the frame batch: sequence_index == sequence_base.
         if (params.dlss_enabled
             && payload_get_bounce() == 0
-            && payload_get_sample_index()
-                   == params.frame_index * params.samples_per_frame) {
+            && payload_get_sample_index() == params.sequence_base) {
             const uint3 li = optixGetLaunchIndex();
             write_aux_no_surface(static_cast<int>(li.x), static_cast<int>(li.y),
                                  make_float4(0.0f, 0.0f, 0.0f, 0.0f));
@@ -636,11 +631,10 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
     // ---- Aux G-buffer writes (first sample's bounce 0 only) ----
     // D37: all samples share per-frame jitter → primary ray identical →
     // aux data identical. Write once at the first sample of the batch
-    // (sequence_index == frame_index * spp). DLSS OFF: no aux consumer.
+    // (sequence_index == sequence_base). DLSS OFF: no aux consumer.
     if (params.dlss_enabled
         && bounce == 0
-        && payload_get_sample_index()
-               == params.frame_index * params.samples_per_frame) {
+        && payload_get_sample_index() == params.sequence_base) {
         const int sx = static_cast<int>(launch_idx.x);
         const int sy = static_cast<int>(launch_idx.y);
 

@@ -688,6 +688,9 @@ namespace qualquer::renderer {
         const bool needs_reset = camera_changed || content_changed || reset_requested_;
         if (has_new_samples) {
             reset_requested_ = false;
+            if (needs_reset) {
+                sequence_base_ = 0;
+            }
             // Estimator bias change must not mix with prior DLSS temporal history.
             if (dlss_active && max_clamp_changed) {
                 invalidate_dlss_history();
@@ -762,7 +765,7 @@ namespace qualquer::renderer {
             .color_input = read.color.tex_object(),
             .width = render_width,
             .height = render_height,
-            .frame_index = frame_counter_,
+            .sequence_base = sequence_base_,
             .traversable = accel_.tlas_handle(),
             .geometry_infos = geometry_info_buffer_.data(),
             .materials = scene.materials.data(),
@@ -963,6 +966,7 @@ namespace qualquer::renderer {
                                          : chain_count + effective_spp;
             }
             accum_index_ = write_slot;
+            sequence_base_ += effective_spp;
         }
         ++frame_counter_;
     }

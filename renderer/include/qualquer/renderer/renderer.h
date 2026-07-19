@@ -484,6 +484,16 @@ namespace qualquer::renderer {
          */
         uint32_t frame_counter_ = 0;
 
+        /**
+         * @brief Cumulative Sobol sequence base for the next frame.
+         *
+         * Advances by samples_per_frame after each frame that produces samples.
+         * Reset to 0 on accumulation reset. Monotonically increasing regardless
+         * of dynamic spp changes — unlike frame_index * spp which can repeat or
+         * skip indices when spp varies.
+         */
+        uint32_t sequence_base_ = 0;
+
         /** @brief Actual TLAS instance count after same-node primitive folding. */
         uint32_t tlas_instance_count_ = 0;
 
