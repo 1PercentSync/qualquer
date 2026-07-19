@@ -6,26 +6,6 @@
 
 ---
 
-### QRP-007：运行时环境图加载失败后，旧环境已销毁但累积未重置
-
-- 严重度：中高
-- 置信度：高
-- 类型：失败路径 / history invalidation
-
-#### 代码证据
-
-- `app/src/scene_loader.cpp:804-805` 的 `load_env_map()` 在验证新资源前先调用 `destroy_env_map()`。
-- `app/src/application.cpp:234-250` 仅在运行时加载成功分支调用 `renderer_.reset_accumulation()`；失败分支只设置错误消息。
-- 启动和 `switch_scene()` 后的 env reload（`application.cpp:129-133,562-566`）还忽略 `load_env_map()` 的 false 返回值；资源已清空时 UI/config 仍可显示旧路径。
-
-#### 触发条件
-
-运行时已有有效环境图和累积结果，随后选择损坏、不支持或无法读取的新环境图。
-
-#### 影响
-
-场景照明实际上从旧环境变为无环境，但 Separate Sum 和 DLSS history 仍含旧环境贡献，直到其他事件触发 reset；UI/config 与实际 GPU resource 还可能不一致。旧贡献会错误保留或逐帧淡出，而不是立即反映失败后的真实状态。
-
 ---
 
 ### QRP-008：`mis_power_heuristic()` 将单侧无穷 PDF 错误处理为 0.5
@@ -1103,7 +1083,7 @@ warp 内相同维度读取具有 constant-memory broadcast 优势。
 
 #### 优化机会
 
-环境光与 glTF scene geometry/material 生命周期独立；普通 scene switch 不需要销毁不变的 env cubemap/alias table。拆分 scene resources 与 environment resources 的所有权可降低切换延迟、CPU 峰值与 GPU allocation churn，并减少 QRP-007 的失败窗口。只有 env path 变化或显式卸载时才重建环境资源。
+环境光与 glTF scene geometry/material 生命周期独立；普通 scene switch 不需要销毁不变的 env cubemap/alias table。拆分 scene resources 与 environment resources 的所有权可降低切换延迟、CPU 峰值与 GPU allocation churn。只有 env path 变化或显式卸载时才重建环境资源。
 
 ### QRP-O13：BRDF lobe selection 只看 Schlick Fresnel，可能把多数 samples 分给近零能量 lobe
 
