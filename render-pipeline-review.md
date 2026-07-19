@@ -62,36 +62,6 @@ native render resolution 等于 display resolution 时，仅这些数组约占 `
 
 color ping-pong 与事件可保持常驻；aux guides 和 `dlss_output_` 应只在 DLSS 实际可用且启用时按需创建，在 feature release 后按策略立即释放或进入明确缓存预算。若保留热切换缓存，应在 UI/统计中显示其 VRAM 成本并允许回收，而不是无条件常驻。
 
-### QRP-027：BC block 对齐通过重采样整张纹理实现，改变非 4 倍数图像的内容与纵横比
-
-- 严重度：高（纹理正确性）
-- 置信度：高
-- 类型：纹理预处理
-
-#### 代码证据
-
-- `app/src/texture.cpp:116-120` 定义 4×4 BC block 对齐。
-- `app/src/texture.cpp:134-162` 把 level 0 的逻辑尺寸从 `(w,h)` 向上取整为 `(align4(w),align4(h))`，并用 `stbir_resize_*` 将整张源图重采样到新尺寸。
-- `app/src/texture.cpp:414-437` 随后把该对齐后尺寸作为 texture 的真实 `base_width/base_height` 写入缓存和 CUDA array。
-- 同文件 `extract_block()` 已能为部分 BC block 填充越界 texel，说明压缩器本身不要求通过整体缩放来补齐 block。
-
-#### 触发条件
-
-任一 LDR glTF image 的宽或高不是 4 的倍数。glTF 对 image 尺寸没有此限制；小贴图、条带贴图和程序生成资产很容易触发。
-
-#### 影响
-
-BC 存储只需要末端 block 补齐，不应改变 logical image：
-
-- 5×7 会被重采样为 8×8，纵横比从 5:7 变成 1:1；
-- 1×2 会变成 4×4，发生极严重拉伸；
-- base color、metallic/roughness、emissive 与 normal map 都会在归一化 UV 下采到被扭曲的内容；
-- mip chain 也从错误的对齐后尺寸继续生成，缓存会永久保存该失真结果。
-
-#### 修复方向
-
-保持 KTX2/CUDA resource 的 logical base dimensions 为原始 `(w,h)`，按原始逻辑尺寸生成 mip；压缩每级时只对最后一个 4×4 block 做 edge padding。对颜色/标量纹理宜复制边缘 texel而不是补透明黑，避免 clamp 与 mip 边界产生暗边；具体 CUDA native BC extent/copy 单位应再按 CUDA 13.2 API 契约验证。
-
 ### QRP-028：部分 BC block 用透明黑补齐，生成的尾部 mip 内容不可靠
 
 - 严重度：低（当前路径）/ 中（启用 LOD 后）
@@ -102,7 +72,7 @@ BC 存储只需要末端 block 补齐，不应改变 logical image：
 
 - `app/src/texture.cpp:179-194` 的 `extract_block()` 对超出 logical mip 范围的 texel 写入全零 RGBA。
 - `compress_bc7()` 与 `compress_bc5()` 都把这 16 个 texel 作为真实 block 输入交给有损编码器。
-- 即使 base image 已是 4 的倍数，完整 mip chain 最终也通常包含 2×N、1×N、2×2、1×1 等尺寸，因此本项并不限于 QRP-027 的非对齐源图。
+- 即使 base image 已是 4 的倍数，完整 mip chain 最终也通常包含 2×N、1×N、2×2、1×1 等尺寸。
 
 #### 触发条件
 
