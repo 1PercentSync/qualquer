@@ -23,7 +23,7 @@ namespace qualquer::renderer {
 // starting at base = 2 + bounce * kDimsPerBounce.
 
 /** @brief Number of RNG dimensions consumed per bounce. */
-constexpr uint32_t kDimsPerBounce = 12;
+constexpr uint32_t kDimsPerBounce = 8;
 
 /** @brief Subpixel jitter X dimension index. */
 constexpr uint32_t kDimJitterX = 0;
@@ -45,11 +45,8 @@ constexpr uint32_t kBounceOffsetBrdfXi1 = 2;
 /** @brief Russian Roulette survival draw. */
 constexpr uint32_t kBounceOffsetRR = 3;
 
-/** @brief First of four env NEE sampling dimensions. */
-constexpr uint32_t kBounceOffsetEnvNee = 4;
-
-/** @brief First of four emissive NEE sampling dimensions. */
-constexpr uint32_t kBounceOffsetEmissiveNee = 8;
+/** @brief First of four shared NEE sampling dimensions (strategy select + conditional ξ₀–ξ₃). */
+constexpr uint32_t kBounceOffsetNee = 4;
 
 /**
  * @brief Computes the base dimension index for a given bounce.

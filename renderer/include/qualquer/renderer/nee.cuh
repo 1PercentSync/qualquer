@@ -14,7 +14,6 @@
 #include <qualquer/renderer/launch_params.h>
 #include <qualquer/renderer/math_utils.cuh>
 #include <qualquer/renderer/pt_common.cuh>
-#include <qualquer/renderer/rng.cuh>
 
 // Defined in programs.cu; NEE evaluators read scene/light resources from it.
 extern "C" {
@@ -245,21 +244,23 @@ __forceinline__ __device__ float emissive_light_pdf(
 
 // ---- Full NEE evaluations (env / emissive) ----------------------------------
 //
-// Env and emissive stay as two functions: their resource parameter sets differ
-// enough that a single entry would force a dishonest or bloated signature.
-// Both read scene resources from the programs.cu LaunchParams constant and take
-// only shading-point inputs as explicit arguments.
+// Each evaluator receives four pre-generated random numbers from the call site.
+// The call site handles strategy selection (single-strategy mixing) and only
+// invokes the evaluator whose resources are valid and selected. Evaluators
+// assume resource validity by contract — no redundant guards.
 
 /**
  * @brief Environment NEE: alias-sample a direction, shadow-test, BRDF eval, MIS.
  *
- * @param bp           Shading-point BRDF parameters (from init_brdf_params).
- * @param offset_pos   Ray origin offset from the hit surface.
- * @param N_face       Geometric face normal (for shadow-terminator correction).
- * @param N_shading    Shading normal (must match bp.N).
- * @param pixel_index  Linear pixel index for RNG.
- * @param sample_index Cumulative sample index for RNG.
- * @param dim_base     Per-bounce RNG dimension base (from bounce_dim_base).
+ * @param bp         Shading-point BRDF parameters (from init_brdf_params).
+ * @param offset_pos Ray origin offset from the hit surface.
+ * @param N_face     Geometric face normal (for shadow-terminator correction).
+ * @param N_shading  Shading normal (must match bp.N).
+ * @param u0         Uniform random [0,1) — alias bin selection.
+ * @param u1         Uniform random [0,1) — alias accept/reject.
+ * @param u2         Uniform random [0,1) — horizontal sub-pixel jitter.
+ * @param u3         Uniform random [0,1) — vertical sub-pixel jitter.
+ * @param q          Selection probability of this strategy (0.5 or 1.0).
  * @return NEE radiance contribution (not yet multiplied by path throughput).
  */
 __forceinline__ __device__ float3 evaluate_env_nee(
@@ -267,38 +268,16 @@ __forceinline__ __device__ float3 evaluate_env_nee(
         const float3 offset_pos,
         const float3 N_face,
         const float3 N_shading,
-        const uint32_t pixel_index,
-        const uint32_t sample_index,
-        const uint32_t dim_base) {
+        const float u0, const float u1, const float u2, const float u3,
+        const float q) {
 
-    if (params.env.cubemap == 0 || params.env.alias_table == nullptr
-        || params.env.total_luminance <= 0.0f) {
-        return make_float3(0.0f, 0.0f, 0.0f);
-    }
-
-    const float env_r1 = sobol_rng(params.sobol_directions, pixel_index,
-                                   sample_index,
-                                   dim_base + kBounceOffsetEnvNee);
-    const float env_r2 = sobol_rng(params.sobol_directions, pixel_index,
-                                   sample_index,
-                                   dim_base + kBounceOffsetEnvNee + 1);
-    const float env_r3 = sobol_rng(params.sobol_directions, pixel_index,
-                                   sample_index,
-                                   dim_base + kBounceOffsetEnvNee + 2);
-    const float env_r4 = sobol_rng(params.sobol_directions, pixel_index,
-                                   sample_index,
-                                   dim_base + kBounceOffsetEnvNee + 3);
-
-    const EnvSample es = sample_env_alias_table(
-        params.env, env_r1, env_r2, env_r3, env_r4);
+    const EnvSample es = sample_env_alias_table(params.env, u0, u1, u2, u3);
     const float3 L = es.world_dir;
 
     if (es.pdf <= 0.0f || !isfinite(es.pdf)) {
         return make_float3(0.0f, 0.0f, 0.0f);
     }
 
-    // Geometric hemisphere reject: shadow_terminator_factor returns 0 when
-    // NgdotL <= 0, so reject before the shadow ray and BRDF work.
     if (dot(N_face, L) <= 0.0f) {
         return make_float3(0.0f, 0.0f, 0.0f);
     }
@@ -314,29 +293,30 @@ __forceinline__ __device__ float3 evaluate_env_nee(
         return make_float3(0.0f, 0.0f, 0.0f);
     }
 
-    // Cubemap lookup uses env_dir directly (no second rotation).
     const auto env_texel = texCubemap<float4>(
         params.env.cubemap, es.env_dir.x, es.env_dir.y, es.env_dir.z);
     const float3 env_color = make_float3(env_texel.x, env_texel.y, env_texel.z);
 
     const BrdfEvalResult bep = brdf_eval_and_pdf(bp, L, NdotL);
 
-    const float mis_w = mis_power_heuristic(es.pdf, bep.pdf);
+    const float mis_w = mis_power_heuristic(es.pdf * q, bep.pdf);
     const float st_factor = shadow_terminator_factor(N_face, N_shading, L);
 
-    return env_color * bep.value * NdotL * mis_w * st_factor / es.pdf;
+    return env_color * bep.value * NdotL * mis_w * st_factor / (es.pdf * q);
 }
 
 /**
  * @brief Emissive-triangle NEE: alias-sample a triangle, shadow-test, BRDF eval, MIS.
  *
- * @param bp           Shading-point BRDF parameters (from init_brdf_params).
- * @param offset_pos   Ray origin offset from the hit surface.
- * @param N_face       Geometric face normal (for shadow-terminator correction).
- * @param N_shading    Shading normal (must match bp.N).
- * @param pixel_index  Linear pixel index for RNG.
- * @param sample_index Cumulative sample index for RNG.
- * @param dim_base     Per-bounce RNG dimension base (from bounce_dim_base).
+ * @param bp         Shading-point BRDF parameters (from init_brdf_params).
+ * @param offset_pos Ray origin offset from the hit surface.
+ * @param N_face     Geometric face normal (for shadow-terminator correction).
+ * @param N_shading  Shading normal (must match bp.N).
+ * @param u0         Uniform random [0,1) — alias bin selection.
+ * @param u1         Uniform random [0,1) — alias accept/reject.
+ * @param u2         Uniform random [0,1) — barycentric ξ₀.
+ * @param u3         Uniform random [0,1) — barycentric ξ₁.
+ * @param q          Selection probability of this strategy (0.5 or 1.0).
  * @return NEE radiance contribution (not yet multiplied by path throughput).
  */
 __forceinline__ __device__ float3 evaluate_emissive_nee(
@@ -344,43 +324,21 @@ __forceinline__ __device__ float3 evaluate_emissive_nee(
         const float3 offset_pos,
         const float3 N_face,
         const float3 N_shading,
-        const uint32_t pixel_index,
-        const uint32_t sample_index,
-        const uint32_t dim_base) {
-
-    if (params.emissive.count == 0 || params.emissive.triangles == nullptr) {
-        return make_float3(0.0f, 0.0f, 0.0f);
-    }
-
-    const float emi_r1 = sobol_rng(params.sobol_directions, pixel_index,
-                                   sample_index,
-                                   dim_base + kBounceOffsetEmissiveNee);
-    const float emi_r2 = sobol_rng(params.sobol_directions, pixel_index,
-                                   sample_index,
-                                   dim_base + kBounceOffsetEmissiveNee + 1);
-    const float emi_r3 = sobol_rng(params.sobol_directions, pixel_index,
-                                   sample_index,
-                                   dim_base + kBounceOffsetEmissiveNee + 2);
-    const float emi_r4 = sobol_rng(params.sobol_directions, pixel_index,
-                                   sample_index,
-                                   dim_base + kBounceOffsetEmissiveNee + 3);
+        const float u0, const float u1, const float u2, const float u3,
+        const float q) {
 
     const uint32_t tri_idx = sample_emissive_alias_table(
-        params.emissive.alias_table, params.emissive.count, emi_r1, emi_r2);
+        params.emissive.alias_table, params.emissive.count, u0, u1);
     const EmissiveTriangle &tri = params.emissive.triangles[tri_idx];
 
     // Barycentric point on triangle: v0 + edge1 * b1 + edge2 * b2.
-    // triangle_barycentric returns (b0, b1, b2) with b0 = 1 - b1 - b2;
-    // the v0 term absorbs b0 via v0*b0 + (v0+e1)*b1 + (v0+e2)*b2 = v0 + e1*b1 + e2*b2.
-    const float3 light_bary = triangle_barycentric(emi_r3, emi_r4);
+    const float3 light_bary = triangle_barycentric(u2, u3);
     const float3 light_pos = tri.v0 + tri.edge1 * light_bary.y
                            + tri.edge2 * light_bary.z;
 
     const float3 to_light = light_pos - offset_pos;
     const float dist2 = dot(to_light, to_light);
 
-    // Guard against zero or underflowed distance (overlapping geometry,
-    // precision collapse). 1/0 → Inf → L = (0,0,0)*Inf = NaN.
     if (dist2 <= 0.0f) {
         return make_float3(0.0f, 0.0f, 0.0f);
     }
@@ -391,8 +349,6 @@ __forceinline__ __device__ float3 evaluate_emissive_nee(
     const float3 light_normal = make_float3(tri.normal_x, tri.normal_y, tri.normal_z);
     float cos_theta_light = dot(light_normal, -L);
 
-    // Double-sided: take absolute cosine so both faces are treated as
-    // front-facing (light emits from both sides of the triangle).
     if (tri.double_sided == 1u) {
         cos_theta_light = fabsf(cos_theta_light);
     }
@@ -400,8 +356,6 @@ __forceinline__ __device__ float3 evaluate_emissive_nee(
         return make_float3(0.0f, 0.0f, 0.0f);
     }
 
-    // Geometric hemisphere reject: shadow_terminator_factor returns 0 when
-    // NgdotL <= 0, so reject before the shadow ray and BRDF work.
     if (dot(N_face, L) <= 0.0f) {
         return make_float3(0.0f, 0.0f, 0.0f);
     }
@@ -411,14 +365,12 @@ __forceinline__ __device__ float3 evaluate_emissive_nee(
         return make_float3(0.0f, 0.0f, 0.0f);
     }
 
-    // tMax shortened to avoid hitting the target triangle itself.
     const uint32_t visible = trace_shadow_ray(
         params.traversable, offset_pos, L, dist * (1.0f - 1e-4f));
     if (!visible) {
         return make_float3(0.0f, 0.0f, 0.0f);
     }
 
-    // UV interpolation: uv0 + (uv1-uv0)*b1 + (uv2-uv0)*b2 (same edge form as position).
     const float2 light_uv = make_float2(
         tri.uv0.x + (tri.uv1.x - tri.uv0.x) * light_bary.y
                    + (tri.uv2.x - tri.uv0.x) * light_bary.z,
@@ -440,11 +392,11 @@ __forceinline__ __device__ float3 evaluate_emissive_nee(
         return make_float3(0.0f, 0.0f, 0.0f);
     }
 
-    const float mis_w_emi = mis_power_heuristic(light_pdf_emi, bep_emi.pdf);
+    const float mis_w_emi = mis_power_heuristic(light_pdf_emi * q, bep_emi.pdf);
     const float st_factor_emi = shadow_terminator_factor(N_face, N_shading, L);
 
     return Le * bep_emi.value * NdotL_emi * mis_w_emi * st_factor_emi
-        / light_pdf_emi;
+        / (light_pdf_emi * q);
 }
 
 } // namespace qualquer::renderer

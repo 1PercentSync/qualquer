@@ -406,14 +406,15 @@ __global__ void __miss__env() { // NOLINT(*-reserved-identifier)
     }
 
     // Env MIS: when this miss follows a BRDF sample (last_brdf_pdf > 0)
-    // and env NEE is active, weight by power_heuristic(brdf_pdf, env_pdf)
-    // to avoid double-counting with the closesthit NEE strategy.
+    // and env NEE is active, weight by power_heuristic(brdf_pdf, env_pdf * q)
+    // where q accounts for the single-strategy selection probability.
     // Primary ray (bounce 0), pass-through, or invalid BRDF sample:
     // last_brdf_pdf == 0 → weight stays 1.0.
     const float last_brdf_pdf = payload_get_last_brdf_pdf();
-    if (last_brdf_pdf > 0.0f && params.env.alias_table != nullptr) {
+    if (last_brdf_pdf > 0.0f && params.env.total_luminance > 0.0f) {
+        const float q_env = (params.emissive.total_power > 0.0f) ? 0.5f : 1.0f;
         const float pdf_env = env_pdf(params.env, world_dir);
-        env_color = env_color * mis_power_heuristic(last_brdf_pdf, pdf_env);
+        env_color = env_color * mis_power_heuristic(last_brdf_pdf, pdf_env * q_env);
     }
 
     payload_set_color(env_color);
@@ -558,6 +559,10 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
         make_float2(nm_texel.x, nm_texel.y), mat.normal_scale);
     const float3 N_shading = ensure_normal_consistency(N_mapped, N_face);
 
+    // ---- NEE strategy activity (scene-global, used by emissive-hit MIS and NEE) ----
+    const bool env_active = params.env.total_luminance > 0.0f;
+    const bool emissive_active = params.emissive.total_power > 0.0f;
+
     // ---- Emissive (with BRDF-strategy MIS weight for bounce > 0) ----
     // Skip the emissive texture fetch when emissive_factor is zero (the
     // vast majority of materials). SER groups threads by material, so
@@ -575,20 +580,22 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
 
         // Bounce 0 (direct view): weight 1.0 — primary ray is not a BRDF sample.
         // Bounce > 0 with emissive NEE active: BRDF hit emissive is one of two MIS
-        // strategies, weight by power_heuristic(brdf_pdf, light_pdf).
+        // strategies, weight by power_heuristic(brdf_pdf, light_pdf * q).
+        // q accounts for single-strategy selection probability of the emissive NEE.
         // Bounce > 0 without emissive NEE: weight 1.0 — no competing strategy.
-        if (bounce > 0 && params.emissive.count > 0) {
+        if (bounce > 0 && emissive_active) {
             const float last_brdf_pdf = payload_get_last_brdf_pdf();
             // MIS only when a competing BRDF strategy exists. last_brdf_pdf == 0
             // means no real BRDF sample preceded this bounce (camera ray followed
             // by one or more single-sided pass-throughs); the emissive contribution
             // keeps full weight as if directly visible.
             if (last_brdf_pdf > 0.0f) {
+                const float q_emi = env_active ? 0.5f : 1.0f;
                 const float cos_theta_l = fabsf(dot(N_face, ray_dir));
                 const float hit_dist = optixGetRayTmax();
                 const float light_pdf = emissive_light_pdf(
                     emi_lum, hit_dist, cos_theta_l, params.emissive.total_power);
-                const float mis_w = mis_power_heuristic(last_brdf_pdf, light_pdf);
+                const float mis_w = mis_power_heuristic(last_brdf_pdf, light_pdf * q_emi);
                 emissive = emissive * mis_w;
             }
         }
@@ -681,13 +688,41 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
     const uint32_t sample_index = payload_get_sample_index();
     const uint32_t dim_base = bounce_dim_base(bounce);
 
-    // ---- NEE: environment + emissive (full evaluation lives in nee.cuh) ----
-    // NEE is valid on every bounce including the last (direct light contribution).
-    const float3 nee_radiance =
-        evaluate_env_nee(bp, offset_pos, N_face, N_brdf,
-                         pixel_index, sample_index, dim_base)
-        + evaluate_emissive_nee(bp, offset_pos, N_face, N_brdf,
-                                pixel_index, sample_index, dim_base);
+    // ---- NEE: single-strategy mixing (env or emissive, not both) ----
+    // Each bounce evaluates at most one NEE strategy. When both are valid,
+    // 50:50 random selection with interval remapping preserves Sobol
+    // stratification across strategies.
+    float3 nee_radiance = make_float3(0.0f, 0.0f, 0.0f);
+    if (env_active || emissive_active) {
+        float u0 = sobol_rng(params.sobol_directions, pixel_index,
+                             sample_index, dim_base + kBounceOffsetNee);
+        const float u1 = sobol_rng(params.sobol_directions, pixel_index,
+                                   sample_index, dim_base + kBounceOffsetNee + 1);
+        const float u2 = sobol_rng(params.sobol_directions, pixel_index,
+                                   sample_index, dim_base + kBounceOffsetNee + 2);
+        const float u3 = sobol_rng(params.sobol_directions, pixel_index,
+                                   sample_index, dim_base + kBounceOffsetNee + 3);
+
+        if (env_active && emissive_active) {
+            // Both strategies valid: 50:50 selection with interval remapping.
+            constexpr float q = 0.5f;
+            if (u0 < 0.5f) {
+                u0 = 2.0f * u0;
+                nee_radiance = evaluate_env_nee(
+                    bp, offset_pos, N_face, N_brdf, u0, u1, u2, u3, q);
+            } else {
+                u0 = 2.0f * u0 - 1.0f;
+                nee_radiance = evaluate_emissive_nee(
+                    bp, offset_pos, N_face, N_brdf, u0, u1, u2, u3, q);
+            }
+        } else if (env_active) {
+            nee_radiance = evaluate_env_nee(
+                bp, offset_pos, N_face, N_brdf, u0, u1, u2, u3, 1.0f);
+        } else {
+            nee_radiance = evaluate_emissive_nee(
+                bp, offset_pos, N_face, N_brdf, u0, u1, u2, u3, 1.0f);
+        }
+    }
 
     // ---- Write common payload ----
     payload_set_next_origin(offset_pos);
