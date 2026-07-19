@@ -2,18 +2,19 @@
 
 /**
  * @file payload_helpers.cuh
- * @brief 16-register OptiX payload pack/unpack helpers (renderer layer).
+ * @brief 15-register OptiX payload pack/unpack helpers (renderer layer).
  */
 
-// Register layout (see current-phase.md "Payload Layout"):
+// Register layout:
 //   p0-p2   next_origin (float3)
 //   p3-p5   next_direction (float3)
 //   p6-p8   throughput_update (float3)
 //   p9-p11  color (float3) — emissive + NEE radiance
 //   p12     hit_distance (float) — negative means miss
 //   p13     last_brdf_pdf (float)
-//   p14     path sequence_index (uint32) — raygen → closesthit for Sobol
-//   p15     bounce index (uint32) — raygen → closesthit (read-only, not written back)
+//   p14     packed: bounce[0:6] | sample_s[7:12] | primary_aux_needed[31]
+//
+// Closesthit reconstructs sequence_index as params.sequence_base + sample_s.
 
 #include <cstdint>
 
@@ -26,11 +27,11 @@ namespace qualquer::renderer {
     // ---- Unpacked payload (raygen reads after optixTrace) -----------------------
 
     /**
-     * @brief All 16 payload registers unpacked into named fields.
+     * @brief Output payload fields (p0-p13) unpacked into named fields.
      *
-     * Raygen constructs this from the 16 local uint32_t variables that
-     * optixTrace populated. Changing the register layout only requires
-     * updating payload_unpack and the closesthit/miss setters below.
+     * p14 is caller-write input metadata (bounce/sample_s/aux) and is not
+     * included here. Changing the register layout only requires updating
+     * payload_unpack and the closesthit/miss setters below.
      */
     struct PayloadData {
         float3 next_origin; ///< Offset hit position for the next bounce.
@@ -39,23 +40,20 @@ namespace qualquer::renderer {
         float3 color; ///< Emissive + NEE radiance (miss shader applies env MIS weight).
         float hit_distance; ///< Ray tHit (negative = miss, terminates path).
         float last_brdf_pdf; ///< Combined multi-lobe BRDF PDF (for emissive MIS).
-        uint32_t bounce; ///< Current bounce index (passed through payload).
     };
 
     /**
-     * @brief Unpacks 16 payload registers into PayloadData.
+     * @brief Unpacks the 14 output payload registers (p0-p13) into PayloadData.
      *
-     * Called by raygen after optixTrace / optixInvoke returns.
+     * Called by raygen after optixTrace / optixInvoke returns. p14 is
+     * caller-write input metadata (bounce/sample_s/aux) and not unpacked.
      */
     __forceinline__ __device__ PayloadData payload_unpack(
         const uint32_t p0, const uint32_t p1, const uint32_t p2,
         const uint32_t p3, const uint32_t p4, const uint32_t p5,
         const uint32_t p6, const uint32_t p7, const uint32_t p8,
         const uint32_t p9, const uint32_t p10, const uint32_t p11,
-        const uint32_t p12, const uint32_t p13, const uint32_t p14,
-        const uint32_t p15) {
-        (void) p14;
-        (void) p15;
+        const uint32_t p12, const uint32_t p13) {
         PayloadData d{};
         d.next_origin = make_float3(__uint_as_float(p0), __uint_as_float(p1), __uint_as_float(p2));
         d.next_direction = make_float3(__uint_as_float(p3), __uint_as_float(p4), __uint_as_float(p5));
@@ -63,7 +61,6 @@ namespace qualquer::renderer {
         d.color = make_float3(__uint_as_float(p9), __uint_as_float(p10), __uint_as_float(p11));
         d.hit_distance = __uint_as_float(p12);
         d.last_brdf_pdf = __uint_as_float(p13);
-        d.bounce = p15;
         return d;
     }
 
@@ -107,26 +104,23 @@ namespace qualquer::renderer {
         optixSetPayload_13(__float_as_uint(v));
     }
 
-    /** @brief Writes bounce index into p15. */
-    __forceinline__ __device__ void payload_set_bounce(const uint32_t v) {
-        optixSetPayload_15(v);
-    }
+    // ---- p14 packed field: bounce | sample_s | primary_aux_needed ---------------
+    // Raygen packs p14 directly into the local uint32_t before optixTraverse;
+    // closesthit only reads (CH_READ semantics); miss does not use p14.
 
-    /** @brief Writes path sequence_index into p14 (Sobol; not sample_count). */
-    __forceinline__ __device__ void payload_set_sample_index(const uint32_t v) {
-        optixSetPayload_14(v);
-    }
-
-    // ---- Closesthit / miss getters (read values passed from raygen) -------------
-
-    /** @brief Reads bounce index from p15 (set by raygen before trace). */
+    /** @brief Reads bounce index (bits 0-6) from p14. */
     __forceinline__ __device__ uint32_t payload_get_bounce() {
-        return optixGetPayload_15();
+        return optixGetPayload_14() & 0x7Fu;
     }
 
-    /** @brief Reads path sequence_index from p14 (set by raygen before trace). */
-    __forceinline__ __device__ uint32_t payload_get_sample_index() {
-        return optixGetPayload_14();
+    /** @brief Reads sample loop index s (bits 7-12) from p14. */
+    __forceinline__ __device__ uint32_t payload_get_sample_s() {
+        return (optixGetPayload_14() >> 7) & 0x3Fu;
+    }
+
+    /** @brief Reads primary_aux_needed flag (bit 31) from p14. */
+    __forceinline__ __device__ bool payload_get_primary_aux_needed() {
+        return (optixGetPayload_14() & 0x80000000u) != 0;
     }
 
     /** @brief Reads last_brdf_pdf from p13 (set by previous closesthit). */

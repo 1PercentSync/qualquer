@@ -95,6 +95,10 @@ __forceinline__ __device__ float3 trace_sample(
 ) {
     using namespace qualquer::renderer;
 
+    // Sample loop index (0..spp-1) for payload packing; closesthit
+    // reconstructs sequence_index as params.sequence_base + sample_s.
+    const uint32_t sample_s = sequence_index - params.sequence_base;
+
     PathState path{};
     path.origin = cam_origin;
     path.direction = primary_dir;
@@ -107,12 +111,12 @@ __forceinline__ __device__ float3 trace_sample(
 
     uint32_t p0 = 0, p1 = 0, p2 = 0, p3 = 0, p4 = 0, p5 = 0;
     uint32_t p6 = 0, p7 = 0, p8 = 0, p9 = 0, p10 = 0, p11 = 0;
-    uint32_t p12 = 0, p13 = 0, p14 = 0, p15 = 0;
+    uint32_t p12 = 0, p13 = 0, p14 = 0;
 
     // When capture_primary is true, we look for the first real surface
     // (hit_distance > 0) or sky miss (hit_distance < 0) to use for MV and
     // aux guides. Pass-through bounces return hit_distance == 0 and are
-    // skipped. The flag is also encoded in p15 MSB so closesthit knows
+    // skipped. The flag is also encoded in p14 bit 31 so closesthit knows
     // whether to write aux data for this hit.
     bool awaiting_primary = capture_primary;
 
@@ -132,8 +136,8 @@ __forceinline__ __device__ float3 trace_sample(
             path.throughput = path.throughput / rr_prob;
         }
 
-        p14 = sequence_index;
-        p15 = path.bounce | (awaiting_primary ? 0x80000000u : 0u);
+        p14 = (path.bounce & 0x7Fu) | ((sample_s & 0x3Fu) << 7)
+            | (awaiting_primary ? 0x80000000u : 0u);
 
         optixTraverse(kPayloadTypeBounce,
                       params.traversable,
@@ -149,7 +153,7 @@ __forceinline__ __device__ float3 trace_sample(
                       0, // miss SBT index (env)
                       p0, p1, p2, p3, p4, p5,
                       p6, p7, p8, p9, p10, p11,
-                      p12, p13, p14, p15);
+                      p12, p13, p14);
         // SER: reorder secondary bounces by material for texture cache
         // coherence. Primary rays (bounce 0) are spatially coherent —
         // adjacent pixels hit nearby geometry with similar materials.
@@ -169,12 +173,12 @@ __forceinline__ __device__ float3 trace_sample(
         optixInvoke(kPayloadTypeBounce,
                     p0, p1, p2, p3, p4, p5,
                     p6, p7, p8, p9, p10, p11,
-                    p12, p13, p14, p15);
+                    p12, p13, p14);
 
         const PayloadData d = payload_unpack(
             p0, p1, p2, p3, p4, p5,
             p6, p7, p8, p9, p10, p11,
-            p12, p13, p14, p15);
+            p12, p13);
 
         // Capture first real surface or sky miss for MV + aux defaults.
         // Pass-through returns hit_distance == 0 and is skipped here.
@@ -279,9 +283,9 @@ __global__ void __raygen__rg() { // NOLINT(*-reserved-identifier)
         for (uint32_t s = 0; s < params.samples_per_frame; ++s) {
             const uint32_t sequence_index = params.sequence_base + s;
             const float3 sample_radiance = apply_firefly_clamp(
-                trace_sample(cam_origin, primary_dir, pixel_index, sequence_index,
-                             s == 0, primary_hit_pos, primary_sky_color,
-                             primary_is_hit),
+                trace_sample(cam_origin, primary_dir, pixel_index,
+                             sequence_index, s == 0, primary_hit_pos,
+                             primary_sky_color, primary_is_hit),
                 params.max_clamp);
             frame_radiance = frame_radiance + sample_radiance;
         }
@@ -298,9 +302,9 @@ __global__ void __raygen__rg() { // NOLINT(*-reserved-identifier)
             const float3 primary_dir = compute_primary_dir(idx.x, idx.y, jx, jy);
 
             const float3 sample_radiance = apply_firefly_clamp(
-                trace_sample(cam_origin, primary_dir, pixel_index, sequence_index,
-                             false, primary_hit_pos, primary_sky_color,
-                             primary_is_hit),
+                trace_sample(cam_origin, primary_dir, pixel_index,
+                             sequence_index, false, primary_hit_pos,
+                             primary_sky_color, primary_is_hit),
                 params.max_clamp);
             frame_radiance = frame_radiance + sample_radiance;
         }
@@ -429,7 +433,7 @@ __global__ void __miss__env() { // NOLINT(*-reserved-identifier)
 }
 
 /// Closest hit: geometry + material setup, normal mapping, ray offset,
-/// NEE, BRDF sampling, 16-register payload write.
+/// NEE, BRDF sampling, 15-register payload write.
 __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
     using namespace qualquer::renderer;
 
@@ -472,7 +476,7 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
         // hit_distance = 0 signals raygen that this is not a real primary
         // surface (raygen skips primary capture for == 0, terminates for < 0).
         // The real visible surface behind will write correct aux guides via
-        // the primary_aux_needed flag in p15 MSB.
+        // the primary_aux_needed flag in p14 bit 31.
         const float hit_t = optixGetRayTmax();
         const float3 hit_pos = optixGetWorldRayOrigin() + ray_dir * hit_t;
         // Push past the triangle toward the front side. For neg-det instances
@@ -573,9 +577,8 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
     // vast majority of materials). SER groups threads by material, so
     // this branch is warp-coherent and cheaper than a bindless tex2D to
     // the default white texture whose result would be multiplied to zero.
-    const uint32_t bounce_raw = payload_get_bounce();
-    const bool primary_aux_needed = (bounce_raw & 0x80000000u) != 0;
-    const uint32_t bounce = bounce_raw & 0x7FFFFFFFu;
+    const uint32_t bounce = payload_get_bounce();
+    const bool primary_aux_needed = payload_get_primary_aux_needed();
     const float emi_lum = luminance(make_float3(
         mat.emissive_factor.x, mat.emissive_factor.y, mat.emissive_factor.z));
     float3 emissive = make_float3(0.0f, 0.0f, 0.0f);
@@ -641,14 +644,14 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
     const uint32_t pixel_index = launch_idx.y * params.width + launch_idx.x;
 
     // ---- Aux G-buffer writes (first real surface hit, first sample) ----
-    // primary_aux_needed (p15 MSB) is set by raygen until the first real
+    // primary_aux_needed (p14 bit 31) is set by raygen until the first real
     // surface is found — pass-through bounces leave it set, so the actual
     // visible surface writes correct guides regardless of bounce index.
     // D37: all samples share per-frame jitter → primary ray identical →
     // aux data identical. Write once at the first sample of the batch.
     if (params.dlss_enabled
         && primary_aux_needed
-        && payload_get_sample_index() == params.sequence_base) {
+        && payload_get_sample_s() == 0) {
         const int sx = static_cast<int>(launch_idx.x);
         const int sy = static_cast<int>(launch_idx.y);
 
@@ -693,7 +696,7 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
                     sx * static_cast<int>(sizeof(float)), sy);
     }
 
-    const uint32_t sample_index = payload_get_sample_index();
+    const uint32_t sample_index = params.sequence_base + payload_get_sample_s();
     const uint32_t dim_base = bounce_dim_base(bounce);
 
     // ---- NEE: single-strategy mixing (env or emissive, not both) ----

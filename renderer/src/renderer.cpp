@@ -353,15 +353,15 @@ namespace qualquer::renderer {
         // the renderer usable (feature create is deferred to submit_cuda).
         dlss_rr_.init(cuda_context.device_id());
 
-        // Bounce payload: 16 registers with per-register read/write semantics.
+        // Bounce payload: 15 registers with per-register read/write semantics.
         // The compiler uses this table to know which registers to save/restore
         // across trace calls — shadow traces pass zero payload, so the compiler
-        // skips saving all 16 bounce registers across them.
+        // skips saving all 15 bounce registers across them.
         //
         // Layout: p0-p2 origin, p3-p5 direction, p6-p8 throughput,
         //         p9-p11 color, p12 hit_distance, p13 last_brdf_pdf,
-        //         p14 sequence_index, p15 bounce.
-        constexpr unsigned int kBouncePayloadSemantics[16] = {
+        //         p14 packed (bounce | sample_s | primary_aux_needed).
+        constexpr unsigned int kBouncePayloadSemantics[15] = {
             // p0-p2: next_origin — caller reads after trace, CH writes
             OPTIX_PAYLOAD_SEMANTICS_TRACE_CALLER_READ | OPTIX_PAYLOAD_SEMANTICS_CH_WRITE,
             OPTIX_PAYLOAD_SEMANTICS_TRACE_CALLER_READ | OPTIX_PAYLOAD_SEMANTICS_CH_WRITE,
@@ -387,14 +387,12 @@ namespace qualquer::renderer {
             // p13: last_brdf_pdf — caller reads+writes, CH reads+writes, MS reads
             OPTIX_PAYLOAD_SEMANTICS_TRACE_CALLER_READ_WRITE | OPTIX_PAYLOAD_SEMANTICS_CH_READ_WRITE
                 | OPTIX_PAYLOAD_SEMANTICS_MS_READ,
-            // p14: sequence_index — caller writes before trace, CH reads
-            OPTIX_PAYLOAD_SEMANTICS_TRACE_CALLER_WRITE | OPTIX_PAYLOAD_SEMANTICS_CH_READ,
-            // p15: bounce — caller writes before trace, CH reads
+            // p14: packed (bounce|sample_s|primary_aux) — caller writes, CH reads
             OPTIX_PAYLOAD_SEMANTICS_TRACE_CALLER_WRITE | OPTIX_PAYLOAD_SEMANTICS_CH_READ,
         };
 
         const OptixPayloadType bounce_payload_type{
-            .numPayloadValues = 16,
+            .numPayloadValues = 15,
             .payloadSemantics = kBouncePayloadSemantics,
         };
 
