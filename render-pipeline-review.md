@@ -62,40 +62,6 @@ native render resolution 等于 display resolution 时，仅这些数组约占 `
 
 color ping-pong 与事件可保持常驻；aux guides 和 `dlss_output_` 应只在 DLSS 实际可用且启用时按需创建，在 feature release 后按策略立即释放或进入明确缓存预算。若保留热切换缓存，应在 UI/统计中显示其 VRAM 成本并允许回收，而不是无条件常驻。
 
-### QRP-029：材质纹理生成并上传完整 mip chain，但所有 OptiX 采样固定走隐式 base level
-
-- 严重度：高（画质与资源）
-- 置信度：高
-- 类型：texture LOD / path tracing
-
-#### 代码证据
-
-- `app/src/texture.cpp:134-176` 为每张 LDR texture 生成完整 mip chain，随后逐级 BC 压缩、缓存和上传。
-- `optix/src/cuda_texture_upload.cpp:101-173` 创建 mipmapped CUDA array 并设置 mipmap filter/clamp。
-- 但所有材质、alpha any-hit 和 emissive NEE 读取均调用不带 LOD/gradient 的 `tex2D<float4>()`：`renderer/src/device/programs.cu:546-573,771`、`renderer/include/qualquer/renderer/nee.cuh:449,625`。
-- 工作区没有任何材质路径调用 `tex2DLod()` 或 `tex2DGrad()`，也没有传播 ray cone、ray differential 或显式 footprint。
-
-#### 官方依据
-
-CUDA 为 mipmapped texture 提供 `tex2DLod()`（显式 level）和 `tex2DGrad()`（由 gradients 推导 level）；普通 `tex2D()` 没有可用于选择 path-traced ray footprint 的梯度输入。任意 ray program 也不存在 raster quad 的隐式屏幕导数。
-
-- <https://docs.nvidia.com/cuda/cuda-c-programming-guide/#texture-functions>
-- NVIDIA 的 DLSS integration checklist 还明确要求在 RR/SR 启用时设置合适 mip-map bias，否则纹理会显得模糊、涂抹或低分辨率；当前连基础 footprint LOD 都不存在，更无法针对低 render resolution 正确偏置：<https://developer.nvidia.com/blog/how-to-integrate-nvidia-dlss-4-into-your-game-with-nvidia-streamline>
-
-#### 触发条件
-
-所有纹理化材质，尤其高频纹理、斜视角、远距离物体、反射/间接 bounce 和低 render resolution。
-
-#### 影响
-
-- 远距离和缩小时持续采样最高分辨率，产生 aliasing、闪烁和高频噪声；DLSS-RR 会收到本可由正确 footprint 预滤除的噪声。
-- glTF `minFilter` 的四种 mipmap 模式及 `mipmapFilterMode` 实际没有发挥预期作用。
-- CPU 仍支付 mip 生成与每级 BC 压缩，磁盘 cache 和 GPU VRAM 仍存放所有不可达 mip，形成纯开销。
-
-#### 改进方向
-
-引入 ray cones 或 ray differentials，在每次 hit 根据 UV gradients/texture dimensions 计算显式 LOD，再使用 `tex2DLod`/`tex2DGrad`；primary 与 secondary/specular ray 的 footprint 更新规则需统一设计。若暂不实现 LOD，应至少明确只存 base level，避免把不可达 mip 伪装成已支持的 glTF filtering。
-
 ### QRP-030：DLSS motion vector 接受 previous clip space 中位于相机后方的投影
 
 - 严重度：中
