@@ -773,6 +773,15 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
     // Treating these as zero-contribution samples is unbiased (indicator
     // function on the geometric hemisphere) and aligns the BRDF sampling
     // domain with NEE, which already rejects dot(N_face, L) <= 0.
+    //
+    // Known limitation: classic normal mapping on a flat triangle is not a
+    // physically self-consistent model (Veach 1997 §5.3). Rejecting
+    // geometric-backside samples introduces minor energy loss at silhouettes
+    // and strong normal-map boundaries. A geometrically valid alternative
+    // (Schüssler et al. 2017, microfacet-based normal mapping) would
+    // eliminate this, but triples BRDF evaluation cost — prohibitive for
+    // real-time. The energy loss here is small and preferable to the
+    // previous light leaks and self-intersection artifacts.
     if (dot(N_face, bs.next_dir) <= 0.0f) {
         payload_set_next_direction(make_float3(0.0f, 0.0f, 0.0f));
         payload_set_throughput_update(make_float3(0.0f, 0.0f, 0.0f));
