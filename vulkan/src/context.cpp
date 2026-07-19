@@ -106,10 +106,10 @@ namespace qualquer::vulkan {
         /**
          * @brief Whether a device can serve as the present GPU.
          *
-         * Qualification mirrors the old rate_device's eligibility gate (graphics
-         * + present queue family, swapchain extension, Vulkan 1.4) but drops the
-         * scoring — device selection now happens on the CUDA side under this
-         * constraint, so Vulkan only filters presentability, it does not rank.
+         * Checks the complete capability chain that later init/render code
+         * relies on without fallback: queue family, API version, required
+         * extensions, Vulkan 1.3 features, interop format/blit support, and
+         * swapchain surface usage flags.
          */
         // ReSharper disable CppParameterMayBeConst
         bool is_presentable_device(VkPhysicalDevice dev, VkSurfaceKHR surface) {
@@ -117,13 +117,142 @@ namespace qualquer::vulkan {
             if (!has_graphics_present_queue(dev, surface)) {
                 return false;
             }
-            if (!has_device_extension(dev, VK_KHR_SWAPCHAIN_EXTENSION_NAME)) {
-                return false;
-            }
 
             VkPhysicalDeviceProperties props;
             vkGetPhysicalDeviceProperties(dev, &props);
-            return props.apiVersion >= VK_API_VERSION_1_4;
+            if (props.apiVersion < VK_API_VERSION_1_4) {
+                return false;
+            }
+
+            // Extensions required by create_device (swapchain + Win32 interop).
+            if (!has_device_extension(dev, VK_KHR_SWAPCHAIN_EXTENSION_NAME)
+                || !has_device_extension(dev, VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME)
+                || !has_device_extension(dev, VK_KHR_EXTERNAL_SEMAPHORE_WIN32_EXTENSION_NAME)) {
+                return false;
+            }
+
+            // Features enabled unconditionally in create_device.
+#ifndef NDEBUG
+            VkPhysicalDeviceVulkan12Features features_12{
+                .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
+            };
+#endif
+            VkPhysicalDeviceVulkan13Features features_13{
+                .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
+#ifndef NDEBUG
+                .pNext = &features_12,
+#endif
+            };
+            VkPhysicalDeviceFeatures2 features2{
+                .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
+                .pNext = &features_13,
+            };
+            vkGetPhysicalDeviceFeatures2(dev, &features2);
+            if (!features_13.synchronization2 || !features_13.dynamicRendering) {
+                return false;
+            }
+#ifndef NDEBUG
+            if (!features_12.hostQueryReset) {
+                return false;
+            }
+#endif
+
+            // Display buffer format: R16G16B16A16_SFLOAT must support blit-src
+            // with linear filter (tonemap output → swapchain blit).
+            VkFormatProperties src_fmt{};
+            vkGetPhysicalDeviceFormatProperties(dev, VK_FORMAT_R16G16B16A16_SFLOAT, &src_fmt);
+            constexpr auto kSrcBits = VK_FORMAT_FEATURE_BLIT_SRC_BIT
+                                    | VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT;
+            if ((src_fmt.optimalTilingFeatures & kSrcBits) != kSrcBits) {
+                return false;
+            }
+
+            // Swapchain format: B8G8R8A8_SRGB must support blit-dst.
+            // COLOR_ATTACHMENT is covered by surface supportedUsageFlags below.
+            VkFormatProperties dst_fmt{};
+            vkGetPhysicalDeviceFormatProperties(dev, VK_FORMAT_B8G8R8A8_SRGB, &dst_fmt);
+            if (!(dst_fmt.optimalTilingFeatures & VK_FORMAT_FEATURE_BLIT_DST_BIT)) {
+                return false;
+            }
+
+            // Surface must offer B8G8R8A8_SRGB + SRGB_NONLINEAR_KHR.
+            {
+                uint32_t fmt_count = 0;
+                vkGetPhysicalDeviceSurfaceFormatsKHR(dev, surface, &fmt_count, nullptr);
+                std::vector<VkSurfaceFormatKHR> formats(fmt_count);
+                vkGetPhysicalDeviceSurfaceFormatsKHR(dev, surface, &fmt_count, formats.data());
+                bool found = false;
+                for (const auto &f : formats) {
+                    if (f.format == VK_FORMAT_B8G8R8A8_SRGB
+                        && f.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    return false;
+                }
+            }
+
+            // Swapchain must support the usage flags we request.
+            VkSurfaceCapabilitiesKHR capabilities{};
+            vkGetPhysicalDeviceSurfaceCapabilitiesKHR(dev, surface, &capabilities);
+            constexpr auto kUsage = VK_IMAGE_USAGE_TRANSFER_DST_BIT
+                                  | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+            if ((capabilities.supportedUsageFlags & kUsage) != kUsage) {
+                return false;
+            }
+            if (!(capabilities.supportedCompositeAlpha & VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR)) {
+                return false;
+            }
+
+            // OPAQUE_WIN32 external memory: the display buffer's exact format,
+            // type, tiling and usage must be exportable via this handle type.
+            {
+                VkPhysicalDeviceExternalImageFormatInfo ext_info{
+                    .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTERNAL_IMAGE_FORMAT_INFO,
+                    .handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT,
+                };
+                VkPhysicalDeviceImageFormatInfo2 fmt_info{
+                    .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_FORMAT_INFO_2,
+                    .pNext = &ext_info,
+                    .format = VK_FORMAT_R16G16B16A16_SFLOAT,
+                    .type = VK_IMAGE_TYPE_2D,
+                    .tiling = VK_IMAGE_TILING_OPTIMAL,
+                    .usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+                };
+                VkExternalImageFormatProperties ext_props{
+                    .sType = VK_STRUCTURE_TYPE_EXTERNAL_IMAGE_FORMAT_PROPERTIES,
+                };
+                VkImageFormatProperties2 img_props{
+                    .sType = VK_STRUCTURE_TYPE_IMAGE_FORMAT_PROPERTIES_2,
+                    .pNext = &ext_props,
+                };
+                if (vkGetPhysicalDeviceImageFormatProperties2(dev, &fmt_info, &img_props) != VK_SUCCESS) {
+                    return false;
+                }
+                const auto mem_flags = ext_props.externalMemoryProperties.externalMemoryFeatures;
+                if (!(mem_flags & VK_EXTERNAL_MEMORY_FEATURE_EXPORTABLE_BIT)) {
+                    return false;
+                }
+            }
+
+            // OPAQUE_WIN32 external semaphore: must be exportable.
+            {
+                VkPhysicalDeviceExternalSemaphoreInfo sem_info{
+                    .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTERNAL_SEMAPHORE_INFO,
+                    .handleType = VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_OPAQUE_WIN32_BIT,
+                };
+                VkExternalSemaphoreProperties sem_props{
+                    .sType = VK_STRUCTURE_TYPE_EXTERNAL_SEMAPHORE_PROPERTIES,
+                };
+                vkGetPhysicalDeviceExternalSemaphoreProperties(dev, &sem_info, &sem_props);
+                if (!(sem_props.externalSemaphoreFeatures & VK_EXTERNAL_SEMAPHORE_FEATURE_EXPORTABLE_BIT)) {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         /**
@@ -271,7 +400,9 @@ namespace qualquer::vulkan {
         }
 
         if (uuids.empty()) {
-            spdlog::error("No presentable GPU found (need Vulkan 1.4 + swapchain + graphics/present queue)");
+            spdlog::error("No presentable GPU found (need Vulkan 1.4, swapchain, "
+                          "Win32 interop extensions, synchronization2, dynamicRendering, "
+                          "RGBA16F blit-src, B8G8R8A8_SRGB blit-dst, opaque composite alpha)");
             std::abort();
         }
 
