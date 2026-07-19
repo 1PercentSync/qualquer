@@ -20,7 +20,7 @@ Step 15（自适应 sample 数）     ← 独立
 
 Step 16（Stochastic Alpha）     ← 独立
 
-Step 17（Ray Cone LOD）         ← 独立（payload 需扩至 18 以携带 cone）
+Step 17（Ray Cone LOD）         ← 独立（payload 需扩至 17 以携带 cone）
      ↓
 Step 18（Normal Map Specular AA）← 依赖 Step 17 的 cone footprint
 ```
@@ -94,7 +94,7 @@ cubemap 保持全分辨率。非 power-of-2 输入维度产生非最优降采样
 
 ### OptiX payload type semantics
 
-当前 `OptixProgramGroupOptions` 零初始化（无 payloadType），编译器跨 shadow trace 保守保存全部 16 个 payload register。 声明单一
+当前 `OptixProgramGroupOptions` 零初始化（无 payloadType），编译器跨 shadow trace 保守保存全部 15 个 payload register。 声明单一
 bounce payload type + shadow 改为零 payload `optixTraverse`，降低 continuation stack 压力。
 
 **方案**：
@@ -114,7 +114,7 @@ bounce payload type + shadow 改为零 payload `optixTraverse`，降低 continua
 6. 单一 type 下 `optixSetPayloadTypes`（程序内部声明支持哪些 type 的 API）不需要——编译器从模块选项中已知唯一 type 的语义，SDK
    示例在 CH/MS 中调用它是多 type 场景的惯例，单 type 下无效果
 
-bounce payload 16 register 语义：
+bounce payload 15 register 语义：
 
 | 寄存器 | 内容                            | Caller     | CH         | MS    | AH |
 |--------|---------------------------------|------------|------------|-------|----|
@@ -122,8 +122,7 @@ bounce payload 16 register 语义：
 | p9-p11 | color                           | READ       | WRITE      | WRITE | —  |
 | p12    | hit_distance                    | READ       | WRITE      | WRITE | —  |
 | p13    | last_brdf_pdf                   | READ_WRITE | READ_WRITE | READ  | —  |
-| p14    | sequence_index                  | WRITE      | READ       | —     | —  |
-| p15    | bounce                          | WRITE      | READ       | —     | —  |
+| p14    | packed: bounce\|sample_s\|aux   | WRITE      | READ       | —     | —  |
 
 ### 单策略 NEE 混合
 
@@ -236,12 +235,12 @@ mip 基础设施已就绪；当前固定 LOD 0 的采样点改为 cone 驱动 LO
 
 ### payload 接入 cone_width / cone_spread
 
-当前 pipeline 为 16 个 payload 寄存器。本小项将 `numPayloadValues` 扩至 18，并在 `payload_helpers` 中增加 cone 字段读写：
+当前 pipeline 为 15 个 payload 寄存器。本小项将 `numPayloadValues` 扩至 17，并在 `payload_helpers` 中增加 cone 字段读写：
 
 | Register | 内容                 |
 |----------|----------------------|
-| p16      | cone_width（float）  |
-| p17      | cone_spread（float） |
+| p15      | cone_width（float）  |
+| p16      | cone_spread（float） |
 
 ### raygen 初始化 cone
 

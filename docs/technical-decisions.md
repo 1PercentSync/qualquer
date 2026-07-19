@@ -168,8 +168,8 @@ ReSTIR 时收益不足。
 
 ### Payload
 
-**决策**：全信息 payload registers，不走 global hit buffer。当前 16 槽（typed payload，per-register 读写语义声明）；Ray Cone
-LOD 使用时扩至 18（p16/p17 = cone_width / cone_spread）。Shadow ray 零 payload（`optixTraverse` +
+**决策**：全信息 payload registers，不走 global hit buffer。当前 15 槽（typed payload，per-register 读写语义声明；bounce/sample_s/primary_aux 打包在 p14）；Ray Cone
+LOD 使用时扩至 17（p15/p16 = cone_width / cone_spread）。Shadow ray 零 payload（`optixTraverse` +
 `optixHitObjectIsHit()`），编译器跨 shadow trace 不保存/恢复 bounce 寄存器。
 
 **理由**：SER 重排后 payload 随线程移动、零全局内存；global buffer 在重排后访问变为 non-coalesced，反而更差。OptiX 上限 32
@@ -305,7 +305,7 @@ per-sample。
 
 **决策**：Sobol / xxhash 的 path sequence index 为 `frame_index * samples_per_frame + s`（两模式统一）。与 Separate Sum 的
 `sample_count`（per-slot 链长；DLSS ON 每帧为 0）解耦。首 sample 写 aux 的门控改为
-`sequence_index == frame_index * samples_per_frame`，不再与 `sample_count` 比较。
+`sample_s == 0`（payload 打包的帧内样本序号），不再与 `sample_count` 比较。
 
 **理由**：DLSS 清零 `sample_count` 后若仍作 sequence index，每帧 path 维序列重复，跨维相关噪声被时域历史加深。
 `frame_index` 永不 reset，与 host 全局 jitter 同源，保证跨帧序号前进。
