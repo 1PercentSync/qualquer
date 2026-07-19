@@ -418,8 +418,10 @@ namespace qualquer::app {
             {
                 .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
                 // Per-swapchain-image: see Swapchain::render_finished_semaphores.
+                // Minimal scope: the last work before present is ImGui rendering
+                // and the PRESENT_SRC layout transition, both at this stage.
                 .semaphore = swapchain_.render_finished_semaphores[image_index_],
-                .stageMask = VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT,
+                .stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
             },
             {
                 .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
