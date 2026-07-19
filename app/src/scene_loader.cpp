@@ -804,7 +804,11 @@ namespace qualquer::app {
                 const auto world_mat = convert_matrix(world_transform);
 
                 // Validate transform: all elements must be finite and the
-                // matrix must be non-singular (invertible for normal transform).
+                // 3×3 linear part must be non-singular (invertible for normal
+                // transform). The check is scale-relative: |det| is compared
+                // against the product of column lengths, so the threshold
+                // measures how close the axes are to being coplanar regardless
+                // of the overall scale of the matrix.
                 {
                     bool finite = true;
                     for (int col = 0; col < 4 && finite; ++col) {
@@ -812,7 +816,17 @@ namespace qualquer::app {
                             if (!std::isfinite(world_mat[col][row])) { finite = false; }
                         }
                     }
-                    if (!finite || glm::abs(glm::determinant(world_mat)) < 1e-12f) {
+                    if (finite) {
+                        const glm::vec3 c0(world_mat[0]);
+                        const glm::vec3 c1(world_mat[1]);
+                        const glm::vec3 c2(world_mat[2]);
+                        const float col_product = glm::length(c0) * glm::length(c1) * glm::length(c2);
+                        const float abs_det = glm::abs(glm::determinant(glm::mat3(world_mat)));
+                        // For orthogonal axes abs_det == col_product; the ratio
+                        // drops toward zero as axes become coplanar.
+                        finite = col_product > 0.0f && (abs_det / col_product) > 1e-6f;
+                    }
+                    if (!finite) {
                         spdlog::warn("Node '{}': non-finite or singular transform, skipping",
                                      std::string(node.name));
                         return;
