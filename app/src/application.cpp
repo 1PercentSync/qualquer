@@ -246,6 +246,7 @@ namespace qualquer::app {
                     save_config(config_);
                 } else {
                     error_message_ = "Failed to load env map: " + actions.new_env_map_path;
+                    renderer_.reset_accumulation();
                     update_scene_stats();
                 }
             }
