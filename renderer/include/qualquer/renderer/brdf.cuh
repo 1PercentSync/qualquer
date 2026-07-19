@@ -965,7 +965,18 @@ __forceinline__ __device__ BrdfSample brdf_sample(const BrdfParams &params,
         const float4 wi_c = sample_EON(cltc, u0, u1);
         const float3 L_ts = make_float3(wi_c.x, wi_c.y, wi_c.z);
         const float pdf_diff = wi_c.w;
-        const float NdotL = fmaxf(L_ts.z, 1e-4f);
+
+        // Reject samples below the shading hemisphere. CLTC is designed to
+        // avoid this, but numerical edge cases (r≈1, mu≈1) can produce z<=0.
+        // Do not clamp — that alters the sample without adjusting the PDF.
+        if (L_ts.z <= 0.0f || pdf_diff <= 0.0f) {
+            result.next_dir = params.N;
+            result.throughput_update = make_float3(0.0f, 0.0f, 0.0f);
+            result.pdf_combined = 0.0f;
+            return result;
+        }
+
+        const float NdotL = L_ts.z;
 
         const float3 diff_brdf = params.diffuse_weight
             * f_EON(params.base_color, params.r, L_ts, V_ts);

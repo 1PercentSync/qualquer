@@ -758,12 +758,22 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
     const BrdfSample bs = brdf_sample(bp, u_lobe, u0, u1);
 
     if (bs.pdf_combined == 0.0f) {
-        // Invalid BRDF sample (specular reflected below surface): terminate
-        // via zero throughput — raygen's throughput check breaks the loop
-        // while this bounce's emissive/NEE contribution is kept. The hit
-        // distance stays the real hit t: a negative value means "geometric
-        // miss" to raygen (sky classification for aux data), which this
-        // surface hit is not.
+        // Invalid BRDF sample (shading-hemisphere reject): terminate via zero
+        // throughput — raygen's throughput check breaks the loop while this
+        // bounce's emissive/NEE contribution is kept.
+        payload_set_next_direction(make_float3(0.0f, 0.0f, 0.0f));
+        payload_set_throughput_update(make_float3(0.0f, 0.0f, 0.0f));
+        payload_set_last_brdf_pdf(0.0f);
+        return;
+    }
+
+    // Geometric hemisphere gate: reject directions that penetrate the real
+    // surface. The BRDF sampler works in shading-normal space and cannot
+    // guarantee the world-space direction stays on the geometric outside.
+    // Treating these as zero-contribution samples is unbiased (indicator
+    // function on the geometric hemisphere) and aligns the BRDF sampling
+    // domain with NEE, which already rejects dot(N_face, L) <= 0.
+    if (dot(N_face, bs.next_dir) <= 0.0f) {
         payload_set_next_direction(make_float3(0.0f, 0.0f, 0.0f));
         payload_set_throughput_update(make_float3(0.0f, 0.0f, 0.0f));
         payload_set_last_brdf_pdf(0.0f);
