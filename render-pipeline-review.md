@@ -62,30 +62,6 @@ native render resolution 等于 display resolution 时，仅这些数组约占 `
 
 color ping-pong 与事件可保持常驻；aux guides 和 `dlss_output_` 应只在 DLSS 实际可用且启用时按需创建，在 feature release 后按策略立即释放或进入明确缓存预算。若保留热切换缓存，应在 UI/统计中显示其 VRAM 成本并允许回收，而不是无条件常驻。
 
-### QRP-028：部分 BC block 用透明黑补齐，生成的尾部 mip 内容不可靠
-
-- 严重度：低（当前路径）/ 中（启用 LOD 后）
-- 置信度：高
-- 类型：纹理压缩边界处理 / 潜伏缺陷
-
-#### 代码证据
-
-- `app/src/texture.cpp:179-194` 的 `extract_block()` 对超出 logical mip 范围的 texel 写入全零 RGBA。
-- `compress_bc7()` 与 `compress_bc5()` 都把这 16 个 texel 作为真实 block 输入交给有损编码器。
-- 即使 base image 已是 4 的倍数，完整 mip chain 最终也通常包含 2×N、1×N、2×2、1×1 等尺寸。
-
-#### 触发条件
-
-启用 mip 的任意 LDR texture 在某级宽或高小于 4 或不是 4 的倍数；当前所有 LDR texture 都生成完整 mip chain。
-
-#### 影响
-
-硬件不会把 logical extent 外的 texel 作为独立图像区域采样，但 block encoder 会用有限 endpoints/partitions 同时拟合真实 texel与伪造黑 texel。人工黑色因此消耗编码精度并可改变有效边缘 texel。当前 QRP-029 表明这些尾部 mip 尚未被材质采样，所以现阶段主要表现为错误 cache 数据与无效压缩开销；一旦实现显式 LOD，就会直接变成远距离变暗、颜色/alpha coverage 改变及 normal/roughness 失真的画质问题。
-
-#### 修复方向
-
-block padding 应复制最近边缘 texel，或按 sampler wrap 语义构造边界；至少不能统一补透明黑。alpha-tested texture 还需单独考虑 mip alpha coverage，而不是把 padding 与 coverage 问题混为一体。
-
 ### QRP-029：材质纹理生成并上传完整 mip chain，但所有 OptiX 采样固定走隐式 base level
 
 - 严重度：高（画质与资源）

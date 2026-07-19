@@ -255,6 +255,10 @@ mip 基础设施已就绪；当前固定 LOD 0 的采样点改为 cone 驱动 LO
 
 `tex2DLod`，`LOD = log2(cone_width * texture_resolution / triangle_footprint)`（triangle_footprint 由交点偏导或等价几何估计）。
 
+### BC 尾部 mip padding 修正
+
+当前 `extract_block()` 对尾部 mip（2×2、1×1 等）越界 texel 填透明黑。黑色 texel 消耗 BC encoder 的 endpoint 精度并可能压暗有效 texel。启用 LOD 采样前须改为 edge-replicate padding。
+
 ---
 
 ## Step 18：Normal Map Specular AA
