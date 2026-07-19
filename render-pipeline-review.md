@@ -62,31 +62,6 @@ native render resolution 等于 display resolution 时，仅这些数组约占 `
 
 color ping-pong 与事件可保持常驻；aux guides 和 `dlss_output_` 应只在 DLSS 实际可用且启用时按需创建，在 feature release 后按策略立即释放或进入明确缓存预算。若保留热切换缓存，应在 UI/统计中显示其 VRAM 成本并允许回收，而不是无条件常驻。
 
-### QRP-032：secondary BRDF samples 未约束到 geometric-normal hemisphere
-
-- 严重度：高
-- 置信度：高
-- 类型：shading normal / path correctness
-
-#### 代码证据
-
-- `renderer/src/device/programs.cu:543-544` 只保证 mapped shading normal 与 `N_face` 位于同一半球；这不代表以 shading normal 为轴采样出的所有方向也位于 geometric hemisphere。
-- `renderer/include/qualquer/renderer/brdf.cuh:917-978` 的 specular branch 只检查 tangent-space `L_ts.z`（相对 `N_brdf`），`BrdfParams` 本身不携带 geometric normal；diffuse branch 甚至不拒绝负 `L_ts.z`，而是把 `NdotL` 强行 clamp 到 `1e-4` 后继续追踪。
-- EON 原论文的 CLTC 目标是禁止 negative-hemisphere samples，但当前 rational-fit 边界可静态构造反例：`r=1, mu=1` 时 `d≈+0.00345`；conditional random 接近 1、azimuth 接近 0 时 `wh→(-1,0,0)`，故变换后 `wi.z=d*wh.x+wh.z<0`。24-bit RNG 可进入该非零邻域。此时 `sample_EON()` 还把仅定义于正半球的 uniform PDF 常数加入 mixture PDF。
-- `renderer/src/device/programs.cu:707-744` 接收 `bs.next_dir` 后不再检查 `dot(N_face, next_dir)`，直接作为下一条 path ray。
-- 相比之下，NEE 路径在 `nee.cuh` 中显式拒绝 `dot(N_face,L) <= 0`，两条积分策略的有效方向域不一致。
-
-#### 触发条件
-
-平滑 shading normal 与低多边形 face normal 偏差较大、强 normal map、silhouette/grazing angle，或代码的 grazing fallback 进一步调整 `N_brdf` 时。
-
-#### 影响
-
-采样方向可能位于 shading normal 上方却穿入真实几何表面下方；CLTC 数值边界下甚至可位于 shading normal 自身的负半球。ray origin 仍沿 `N_face` 向外偏移，随后 ray 朝内发射，可能立即自交、穿透壳体、采到物体内部/背后环境。diffuse branch 对负方向使用正 cosine 与不适用的 mixture PDF，还会直接形成 estimator 偏差。
-
-#### 修复方向
-
-先保证 CLTC fit/sampling 在其声明域内（对 `d` 的边界、sample hemisphere 与 PDF 做一致处理），再在生成 secondary direction 后拒绝 geometric-backside samples，并让无效概率体现在 estimator/PDF 中；更完整方案应采用一致的 shading-normal energy/Jacobian correction。仅把方向硬翻回半球会改变分布，同样可能引入偏差，需按所选理论方案实现并做 furnace/normal-map 测试。EON 依据：<https://jcgt.org/published/0014/01/06/>。
 
 ### QRP-033：shadow-terminator correction 只作用于 NEE，MIS 的 BRDF-hit 分支估计了不同 integrand
 
