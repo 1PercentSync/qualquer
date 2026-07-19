@@ -62,32 +62,6 @@ native render resolution 等于 display resolution 时，仅这些数组约占 `
 
 color ping-pong 与事件可保持常驻；aux guides 和 `dlss_output_` 应只在 DLSS 实际可用且启用时按需创建，在 feature release 后按策略立即释放或进入明确缓存预算。若保留热切换缓存，应在 UI/统计中显示其 VRAM 成本并允许回收，而不是无条件常驻。
 
-### QRP-026：environment rotation 变化不会向 DLSS-RR 发送 history reset
-
-- 严重度：中
-- 置信度：高
-- 类型：DLSS temporal history / 画质
-
-#### 代码证据
-
-- `renderer/src/renderer.cpp:675-680` 把 `env_rotation` 变化计入 `content_changed`/`needs_reset`。
-- 但 DLSS active 时 `chain_count` 本来固定为 0；真正传给 NGX 的 reset 来自 `dlss_reset_requested_`。
-- `renderer/src/renderer.cpp:682-704` 只在 camera 或 `max_clamp` 变化时调用 `invalidate_dlss_history()`；environment rotation 被明确排除。
-- `renderer/src/renderer.cpp:734-747` 因而给旋转后生成的 metadata 写入 `.reset = false`，`optix/src/dlss_rr.cpp:308` 最终将 `InReset=0` 传给 NGX。
-- `app/src/application.cpp:600-625` 的 IBL drag 可逐帧连续改变 `env_rotation`。
-
-#### 触发条件
-
-DLSS-RR 开启时拖动环境旋转；暂停期间旋转后再恢复也会触发。加载全新 env map 走显式 `reset_accumulation()`，不属于本项。
-
-#### 影响
-
-环境照明相对于所有表面发生全局不连续变化，但 motion vectors 仍描述几何运动且通常接近零。DLSS 会把旧照明历史重投影到新照明，产生拖影、滞后、残留高光或短时错误去噪；暂停恢复时旧历史还可能跨越整个旋转跨度。
-
-#### 修复方向
-
-当 `dlss_active && env_rotation_changed` 时请求 history reset，并让第一张旋转后、可评估的 input metadata 携带 `reset=true`。连续拖动期间每个输入都发生光照不连续，是否逐帧 reset 或在交互期间采用更专门的响应策略可做画质 A/B，但当前完全不 reset 没有 motion-vector 补偿依据。
-
 ### QRP-027：BC block 对齐通过重采样整张纹理实现，改变非 4 倍数图像的内容与纵横比
 
 - 严重度：高（纹理正确性）
