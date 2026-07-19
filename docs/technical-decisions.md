@@ -258,15 +258,6 @@ roughness**（与 specular 的 alpha 参数域不同，见上节）。
 - **全分辨率**：L2 共享预算下代价过大，importance 精度的边际收益不足以抵消
 - **Hierarchical mipmap sampling**：存储最优且天然适配任意分辨率，但需重构采样与 PDF 路径，留待 M2 更复杂光源策略时评估
 
-### NEE 策略混合
-
-**决策**：两种光源（env + emissive）同时有效时，每个 bounce 以固定 50:50 选择一种 NEE 策略，被选贡献除以选择概率 `q = 0.5`
-；仅一种策略有效时直接评估该策略且 `q = 1.0`。光源资源遵循整体有效或整体无效的契约：正 `total_luminance` 是 env 的唯一有效性信号，正
-`total_power` 是 emissive 的唯一有效性信号，并分别保证关联资源全部有效。host 据此编码 LaunchParams 的 `nee_light_mask`（bit 0 =
-env，bit 1 = emissive），device 以该 mask 作为唯一控制来源并推导 `q`；host、device 与 evaluator 均不重复验证关联资源字段。MIS 权重
-使用无条件有效密度 `q * p_nee`。env 与 emissive 共享四个 Sobol NEE 维度，首个维度同时承担策略选择和所选策略的第一个条件随机数：env 区间 `[0, 0.5)` 映射为
-`2u`， emissive 区间 `[0.5, 1)` 映射为 `2u - 1`。不使用额外 hash。
-
 ### 环境贴图表示
 
 **决策**：equirect 加载后转 cubemap，`texCubemap` 采样。
