@@ -104,15 +104,15 @@ bounce payload type + shadow 改为零 payload `optixTraverse`，降低 continua
    `payload_types` / `num_payload_types` 参数（renderer 定义内容，optix 层透传）。编译器拿到这张表后，能区分 typed bounce
    trace（16 个寄存器）和 untyped shadow trace（零寄存器），跨 shadow trace 时不再保存/恢复 bounce 寄存器
 2. Shadow ray 改为零 payload `optixTraverse(...)` + `!optixHitObjectIsHit()`——shadow 只需要知道「有没有撞到东西」，
-   `optixHitObjectIsHit()` 直接回答，不需要通过寄存器传数据。AH（alpha 测试）在遍历阶段执行，不属于 invoke 阶段，
-   零 payload 不影响 AH 触发
-3. 移除 `__miss__shadow`——它唯一的作用是往寄存器写 `visible=1`，shadow 不再用寄存器后没有存在意义。程序组 4→3，SBT
-   miss 记录 2→1
-4. Bounce trace 的 `optixTraverse` / `optixInvoke` 加 type 参数 `kPayloadTypeBounce`（= `OPTIX_PAYLOAD_TYPE_ID_0`），
-   告诉 OptiX 这次 trace 用 bounce 的寄存器布局；shadow trace 不传 type——这是编译器区分两者的依据
+   `optixHitObjectIsHit()` 直接回答，不需要通过寄存器传数据。AH（alpha 测试）在遍历阶段执行，不属于 invoke 阶段， 零 payload
+   不影响 AH 触发
+3. 移除 `__miss__shadow`——它唯一的作用是往寄存器写 `visible=1`，shadow 不再用寄存器后没有存在意义。程序组 4→3，SBT miss 记录
+   2→1
+4. Bounce trace 的 `optixTraverse` / `optixInvoke` 加 type 参数 `kPayloadTypeBounce`（= `OPTIX_PAYLOAD_TYPE_ID_0`）， 告诉
+   OptiX 这次 trace 用 bounce 的寄存器布局；shadow trace 不传 type——这是编译器区分两者的依据
 5. `OptixProgramGroupOptions` 保持零初始化（单一 type 可唯一推导）
-6. 单一 type 下 `optixSetPayloadTypes`（程序内部声明支持哪些 type 的 API）不需要——编译器从模块选项中已知唯一 type
-   的语义，SDK 示例在 CH/MS 中调用它是多 type 场景的惯例，单 type 下无效果
+6. 单一 type 下 `optixSetPayloadTypes`（程序内部声明支持哪些 type 的 API）不需要——编译器从模块选项中已知唯一 type 的语义，SDK
+   示例在 CH/MS 中调用它是多 type 场景的惯例，单 type 下无效果
 
 bounce payload 16 register 语义：
 
@@ -127,33 +127,42 @@ bounce payload 16 register 语义：
 
 ### 单策略 NEE 混合
 
-每 bounce 双 shadow ray（env + emi）遍历代价高。改为随机选一条——两种光源都存在时 50:50 选一条、结果 ×2 补偿；MIS 权重用有效
-PDF（`nee_pdf_scale * p_nee`）反映竞争策略的实际出现频率。选择用 hash（不消耗 Sobol 维度），NEE 维度共享，`kDimsPerBounce`
-12→8。
+每个 bounce 只评估 env 或 emissive 中的一种 NEE 策略。两种策略同时有效时选择概率固定为 50:
+50，被选贡献除以选择概率；仅一种策略有效时直接评估该策略。MIS 使用无条件有效密度 `q * p_nee`，其中 `q` 是当前策略的选择概率。
 
-**LaunchParams 新增**：`float nee_pdf_scale`（host 预算：两种光源共存 0.5，否则 1.0）。
+**策略有效性与 LaunchParams**：host 是策略有效性的唯一判定方。env 有效要求 cubemap、alias table、非零 alias count 与正 total
+luminance；emissive 有效要求 triangles、alias table、非零 count 与正 total power。LaunchParams 新增
+`uint32_t nee_light_mask`：bit 0 表示 env，bit 1 表示 emissive。device 只读取该 mask：值 0 跳过 NEE，值 1 只调用 env，值 2 只调用
+emissive，值 3 执行 50:50 选择。选择概率由 mask 推导为 `q = mask == 3 ? 0.5 : 1.0`，不单独存储。
 
 **RNG 维度布局**：
 
-| 偏移 | 用途 |
-|------|------|
-| 0 | lobe select |
-| 1 | BRDF ξ₀ |
-| 2 | BRDF ξ₁ |
-| 3 | RR |
-| 4–7 | NEE（共享 4 dims） |
+| 偏移 | 用途                      |
+|------|---------------------------|
+| 0    | lobe select               |
+| 1    | BRDF ξ₀                   |
+| 2    | BRDF ξ₁                   |
+| 3    | RR                        |
+| 4    | NEE 策略选择与条件采样 ξ₀ |
+| 5–7  | NEE 条件采样 ξ₁–ξ₃        |
 
 `kDimsPerBounce` = 8，`kBounceOffsetNee` = 4（替代原 `kBounceOffsetEnvNee` / `kBounceOffsetEmissiveNee`）。Sobol 覆盖
 (128−2)/8 = 15 bounces（原 10）。
 
-**call site（closesthit）**：hash 选择（`pcg_hash(pixel ^ sample ^ bounce)` 低位）；只调用选中的 evaluate 函数，结果 ×2；仅一种光源时直接调用对应函数，权重 1。
+**随机数映射**：call site 一次生成共享的 `u0..u3`。两种策略同时有效时，以 `u0 < 0.5` 选择 env，并令 `u0 = 2*u0`；否则选择
+emissive，并令 `u0 = 2*u0 - 1`。区间重映射使所选策略获得均匀的条件采样 `u0`，同时保留 Sobol 的 50:50 分层，不使用额外 hash 或
+RNG 维度。仅一种策略有效时不重映射。
 
-**MIS 权重调整**（`nee_pdf_scale` 统一作用）：
+**evaluator 接口**：`evaluate_env_nee` 与 `evaluate_emissive_nee` 接收已经生成的四个 NEE 随机数，不再接收 pixel、sample 与
+dimension base，也不在内部调用 `sobol_rng`。call site 根据 `nee_light_mask` 只调用有效且被选中的 evaluator；evaluator
+以调用契约保证资源有效，不再重复守卫。两种策略同时有效时将返回值除以 `q`。
 
-- NEE 侧：`mis_power_heuristic(light_pdf * params.nee_pdf_scale, brdf_pdf)`
-- BSDF 侧（miss env / closesthit emissive-hit）：`mis_power_heuristic(brdf_pdf, light_pdf * params.nee_pdf_scale)`
+**MIS 权重调整**（由 `nee_light_mask` 推导的 `q` 统一作用）：
 
-仅一种光源时 `nee_pdf_scale = 1.0`，公式退化为原始二策略 MIS。
+- NEE 侧：`mis_power_heuristic(light_pdf * q, brdf_pdf)`
+- BSDF 侧（miss env / closesthit emissive-hit）：`mis_power_heuristic(brdf_pdf, light_pdf * q)`
+
+仅一种策略有效时 `q = 1.0`，公式退化为原始二策略 MIS。
 
 ---
 
