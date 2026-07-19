@@ -62,30 +62,6 @@ native render resolution 等于 display resolution 时，仅这些数组约占 `
 
 color ping-pong 与事件可保持常驻；aux guides 和 `dlss_output_` 应只在 DLSS 实际可用且启用时按需创建，在 feature release 后按策略立即释放或进入明确缓存预算。若保留热切换缓存，应在 UI/统计中显示其 VRAM 成本并允许回收，而不是无条件常驻。
 
-### QRP-030：DLSS motion vector 接受 previous clip space 中位于相机后方的投影
-
-- 严重度：中
-- 置信度：高
-- 类型：DLSS disocclusion / motion vectors
-
-#### 代码证据
-
-- `renderer/src/device/programs.cu:346-370` 将当前 primary hit/world direction 同时投影到 current 与 previous unjittered VP。
-- perspective divide guard 使用 `fabsf(prev_clip.w) >= 1e-4`；它只排除接近零的 `w`，却把明显为负的 `w` 当成有效。
-- 对当前 GLM 右手透视矩阵，camera 前方点的 `clip.w = -view_z > 0`；负 `w` 表示该点/方向位于 previous camera 后方，没有合法 previous screen position。
-
-#### 触发条件
-
-快速相机旋转、较大帧间位移、穿过近处几何，或 sky direction 在 previous view 中落到相机后半球。正常小幅运动不一定触发。
-
-#### 影响
-
-相机后方点仍会被透视除法映射到有限 NDC；正后方方向甚至可映射到画面中心。DLSS 因而沿错误 motion vector 读取本不对应的历史，产生拖影或错误稳定，而不是把该像素视为 disocclusion。
-
-#### 修复方向
-
-至少要求 `curr_clip.w > epsilon && prev_clip.w > epsilon` 后才生成重投影 MV；previous point 不可投影时需采用与 DLSS 契约一致的 disocclusion 表达（可选 disocclusion mask、history reset 或经画质验证的 fallback），不能把“负且远离零”误认为有效。
-
 ### QRP-031：firefly clamp 对 Inf 产生 `Inf × 0 = NaN`，对既有 NaN 完全失效
 
 - 严重度：中（数值鲁棒性）
