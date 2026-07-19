@@ -1,31 +1,5 @@
 ## 3. 已确认问题
 
-### QRP-019：世界空间 tangent 保留模型缩放长度，导致 normal map 强度随实例缩放改变
-
-- 严重度：高
-- 置信度：高
-- 类型：法线贴图正确性 / 错误优化判断
-
-#### 代码证据
-
-- `renderer/src/device/programs.cu:530-535` 用 object-to-world vector transform 得到 `T_world`，并刻意不归一化。
-- `renderer/include/qualquer/renderer/math_utils.cuh:137-155` 直接计算 `B = cross(N, T_world) * tangent_w`，再组合 `T_world * tx + B * ty + N * tz`。
-- normal `N` 已由 normal transform 后归一化，而 `T_world`/`B` 保留 object-to-world 的缩放长度，三条 TBN 轴不再具有同一尺度。
-
-#### 判断
-
-MikkTSpace 要求避免在共享索引顶点上错误平均 tangent，并不要求在最终世界空间 TBN 中保留模型缩放长度。即使实例只有均匀缩放 `s`，当前组合也变成 `s*T*tx + s*B*ty + N*tz`；归一化最终向量不能消除 tangent 分量与 normal 分量之间的相对缩放。因此 normal map 倾斜角会随实例 scale 改变。
-
-object-to-world 变换后的 tangent 与 inverse-transpose normal 在精确数学下仍正交，但 tangent 仍需归一化；非均匀缩放和数值误差下还应确认正交化策略。
-
-#### 触发条件
-
-使用 normal texture 的实例具有任意非 1 的模型缩放；非均匀缩放更明显。
-
-#### 影响
-
-相同材质贴到不同 scale 的实例上会产生不同法线扰动强度，改变高光形状、能量、NEE 与 DLSS normal guide。放大实例会夸大 XY 扰动，缩小实例会把法线压回几何 normal。
-
 ### QRP-020：负 determinant 实例变换未翻转 triangle facing
 
 - 严重度：高
