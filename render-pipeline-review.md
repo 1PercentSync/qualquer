@@ -1,27 +1,5 @@
 ## 3. 已确认问题
 
-### QRP-011：空场景早退保留上一场景的 TLAS instance 统计
-
-- 严重度：低
-- 置信度：高
-- 类型：状态一致性 / UI
-
-#### 代码证据
-
-- `renderer/src/renderer.cpp:524` 只在构造新 TLAS instance 列表后更新 `tlas_instance_count_`。
-- 空场景路径在该赋值前早退。
-- `renderer/src/renderer.cpp:1205-1206` 直接向 UI 暴露该缓存值。
-
-#### 触发条件
-
-先加载非空场景，再加载没有可渲染 instance 的场景。
-
-#### 影响
-
-统计/UI 继续显示上一场景的 TLAS instance 数量，不反映当前渲染状态。
-
----
-
 ### QRP-012：纹理缓存键不包含转换与压缩实现版本
 
 - 严重度：低至中
