@@ -62,31 +62,6 @@ native render resolution 等于 display resolution 时，仅这些数组约占 `
 
 color ping-pong 与事件可保持常驻；aux guides 和 `dlss_output_` 应只在 DLSS 实际可用且启用时按需创建，在 feature release 后按策略立即释放或进入明确缓存预算。若保留热切换缓存，应在 UI/统计中显示其 VRAM 成本并允许回收，而不是无条件常驻。
 
-### QRP-031：firefly clamp 对 Inf 产生 `Inf × 0 = NaN`，对既有 NaN 完全失效
-
-- 严重度：中（数值鲁棒性）
-- 置信度：高（行为）/ 中（实际触发频率）
-- 类型：path sample 非有限值处理
-
-#### 代码证据
-
-- `renderer/include/qualquer/renderer/pt_common.cuh:199-209` 先计算平均 RGB luminance；超过阈值时返回 `radiance * (max_clamp / lum)`。
-- 任一正无穷分量可使 `lum=Inf`、比例变成 0，随后该分量执行 `Inf*0` 得到 NaN。
-- 输入已经含 NaN 时，`lum > max_clamp` 为 false，函数原样返回 NaN。
-- `renderer/src/device/programs.cu:274-300` 在累加前使用该函数；NaN 随后进入 frame sum，DLSS-off 时还会写入持久 Separate Sum。
-
-#### 触发条件
-
-极端近零 PDF、很长且高增益路径、数值溢出、异常材质/纹理值或其他 BRDF/NEE 非有限中间量。正常资产上未必常见，需要 device validation/画面统计确认频率。
-
-#### 影响
-
-单个 non-finite sample 可永久污染该像素的 accumulation；tonemap 的比较/clamp 同样不能可靠修复 NaN。DLSS 开启时会把非有限 color 输入交给 NGX，结果未定义于当前集成层。
-
-#### 修复方向
-
-在 firefly clamp/累加边界显式检测 RGB 是否 finite，并定义稳定策略：丢弃异常 sample、饱和到有限阈值或记录 device diagnostic。不能依赖普通 luminance 比较消除 NaN/Inf；同时应定位产生 non-finite 的上游而不是只掩盖。
-
 ### QRP-032：secondary BRDF samples 未约束到 geometric-normal hemisphere
 
 - 严重度：高
