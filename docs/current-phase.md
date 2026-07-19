@@ -131,7 +131,7 @@ bounce payload 16 register 语义：
 50，被选贡献除以选择概率；仅一种策略有效时直接评估该策略。MIS 使用无条件有效密度 `q * p_nee`，其中 `q` 是当前策略的选择概率。
 
 **策略有效性**：正 `total_luminance` 保证 env 的 cubemap、alias table、alias count 与维度全部有效；正 `total_power` 保证 emissive 的
-triangles、alias table 与 count 全部有效。这两个规范化总量是唯一事实来源，不新增 LaunchParams 派生字段或 light mask。每个需要
+triangles、alias table 与 count 全部有效。这两个规范化总量是唯一事实来源。每个需要
 NEE 或其 MIS 权重的 program invocation 直接计算一次 `env_active = total_luminance > 0` 与 `emissive_active = total_power > 0`。两者均
 有效时执行 50:50 选择并令 `q = 0.5`；仅一者有效时直接调用对应策略并令 `q = 1.0`；两者均无效时跳过 NEE。
 
