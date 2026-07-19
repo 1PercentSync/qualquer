@@ -1,30 +1,5 @@
 ## 3. 已确认问题
 
-### QRP-015：所有材质纹理都强制使用 `TEXCOORD_0`
-
-- 严重度：中
-- 置信度：高
-- 类型：glTF 材质正确性 / 兼容性
-
-#### 代码证据
-
-- `app/src/scene_loader.cpp:345-357` 只读取 `TEXCOORD_0`；`Vertex` 也只保存一套 UV。
-- `app/src/scene_loader.cpp:698-714` 解析各纹理引用时只保存 texture index，没有保存各 `textureInfo.texCoord`。
-- `renderer/src/device/programs.cu:546-573` 对 base color、metallic-roughness、normal 和 emissive texture 全部使用同一个插值 `uv`；any-hit alpha 在 `renderer/src/device/programs.cu:771` 亦如此。
-
-#### 规范依据
-
-- glTF 2.0 允许 `TEXCOORD_n` 多套属性；本地规范 `Specification.adoc:1278-1315` 建议客户端至少支持两套 texture coordinate。
-- 本地 schema `textureInfo.schema.json:13-18` 定义每个 texture info 独立的 `texCoord`，其值选择对应的 `TEXCOORD_<set index>`；默认值才是 0。
-
-#### 触发条件
-
-任一材质纹理显式设置 `texCoord: 1` 或更高，并由 primitive 提供对应 `TEXCOORD_1` 等属性。
-
-#### 影响
-
-纹理会以错误 UV 采样。base-color alpha 的错误 UV 还会让 any-hit alpha mask 与几何可见性错误；normal、metallic-roughness 和 emissive 纹理则分别造成法线、BRDF 与光源辐射分布错误。
-
 ### QRP-016：glTF `magFilter` 被完全忽略
 
 - 严重度：低至中

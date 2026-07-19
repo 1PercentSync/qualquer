@@ -342,7 +342,10 @@ namespace qualquer::app {
                     }
                 }
 
-                // TEXCOORD_0 (optional, zero-initialized default is fine)
+                // TEXCOORD_0 only. glTF allows per-texture texCoord set selection
+                // (textureInfo.texCoord); currently all textures sample from set 0.
+                // Assets using TEXCOORD_1+ will render with incorrect UVs for those
+                // textures. Acceptable until such assets are encountered in practice.
                 bool has_uv0 = false;
                 if (const auto it = primitive.findAttribute("TEXCOORD_0");
                     it != primitive.attributes.end()) {
