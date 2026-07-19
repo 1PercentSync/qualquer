@@ -1,28 +1,5 @@
 ## 3. 已确认问题
 
-### QRP-014：合法的无材质 glTF primitive 被当作加载错误
-
-- 严重度：中
-- 置信度：高
-- 类型：glTF 兼容性
-
-#### 代码证据
-
-- `app/src/scene_loader.cpp:527-531` 在 `primitive.materialIndex` 缺失时直接抛出异常，并要求每个 primitive 必须显式指定材质。
-- 异常由场景加载顶层捕获后导致整个场景加载失败，而不是只影响该 primitive。
-
-#### 规范依据
-
-本地 Khronos glTF 2.0 规范 `/mnt/d/Github/glTF/specification/2.0/Specification.adoc:1249` 明确规定：当 primitive 的 `material` 未定义时，**必须**使用 default material。该 default material 在同文件 `2171-2179` 定义为所有字段采用规范默认值的普通材质。
-
-#### 触发条件
-
-加载任意省略 primitive `material` 字段的合法 glTF 2.0 资产。
-
-#### 影响
-
-符合规范的资产被整体拒绝，场景切换还会在旧场景已经销毁后落入空场景。该限制没有记录为项目资产子集约束，并与路线图声明的 glTF mesh/material 加载目标不符。
-
 ### QRP-015：所有材质纹理都强制使用 `TEXCOORD_0`
 
 - 严重度：中
