@@ -361,11 +361,13 @@ __global__ void __raygen__rg() { // NOLINT(*-reserved-identifier)
             // the projected point/direction lies near the camera plane: sky
             // direction perpendicular to the previous camera forward (fast
             // rotation), or a hit point crossing the previous near plane (fast
-            // translation). The MV is undefined in these cases; zero tells
-            // DLSS-RR "static pixel", falling back to its internal heuristics.
+            // translation). Negative w means the point is behind that camera
+            // and has no valid screen position (DLSS Programming Guide §3.6.1.1
+            // checks PrevClipPos.w > 0 before computing MV). Zero MV keeps the
+            // default "static pixel" fallback for DLSS internal heuristics.
             constexpr float kClipWMin = 1e-4f;
             float2 mv = make_float2(0.0f, 0.0f);
-            if (fabsf(curr_clip.w) >= kClipWMin && fabsf(prev_clip.w) >= kClipWMin) {
+            if (curr_clip.w >= kClipWMin && prev_clip.w >= kClipWMin) {
                 const float2 curr_ndc = make_float2(curr_clip.x / curr_clip.w,
                                                     curr_clip.y / curr_clip.w);
                 const float2 prev_ndc = make_float2(prev_clip.x / prev_clip.w,
