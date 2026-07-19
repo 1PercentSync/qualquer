@@ -63,37 +63,6 @@ native render resolution 等于 display resolution 时，仅这些数组约占 `
 color ping-pong 与事件可保持常驻；aux guides 和 `dlss_output_` 应只在 DLSS 实际可用且启用时按需创建，在 feature release 后按策略立即释放或进入明确缓存预算。若保留热切换缓存，应在 UI/统计中显示其 VRAM 成本并允许回收，而不是无条件常驻。
 
 
-### QRP-033：shadow-terminator correction 只作用于 NEE，MIS 的 BRDF-hit 分支估计了不同 integrand
-
-- 严重度：中高
-- 置信度：高
-- 类型：MIS / shading-normal heuristic
-
-#### 代码证据
-
-- `renderer/include/qualquer/renderer/nee.cuh:347-350,468-471,667-670,696-699` 仅在 light-sampled NEE contribution 上乘 `shadow_terminator_factor(N_face,N_shading,L)`。
-- BRDF sampling 的 throughput 不包含该 factor，也不携带前一命中的 geometric/shading normals。
-- secondary ray 随后命中 emissive triangle 或 environment 时，`renderer/src/device/programs.cu:572-594` 与 miss shader 只应用 MIS weight，无法为前一 shading point 补上相同 correction。
-
-#### 官方依据与判断
-
-Disney 原论文把该项定义为额外的 shadowing factor `G`，用于让以 shading normal 计算的 incident illumination 在 geometric terminator 平滑归零；项目实现的除以 `dot(Ng,Ns)` 公式及 Hermite 多项式本身与论文一致。
-
-- <https://media.disneyanimation.com/technology/publications/2019/TamingtheShadowTerminator.pdf>
-
-标准 MIS power heuristic 要求参与组合的策略估计同一 integrand。当前 light-sampled strategy 估计 `f × G`，BSDF-hit strategy 估计未修正的 `f`；权重相加不再恢复任一目标函数。并且所有只经 BRDF sampling 到达的间接入射光也完全绕过 `G`。结果会随 proposal PDF/路径生成方式改变，而不是只由场景传输决定。
-
-#### 触发条件
-
-smooth/normal-mapped surface 的 geometric 与 shading terminator 有明显差异，且同一 env/emissive contribution 同时可由 NEE 与 BRDF path 采到。
-
-#### 影响
-
-shadow terminator 附近产生有方向/PDF依赖的能量偏差；改变 roughness 或 light sampling 分布甚至可能改变该偏差，而不只是噪声。BRDF-hit 与纯间接分支还会重新引入本想消除的亮边/漏光。
-
-#### 修复方向
-
-选择一个对两种策略一致的 shading-normal/terminator 模型，并在 BRDF eval、sample throughput 与双方 PDF/贡献中统一。若保留经验性 direct-light attenuation，也需明确接受偏差并避免再用标准 MIS 将它与未修正 integrand 混合。
 
 ### QRP-034：没有 TLAS 时 raygen 固定输出黑色，已加载 environment 也不可见
 
