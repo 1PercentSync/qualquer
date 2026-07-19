@@ -452,26 +452,25 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
     // Single-sided back-face pass-through needs only positions (face normal),
     // ray direction, and double_sided. Check before the full interpolation to
     // skip normal/UV/color/tangent work on the pass-through path.
-    // is_back_face only needs the sign of the face normal: use unnormalized
-    // N_face_raw here; unit N_face is built only on the shading path.
     const float3 face_normal_obj = cross(v1.position - v0.position,
                                          v2.position - v0.position);
     const float3 N_face_raw =
         optixTransformNormalFromObjectToWorldSpace(face_normal_obj);
     const float3 ray_dir = optixGetWorldRayDirection();
-    const bool is_back_face = dot(N_face_raw, ray_dir) > 0.0f;
+    // Normalize once; shared by pass-through (offset_ray_origin) and shading.
+    float3 N_face = normalize(N_face_raw);
+    const bool is_back_face = dot(N_face, ray_dir) > 0.0f;
 
     if (is_back_face && mat.double_sided == 0u) {
         // Single-sided material hit from behind: pass through the surface.
-        // Throughput unchanged, consumes one bounce. Origin is pushed past
-        // the hit point along the ray direction to avoid re-intersection.
+        // Throughput unchanged, consumes one bounce.
         // hit_distance = 0 signals raygen that this is not a real primary
         // surface (raygen skips primary capture for == 0, terminates for < 0).
         // The real visible surface behind will write correct aux guides via
         // the primary_aux_needed flag in p15 MSB.
         const float hit_t = optixGetRayTmax();
-        const float pass_eps = fmaxf(hit_t * 1e-4f, 1e-6f);
-        const float3 pass_origin = optixGetWorldRayOrigin() + ray_dir * (hit_t + pass_eps);
+        const float3 hit_pos = optixGetWorldRayOrigin() + ray_dir * hit_t;
+        const float3 pass_origin = offset_ray_origin(hit_pos, N_face);
 
         payload_set_next_origin(pass_origin);
         payload_set_next_direction(ray_dir);
@@ -486,9 +485,6 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
         payload_set_last_brdf_pdf(0.0f);
         return;
     }
-
-    // Unit geometric normal for shading (N_interp fallback, flips, NEE).
-    float3 N_face = normalize(N_face_raw);
 
     // ---- Full barycentric interpolation (only reached for shaded surfaces) ----
     const float2 bary = optixGetTriangleBarycentrics();
