@@ -31,30 +31,6 @@ host 侧 `submit_cuda()` 可能在参数上传处等待此前 compute-stream 工
 
 QRP-O05 关注 16 KiB 不变 Sobol 表的 constant-cache 与重复传输收益；本项进一步确认重复传输还走 pageable staging。可将不变 Sobol 数据改为一次上传的独立只读/constant 资源，并为真正变化的小型参数使用持久 pinned staging ring；若直接把当前栈地址注册或改成临时 pinned 对象，则必须重新保证其生命周期覆盖异步 copy。
 
-### QRP-023：损坏或不兼容的现有纹理缓存无法被新结果修复
-
-- 严重度：低至中
-- 置信度：高
-- 类型：缓存恢复路径
-
-#### 代码证据
-
-- `app/src/texture.cpp:317-330` 在缓存文件存在但 KTX2 解析失败、format 或 face count 不匹配时只返回 cache miss，不删除/隔离旧文件。
-- 随后重新压缩并调用 `atomic_write_file()`。
-- `app/src/cache.cpp:103-108` 直接把 `.tmp` rename 到目标路径；在 Windows 上目标已存在时该 rename 失败，函数删除临时文件并保留旧目标。
-
-#### 触发条件
-
-缓存文件截断、元数据损坏、由旧实现写出但仍使用同一 key，或格式检查失败。
-
-#### 影响
-
-每次加载都会重新解码和压缩，然后发布阶段再次失败；坏缓存永久存在，程序无法自愈，用户只能手工清理缓存。大型纹理会反复支付显著 CPU 压缩时间。
-
-#### 与纹理缓存键的关系
-
-缓存键缺少算法版本导致”合法旧结果被误命中”是独立的已知限制；本项是已经判定无效的文件仍不能被替换，属于独立恢复缺陷。
-
 ### QRP-024：present semaphore 的 signal stage 没有与最终 PRESENT layout transition 建立完整依赖
 
 - 严重度：高
