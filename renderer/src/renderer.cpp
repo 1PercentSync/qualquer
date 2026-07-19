@@ -719,8 +719,7 @@ namespace qualquer::renderer {
                                          ? 0
                                          : read.sample_count;
         const bool produces_dlss_input = dlss_active
-                                         && has_new_samples
-                                         && accel_.tlas_handle() != 0;
+                                         && has_new_samples;
         const bool slot_reset = produces_dlss_input && dlss_reset_requested_;
         if (produces_dlss_input) {
             dlss_reset_requested_ = false;
@@ -963,9 +962,7 @@ namespace qualquer::renderer {
             if (dlss_active) {
                 write.sample_count = produces_dlss_input ? 1 : 0;
             } else {
-                write.sample_count = accel_.tlas_handle() == 0
-                                         ? 0
-                                         : chain_count + effective_spp;
+                write.sample_count = chain_count + effective_spp;
             }
             accum_index_ = write_slot;
             sequence_base_ += effective_spp;

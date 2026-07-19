@@ -113,6 +113,26 @@ __forceinline__ __device__ float3 trace_sample(
     uint32_t p6 = 0, p7 = 0, p8 = 0, p9 = 0, p10 = 0, p11 = 0;
     uint32_t p12 = 0, p13 = 0, p14 = 0;
 
+    // No geometry: every ray is an immediate environment miss. Perform
+    // the equivalent of miss shader lookup without calling optixTrace
+    // (null traversable is undefined behavior).
+    if (params.traversable == 0) {
+        float3 env_color = make_float3(0.0f, 0.0f, 0.0f);
+        if (params.env.cubemap != 0) {
+            const float3 dir = rotate_y_dir(primary_dir,
+                                            params.env.rotation_sin,
+                                            params.env.rotation_cos);
+            const auto texel = texCubemap<float4>(params.env.cubemap,
+                                                  dir.x, dir.y, dir.z);
+            env_color = make_float3(texel.x, texel.y, texel.z);
+        }
+        if (capture_primary) {
+            primary_is_hit = false;
+            primary_sky_color = env_color;
+        }
+        return env_color;
+    }
+
     // When capture_primary is true, we look for the first real surface
     // (hit_distance > 0) or sky miss (hit_distance < 0) to use for MV and
     // aux guides. Pass-through bounces return hit_distance == 0 and are
@@ -246,18 +266,6 @@ __global__ void __raygen__rg() { // NOLINT(*-reserved-identifier)
 
     const uint3 idx = optixGetLaunchIndex();
     const uint32_t pixel_index = idx.y * params.width + idx.x;
-
-    // Empty scene (no geometry loaded → traversable == 0): optixTrace on a
-    // null traversable is undefined behavior. Write black directly — reading
-    // the read buffer would access uninitialized memory on the first frame
-    // after allocation. Host sets the write-slot count to 0 to match.
-    if (params.traversable == 0) {
-        surf2Dwrite(make_float4(0.0f, 0.0f, 0.0f, 1.0f),
-                    params.color_output,
-                    static_cast<int>(idx.x * sizeof(float4)),
-                    static_cast<int>(idx.y));
-        return;
-    }
 
     // Camera origin (constant across all samples within this frame).
     const float4 origin_w = mul(params.inv_view, make_float4(0.0f, 0.0f, 0.0f, 1.0f));
