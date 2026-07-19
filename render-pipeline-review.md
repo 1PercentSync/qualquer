@@ -10,28 +10,6 @@
 
 ---
 
-### QRP-009：发光三角形 shadow-ray 终点空隙与距离成比例
-
-- 严重度：中
-- 置信度：高
-- 类型：可见性鲁棒性
-
-#### 代码证据
-
-- `renderer/include/qualquer/renderer/nee.cuh:438` 与 `renderer/include/qualquer/renderer/nee.cuh:676` 使用 `dist * (1 - 1e-4)` 作为 shadow-ray `tmax`。
-
-#### 判断
-
-终点排除区长度为 `dist × 1e-4`，随光源距离线性增长，而不是依据起点/终点浮点误差或局部几何尺度。
-
-#### 触发条件
-
-远距离发光三角形，且遮挡物位于光源前方最后一段相对空隙内。
-
-#### 影响
-
-可能漏掉合法遮挡物并产生漏光；距离越远，未检测区绝对长度越大。
-
 ---
 
 ### QRP-010：环境 alias 的 cell 内纬度 jitter 与返回 solid-angle PDF 不一致
