@@ -614,10 +614,28 @@ namespace qualquer::app {
             }
         }
 
+        // ---- Deduplicate entries sharing the same source image + role ----
+        // Different glTF texture objects can reference the same image (different
+        // samplers). Without dedup they would race on the same cache .tmp path
+        // during parallel compression.
+        std::vector<int> dedup_source(tex_count, -1);
+        {
+            std::map<std::pair<std::string, TextureRole>, int> seen;
+            for (int i = 0; i < tex_count; ++i) {
+                if (cache_hit[i]) { continue; }
+                auto key = std::make_pair(source_hashes[i], unique_entries[i].role);
+                if (auto it = seen.find(key); it != seen.end()) {
+                    dedup_source[i] = it->second;
+                } else {
+                    seen[key] = i;
+                }
+            }
+        }
+
         // ---- Decode cache-miss images (serial) ----
         std::vector<ImageData> decoded_images(tex_count);
         for (int i = 0; i < tex_count; ++i) {
-            if (cache_hit[i]) { continue; }
+            if (cache_hit[i] || dedup_source[i] >= 0) { continue; }
             const auto &tex = gltf.textures[unique_entries[i].texture_index];
             decoded_images[i] = decode_gltf_image(gltf, gltf.images[*tex.imageIndex]);
         }
@@ -625,9 +643,16 @@ namespace qualquer::app {
         // ---- Parallel BC compression for cache misses only ----
         #pragma omp parallel for schedule(dynamic)
         for (int i = 0; i < tex_count; ++i) {
-            if (cache_hit[i]) { continue; }
+            if (cache_hit[i] || dedup_source[i] >= 0) { continue; }
             prepared_textures[i] = compress_texture(
                 decoded_images[i], unique_entries[i].role, source_hashes[i]);
+        }
+
+        // Propagate results to duplicate entries.
+        for (int i = 0; i < tex_count; ++i) {
+            if (dedup_source[i] >= 0) {
+                prepared_textures[i] = prepared_textures[dedup_source[i]];
+            }
         }
 
         decoded_images.clear();
