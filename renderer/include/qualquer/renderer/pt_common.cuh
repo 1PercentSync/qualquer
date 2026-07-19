@@ -132,9 +132,10 @@ __forceinline__ __device__ float mis_power_heuristic(const float pdf_a,
         return 0.0f;
     }
     const float r = pdf_b / pdf_a;
-    // Both Inf → r = NaN → guard to 0.5 (equal weight, symmetric default).
+    // Inf/Inf → NaN: symmetric degenerate, equal weight.
+    // finite/finite overflow or Inf/finite → +Inf: pdf_b dominates, A weight 0.
     if (!isfinite(r)) {
-        return 0.5f;
+        return isnan(r) ? 0.5f : 0.0f;
     }
     return 1.0f / (1.0f + r * r);
 }
