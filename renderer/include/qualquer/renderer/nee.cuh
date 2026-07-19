@@ -34,8 +34,8 @@ namespace qualquer::renderer {
  * rotation.
  *
  * Returns world_dir, env_dir (for cubemap lookup), and solid-angle PDF
- * directly from the selected pixel's luminance, avoiding the reverse
- * mapping (atan2/asin) that env_pdf would need to rediscover the pixel.
+ * from the selected cell's stored weight, dividing by cos(latitude) of the
+ * jittered sample to convert from (u,v)-uniform to per-steradian density.
  */
 struct EnvSample {
     float3 world_dir; ///< Sampled direction in world space (normalized).
@@ -85,12 +85,13 @@ __forceinline__ __device__ EnvSample sample_env_alias_table(
                                        sin_theta,
                                        cos_theta * sin_phi);
 
-    // PDF from the selected pixel's stored luminance (same value that built
-    // the alias table). Avoids the atan2/asin inverse mapping of env_pdf.
-    const float lum = env.alias_table[pixel].luminance;
-    const float pdf = lum * static_cast<float>(env.alias_width)
-                          * static_cast<float>(env.alias_height)
-                      / (env.total_luminance * kTwoPi * kPi);
+    // PDF: stored weight (lum × sin_colat_center) × W × H / (total × 2π² × cos_lat_sample).
+    // cos_lat_sample = cos_theta (latitude of the jittered sample).
+    const float w = env.alias_table[pixel].luminance;
+    const float cos_lat = fmaxf(cos_theta, 1e-6f);
+    const float pdf = w * static_cast<float>(env.alias_width)
+                        * static_cast<float>(env.alias_height)
+                      / (env.total_luminance * kTwoPi * kPi * cos_lat);
 
     // Inverse IBL rotation: env space → world space.
     const float3 world_dir = rotate_y_dir(env_dir, -env.rotation_sin, env.rotation_cos);
@@ -101,15 +102,16 @@ __forceinline__ __device__ EnvSample sample_env_alias_table(
  * @brief Solid-angle PDF of a direction under the environment alias table distribution.
  *
  * Rotates the world-space direction to env space (forward IBL rotation), converts
- * to equirect UV, looks up the stored per-pixel luminance, and converts to a
- * solid-angle PDF. Using the stored luminance (same values that built the alias
- * table) ensures exact PDF/sampling consistency.
+ * to equirect UV, looks up the stored per-cell weight, and converts to a
+ * solid-angle PDF. The stored weight includes the sin(colatitude) solid-angle
+ * factor from construction, so the formula divides by cos(latitude) of the
+ * query direction to yield a per-steradian density.
  *
- * pdf = luminance × W × H / (total_luminance × 2π²)
+ * pdf = weight × W × H / (total_luminance × 2π² × cos_lat)
  *
  * @param env  Packed env light data (alias table, dimensions, total luminance, rotation).
  * @param dir  World-space direction (normalized).
- * @return Solid-angle PDF (>= 0). Zero when the pixel has zero luminance
+ * @return Solid-angle PDF (>= 0). Zero when the pixel has zero weight
  *         or the environment is absent.
  */
 __forceinline__ __device__ float env_pdf(
@@ -136,10 +138,12 @@ __forceinline__ __device__ float env_pdf(
                             env.alias_height - 1);
     const uint32_t pixel = py * env.alias_width + px;
 
-    const float lum = env.alias_table[pixel].luminance;
+    const float w = env.alias_table[pixel].luminance;
+    // cos(latitude) = sqrt(1 - sin²(lat)) = sqrt(x² + z²) for unit direction.
+    const float cos_lat = fmaxf(sqrtf(env_dir.x * env_dir.x + env_dir.z * env_dir.z), 1e-6f);
 
-    return lum * static_cast<float>(env.alias_width) * static_cast<float>(env.alias_height)
-           / (env.total_luminance * kTwoPi * kPi);
+    return w * static_cast<float>(env.alias_width) * static_cast<float>(env.alias_height)
+           / (env.total_luminance * kTwoPi * kPi * cos_lat);
 }
 
 // ---- Shadow ray tracing -----------------------------------------------------

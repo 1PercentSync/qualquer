@@ -93,8 +93,8 @@ namespace qualquer::app {
             }
         }
 
-        // Scale luminances so total fits in float. env_pdf divides
-        // lum[i] by total — uniform scaling cancels, PDF unchanged.
+        // Scale so total fits in float. Uniform scaling on both stored
+        // weights and total_luminance cancels in the PDF ratio.
         float lum_scale = 1.0f;
         if (!std::isfinite(static_cast<float>(weight_sum))) {
             lum_scale = static_cast<float>(
@@ -165,9 +165,12 @@ namespace qualquer::app {
             table[s].alias = s;
         }
 
-        // Fill per-entry luminance (without sin_theta) for env_pdf().
+        // Fill per-entry weight (lum × sin_theta × lum_scale). The scale factor
+        // ensures stored[i] / total_luminance = weights[i] / weight_sum (the PDF
+        // ratio is scale-invariant). Storing the full weight lets the PDF formula
+        // simply divide by cos(latitude_sample) without needing per-cell center latitude.
         for (uint32_t i = 0; i < entry_count; ++i) {
-            table[i].luminance = block_luminances[i];
+            table[i].luminance = weights[i] * lum_scale;
         }
 
         if (factor > 1) {

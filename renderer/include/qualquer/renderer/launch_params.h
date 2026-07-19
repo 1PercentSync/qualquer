@@ -44,8 +44,8 @@ static_assert(sizeof(AliasEntry) == 8);
 /**
  * @brief Alias-table entry for environment-map NEE.
  *
- * 12 bytes per entry. Stores per-pixel luminance so env_pdf() evaluates the
- * sampled direction's PDF without a separate luminance lookup texture.
+ * 12 bytes per entry. Stores per-cell sampling weight (luminance × sin(colatitude))
+ * so env_pdf() evaluates the solid-angle PDF without recomputing the cell's latitude.
  */
 struct EnvAliasEntry {
     /** @brief Acceptance probability of the drawn index, in [0,1]. */
@@ -54,7 +54,7 @@ struct EnvAliasEntry {
     /** @brief Alias index used when the draw is rejected. */
     uint32_t alias;
 
-    /** @brief Per-pixel luminance, excluding the sin(theta) projection weight. */
+    /** @brief Per-cell sampling weight: luminance × sin(colatitude_center). */
     float luminance;
 };
 
