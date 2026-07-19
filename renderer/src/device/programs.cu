@@ -109,6 +109,13 @@ __forceinline__ __device__ float3 trace_sample(
     uint32_t p6 = 0, p7 = 0, p8 = 0, p9 = 0, p10 = 0, p11 = 0;
     uint32_t p12 = 0, p13 = 0, p14 = 0, p15 = 0;
 
+    // When capture_primary is true, we look for the first real surface
+    // (hit_distance > 0) or sky miss (hit_distance < 0) to use for MV and
+    // aux guides. Pass-through bounces return hit_distance == 0 and are
+    // skipped. The flag is also encoded in p15 MSB so closesthit knows
+    // whether to write aux data for this hit.
+    bool awaiting_primary = capture_primary;
+
     while (path.alive && path.bounce < params.max_bounces) {
         // ---- Russian Roulette (bounce >= 2) ----
         if (path.bounce >= 2) {
@@ -126,7 +133,7 @@ __forceinline__ __device__ float3 trace_sample(
         }
 
         p14 = sequence_index;
-        p15 = path.bounce;
+        p15 = path.bounce | (awaiting_primary ? 0x80000000u : 0u);
 
         optixTraverse(kPayloadTypeBounce,
                       params.traversable,
@@ -169,15 +176,17 @@ __forceinline__ __device__ float3 trace_sample(
             p6, p7, p8, p9, p10, p11,
             p12, p13, p14, p15);
 
-        // Capture first-bounce result for MV + sky aux defaults (first sample only).
-        if (capture_primary && path.bounce == 0) {
-            if (d.hit_distance >= 0.0f) {
+        // Capture first real surface or sky miss for MV + aux defaults.
+        // Pass-through returns hit_distance == 0 and is skipped here.
+        if (awaiting_primary && d.hit_distance != 0.0f) {
+            if (d.hit_distance > 0.0f) {
                 primary_is_hit = true;
-                primary_hit_pos = cam_origin + primary_dir * d.hit_distance;
+                primary_hit_pos = path.origin + path.direction * d.hit_distance;
             } else {
                 primary_is_hit = false;
                 primary_sky_color = d.color;
             }
+            awaiting_primary = false;
         }
 
         // Accumulate radiance contribution from this bounce. Miss shader
@@ -456,30 +465,19 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
         // Single-sided material hit from behind: pass through the surface.
         // Throughput unchanged, consumes one bounce. Origin is pushed past
         // the hit point along the ray direction to avoid re-intersection.
+        // hit_distance = 0 signals raygen that this is not a real primary
+        // surface (raygen skips primary capture for == 0, terminates for < 0).
+        // The real visible surface behind will write correct aux guides via
+        // the primary_aux_needed flag in p15 MSB.
         const float hit_t = optixGetRayTmax();
         const float pass_eps = fmaxf(hit_t * 1e-4f, 1e-6f);
         const float3 pass_origin = optixGetWorldRayOrigin() + ray_dir * (hit_t + pass_eps);
-
-        // Aux defaults for the invisible pass-through surface. Without
-        // this write the aux data stays stale from the previous frame
-        // (the SDK warns: "A common integration error is to leave sky
-        // pixels uncleared"). The pass-through surface has no meaningful
-        // material attributes, so write "no surface" values matching the
-        // sky/miss convention used by the reference projects.
-        // First sample of the frame batch: sequence_index == sequence_base.
-        if (params.dlss_enabled
-            && payload_get_bounce() == 0
-            && payload_get_sample_index() == params.sequence_base) {
-            const uint3 li = optixGetLaunchIndex();
-            write_aux_no_surface(static_cast<int>(li.x), static_cast<int>(li.y),
-                                 make_float4(0.0f, 0.0f, 0.0f, 0.0f));
-        }
 
         payload_set_next_origin(pass_origin);
         payload_set_next_direction(ray_dir);
         payload_set_throughput_update(make_float3(1.0f, 1.0f, 1.0f));
         payload_set_color(make_float3(0.0f, 0.0f, 0.0f));
-        payload_set_hit_distance(hit_t);
+        payload_set_hit_distance(0.0f);
         // Shadow rays use TERMINATE_ON_FIRST_HIT without closesthit, so they
         // cannot pass through single-sided back-faces. NEE at the previous
         // shading point is therefore blind to anything beyond this surface.
@@ -563,7 +561,9 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
     // vast majority of materials). SER groups threads by material, so
     // this branch is warp-coherent and cheaper than a bindless tex2D to
     // the default white texture whose result would be multiplied to zero.
-    const uint32_t bounce = payload_get_bounce();
+    const uint32_t bounce_raw = payload_get_bounce();
+    const bool primary_aux_needed = (bounce_raw & 0x80000000u) != 0;
+    const uint32_t bounce = bounce_raw & 0x7FFFFFFFu;
     const float emi_lum = luminance(make_float3(
         mat.emissive_factor.x, mat.emissive_factor.y, mat.emissive_factor.z));
     float3 emissive = make_float3(0.0f, 0.0f, 0.0f);
@@ -628,12 +628,14 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
     const uint3 launch_idx = optixGetLaunchIndex();
     const uint32_t pixel_index = launch_idx.y * params.width + launch_idx.x;
 
-    // ---- Aux G-buffer writes (first sample's bounce 0 only) ----
+    // ---- Aux G-buffer writes (first real surface hit, first sample) ----
+    // primary_aux_needed (p15 MSB) is set by raygen until the first real
+    // surface is found — pass-through bounces leave it set, so the actual
+    // visible surface writes correct guides regardless of bounce index.
     // D37: all samples share per-frame jitter → primary ray identical →
-    // aux data identical. Write once at the first sample of the batch
-    // (sequence_index == sequence_base). DLSS OFF: no aux consumer.
+    // aux data identical. Write once at the first sample of the batch.
     if (params.dlss_enabled
-        && bounce == 0
+        && primary_aux_needed
         && payload_get_sample_index() == params.sequence_base) {
         const int sx = static_cast<int>(launch_idx.x);
         const int sy = static_cast<int>(launch_idx.y);
