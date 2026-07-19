@@ -327,6 +327,11 @@ namespace qualquer::app {
             auto ktx2 = read_ktx2(path);
             if (!ktx2 || ktx2->format != format
                 || ktx2->face_count != expected_face_count(format)) {
+                // Remove invalid/incompatible cache so atomic_write_file can
+                // replace it after recompression (Windows rename fails if the
+                // target already exists).
+                std::error_code ec;
+                std::filesystem::remove(path, ec);
                 return std::nullopt;
             }
 
