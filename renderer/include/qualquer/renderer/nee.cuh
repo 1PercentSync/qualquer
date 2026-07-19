@@ -366,7 +366,7 @@ __forceinline__ __device__ float3 evaluate_emissive_nee(
     }
 
     const uint32_t visible = trace_shadow_ray(
-        params.traversable, offset_pos, L, dist * (1.0f - 1e-4f));
+        params.traversable, offset_pos, L, dist * (1.0f - 1e-5f));
     if (!visible) {
         return make_float3(0.0f, 0.0f, 0.0f);
     }
