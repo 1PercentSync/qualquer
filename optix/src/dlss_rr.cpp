@@ -230,6 +230,7 @@ namespace qualquer::optix {
         ngx_params_->Set(NVSDK_NGX_Parameter_RayReconstruction_Hint_Render_Preset_Balanced, ngx_preset);
         ngx_params_->Set(NVSDK_NGX_Parameter_RayReconstruction_Hint_Render_Preset_Performance, ngx_preset);
         ngx_params_->Set(NVSDK_NGX_Parameter_RayReconstruction_Hint_Render_Preset_UltraPerformance, ngx_preset);
+        ngx_params_->Set(NVSDK_NGX_Parameter_RayReconstruction_Hint_Render_Preset_UltraQuality, ngx_preset);
 
         // Release VRAM immediately on feature release (no lazy deallocation).
         ngx_params_->Set(NVSDK_NGX_Parameter_FreeMemOnReleaseFeature, 1);
