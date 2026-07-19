@@ -688,7 +688,7 @@ namespace qualquer::renderer {
         const bool needs_reset = camera_changed || content_changed || reset_requested_;
         if (has_new_samples) {
             reset_requested_ = false;
-            if (needs_reset) {
+            if (needs_reset && !dlss_active) {
                 sequence_base_ = 0;
             }
             // Estimator bias change must not mix with prior DLSS temporal history.
