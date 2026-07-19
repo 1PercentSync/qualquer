@@ -1,32 +1,5 @@
 ## 3. 已确认问题
 
-### QRP-020：负 determinant 实例变换未翻转 triangle facing
-
-- 严重度：高
-- 置信度：高
-- 类型：glTF 变换 / 正反面语义
-
-#### 代码证据
-
-- `renderer/src/renderer.cpp:244-261` 把 node transform 写入 `OptixInstance`，但所有实例都固定使用 `OPTIX_INSTANCE_FLAG_NONE`，没有依据变换 determinant 设置 `OPTIX_INSTANCE_FLAG_FLIP_TRIANGLE_FACING`。
-- `renderer/src/device/programs.cu:451-460` 通过 object-space edge cross 后调用 normal transform 得到 `N_face_raw`，再用其与 ray direction 的点积自行判断背面。
-- inverse-transpose normal transform 不包含 `sign(det(M))`；对负 determinant，`cross(M e1, M e2) = det(M) M^{-T} cross(e1,e2)`，当前结果缺少负号。
-- `renderer/src/device/programs.cu:529-534` 还直接沿用 object-space `tangent.w` 构造 world TBN；mirror transform 会翻转 tangent basis handedness，但代码没有乘以 `sign(det(M))`，因此 normal map 的 bitangent 方向也随镜像出错。
-
-#### 规范依据
-
-本地 glTF 2.0 规范 `/mnt/d/Github/glTF/specification/2.0/Specification.adoc:1686-1694` 明确规定：应用 node global transform 后，正 determinant 的 triangle winding 为 counterclockwise，负 determinant 时为 clockwise；这正是通过 negative scale 镜像几何的规范机制。
-
-OptiX 9.1 `optix_types.h:976-978` 提供 `OPTIX_INSTANCE_FLAG_FLIP_TRIANGLE_FACING`，其语义会翻转 front/back classification。
-
-#### 触发条件
-
-任一 glTF node/global transform 含奇数次轴反射，即 3×3 线性部分 determinant 为负。
-
-#### 影响
-
-single-sided 材质的可见正面与规范 winding 不一致，可能显示本应剔除的一面并穿透本应可见的一面；double-sided normal 翻转和 emissive 单/双面方向也可能错误。即使 facing 修正，若未同步修正 tangent handedness，normal map 的 Y/bitangent 分量仍会镜像错误。镜像实例会与未镜像实例产生不同且不符合 glTF 的照明与阴影。
-
 ### QRP-021：逐帧 LaunchParams 使用 pageable stack memory 的 `cudaMemcpyAsync`，可能隐式同步 compute stream
 
 - 严重度：中高（性能）
