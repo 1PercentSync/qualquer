@@ -524,14 +524,16 @@ namespace qualquer::app {
                 ib.alloc(indices.size());
                 ib.upload(indices.data(), indices.size(), stream);
 
-                if (!primitive.materialIndex.has_value()) {
-                    throw std::runtime_error("Mesh '" + std::string(gltf_mesh.name)
-                                             + "' primitive has no material (required by renderer)");
-                }
-                const auto prim_material_id = static_cast<uint32_t>(*primitive.materialIndex);
+                // glTF spec: undefined material → default material (opaque, white,
+                // metallic 1, roughness 1). The default entry is appended after the
+                // explicit materials at index gltf.materials.size().
+                const auto default_material_idx = static_cast<uint32_t>(gltf.materials.size());
+                const auto prim_material_id = primitive.materialIndex.has_value()
+                    ? static_cast<uint32_t>(*primitive.materialIndex)
+                    : default_material_idx;
 
-                const bool prim_opaque = gltf.materials[prim_material_id].alphaMode
-                                         == fastgltf::AlphaMode::Opaque;
+                const bool prim_opaque = !primitive.materialIndex.has_value()
+                    || gltf.materials[prim_material_id].alphaMode == fastgltf::AlphaMode::Opaque;
 
                 meshes_.push_back({
                     .vertex_buffer = std::move(vb),
@@ -660,7 +662,7 @@ namespace qualquer::app {
             return it->second;
         };
 
-        gpu_materials_.reserve(gltf.materials.size());
+        gpu_materials_.reserve(gltf.materials.size() + 1);
 
         for (const auto &mat : gltf.materials) {
             constexpr uint32_t kDefaultWhiteIdx = 0;
@@ -724,10 +726,29 @@ namespace qualquer::app {
             gpu_materials_.push_back(data);
         }
 
-        if (!gpu_materials_.empty()) {
-            material_buffer_.alloc(gpu_materials_.size());
-            material_buffer_.upload(gpu_materials_.data(), gpu_materials_.size(), stream);
+        // Append the glTF default material (spec §Default Material: all fields
+        // at schema defaults). Used when a primitive omits materialIndex.
+        {
+            constexpr uint32_t kDefaultWhiteIdx = 0;
+            constexpr uint32_t kDefaultFlatNormalIdx = 1;
+            renderer::Material def{};
+            def.base_color_factor = {1.0f, 1.0f, 1.0f, 1.0f};
+            def.emissive_factor = {0.0f, 0.0f, 0.0f, 0.0f};
+            def.metallic_factor = 1.0f;
+            def.roughness_factor = 1.0f;
+            def.normal_scale = 1.0f;
+            def.base_color_tex = kDefaultWhiteIdx;
+            def.emissive_tex = kDefaultWhiteIdx;
+            def.metallic_roughness_tex = kDefaultWhiteIdx;
+            def.normal_tex = kDefaultFlatNormalIdx;
+            def.alpha_cutoff = 0.5f;
+            def.alpha_mode = 0u;
+            def.double_sided = 0u;
+            gpu_materials_.push_back(def);
         }
+
+        material_buffer_.alloc(gpu_materials_.size());
+        material_buffer_.upload(gpu_materials_.data(), gpu_materials_.size(), stream);
 
         if (!texture_objects_.empty()) {
             texture_objects_buffer_.alloc(texture_objects_.size());
