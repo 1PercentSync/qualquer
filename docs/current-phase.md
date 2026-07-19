@@ -130,10 +130,10 @@ bounce payload 16 register 语义：
 每个 bounce 只评估 env 或 emissive 中的一种 NEE 策略。两种策略同时有效时选择概率固定为 50:
 50，被选贡献除以选择概率；仅一种策略有效时直接评估该策略。MIS 使用无条件有效密度 `q * p_nee`，其中 `q` 是当前策略的选择概率。
 
-**策略有效性与 LaunchParams**：host 是策略有效性的唯一判定方。env 有效要求 cubemap、alias table、非零 alias count 与正 total
-luminance；emissive 有效要求 triangles、alias table、非零 count 与正 total power。LaunchParams 新增
+**策略有效性与 LaunchParams**：正 `total_luminance` 保证 env 的 cubemap、alias table、alias count 与维度全部有效；正
+`total_power` 保证 emissive 的 triangles、alias table 与 count 全部有效。host 是策略有效性的唯一判定方，仅根据这两个规范化总量构造
 `uint32_t nee_light_mask`：bit 0 表示 env，bit 1 表示 emissive。device 只读取该 mask：值 0 跳过 NEE，值 1 只调用 env，值 2 只调用
-emissive，值 3 执行 50:50 选择。选择概率由 mask 推导为 `q = mask == 3 ? 0.5 : 1.0`，不单独存储。
+emissive，值 3 执行 50:50 选择。选择概率由 mask 推导为 `q = mask == 3 ? 0.5 : 1.0`，不单独存储；host 与 device 均不重复验证资源字段。
 
 **RNG 维度布局**：
 
