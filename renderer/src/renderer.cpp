@@ -242,7 +242,13 @@ namespace qualquer::renderer {
                 inst.instanceId = grouping.group_base_offset[group_id];
                 inst.sbtOffset = 0;
                 inst.visibilityMask = 0xFF;
-                inst.flags = OPTIX_INSTANCE_FLAG_NONE;
+                // glTF spec §1688: negative determinant reverses triangle winding.
+                // FLIP_TRIANGLE_FACING corrects OptiX front/back classification so
+                // optixIsTriangleBackFaceHit() returns the spec-correct answer.
+                const float det = glm::determinant(glm::mat3(first_inst.transform));
+                inst.flags = det < 0.0f
+                    ? OPTIX_INSTANCE_FLAG_FLIP_TRIANGLE_FACING
+                    : OPTIX_INSTANCE_FLAG_NONE;
                 inst.traversableHandle = blas_handles[grouping.group_to_blas[group_id]].handle;
                 tlas_instances.push_back(inst);
 

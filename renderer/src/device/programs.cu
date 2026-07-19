@@ -459,7 +459,10 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
     const float3 ray_dir = optixGetWorldRayDirection();
     // Normalize once; shared by pass-through (offset_ray_origin) and shading.
     float3 N_face = normalize(N_face_raw);
-    const bool is_back_face = dot(N_face, ray_dir) > 0.0f;
+    // Use OptiX's face classification which respects FLIP_TRIANGLE_FACING set
+    // on negative-determinant instances. The dot-based check would give wrong
+    // classification for mirrored instances (M^{-T} inverts the face normal).
+    const bool is_back_face = optixIsTriangleBackFaceHit();
 
     if (is_back_face && mat.double_sided == 0u) {
         // Single-sided material hit from behind: pass through the surface.
@@ -470,7 +473,10 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
         // the primary_aux_needed flag in p15 MSB.
         const float hit_t = optixGetRayTmax();
         const float3 hit_pos = optixGetWorldRayOrigin() + ray_dir * hit_t;
-        const float3 pass_origin = offset_ray_origin(hit_pos, N_face);
+        // Push past the triangle toward the front side. For neg-det instances
+        // M^{-T} inverts N_face, so align push direction with the ray.
+        const float3 push_n = dot(N_face, ray_dir) > 0.0f ? N_face : -N_face;
+        const float3 pass_origin = offset_ray_origin(hit_pos, push_n);
 
         payload_set_next_origin(pass_origin);
         payload_set_next_direction(ray_dir);
@@ -522,8 +528,14 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
     const float3 T_world = optixTransformVectorFromObjectToWorldSpace(
         make_float3(tangent.x, tangent.y, tangent.z));
 
-    // Double-sided back-face: flip normals to face the incoming ray.
-    if (is_back_face) {
+    // Orient normals toward the incoming ray. For positive-det instances this
+    // is equivalent to flipping on back-face hits; for negative-det instances
+    // it also corrects the inverted M^{-T} normal transform direction.
+    // Detect neg-det by disagreement between OptiX face classification and
+    // geometric normal direction — used below for tangent handedness correction.
+    const bool normal_faces_away = dot(N_face, ray_dir) > 0.0f;
+    const bool neg_det = (is_back_face != normal_faces_away);
+    if (normal_faces_away) {
         N_face = -N_face;
         N_interp = -N_interp;
     }
@@ -543,8 +555,10 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
 
     // ---- Normal mapping + consistency ----
     const auto nm_texel = tex2D<float4>(tex[mat.normal_tex], uv.x, uv.y);
+    // Mirror transforms flip tangent basis handedness; correct tangent.w sign.
+    const float effective_tangent_w = neg_det ? -tangent.w : tangent.w;
     const float3 N_mapped = get_shading_normal(
-        N_interp, T_world, tangent.w,
+        N_interp, T_world, effective_tangent_w,
         make_float2(nm_texel.x, nm_texel.y), mat.normal_scale);
     const float3 N_shading = ensure_normal_consistency(N_mapped, N_face);
 
