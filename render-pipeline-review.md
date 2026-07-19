@@ -31,31 +31,6 @@ host 侧 `submit_cuda()` 可能在参数上传处等待此前 compute-stream 工
 
 QRP-O05 关注 16 KiB 不变 Sobol 表的 constant-cache 与重复传输收益；本项进一步确认重复传输还走 pageable staging。可将不变 Sobol 数据改为一次上传的独立只读/constant 资源，并为真正变化的小型参数使用持久 pinned staging ring；若直接把当前栈地址注册或改成临时 pinned 对象，则必须重新保证其生命周期覆盖异步 copy。
 
-### QRP-022：并行纹理压缩可并发写入同一固定 `.tmp` 缓存路径
-
-- 严重度：中
-- 置信度：高
-- 类型：缓存并发 / 场景加载
-
-#### 代码证据
-
-- `app/src/scene_loader.cpp:580-624` 以 `(texture_index, role)` 去重；两个不同 glTF texture 可以引用同一 image、使用不同 sampler，因此会成为两个并行 entry。
-- cache key 却由 image 内容 hash 与目标 format 构成：`app/src/texture.cpp:317-323`、`app/src/texture.cpp:387-390`。相同 image 和 role 会得到同一目标路径。
-- `app/src/scene_loader.cpp:620-626` 使用 OpenMP 并行压缩所有 cache miss。
-- `app/src/cache.cpp:84-104` 的 `atomic_write_file()` 对同一目标统一使用固定的 `<path>.tmp`，没有每 writer 唯一名称或按 key 加锁。
-
-#### 触发条件
-
-同一源 image 通过多个 glTF texture object 以相同 role 使用，且缓存尚未存在。不同 sampler 是产生多个 texture object 但共享 image 的合法常见原因；内容完全相同的重复 image 也会触发。
-
-#### 影响
-
-多个 OpenMP worker 可同时 truncate/write/rename 同一临时文件，导致 rename 失败、缓存缺失，或依赖平台文件共享语义的竞争结果。当前帧使用各线程内存中的压缩结果，通常仍能完成加载；主要影响缓存可靠性、日志噪声和下一次启动重复压缩。
-
-#### 补充
-
-“write temp then rename”只保证单 writer 下的原子替换，不自动提供多 writer 安全。可在收集阶段按 `(source_hash, format)` 共享一次压缩结果，或使用每 writer 唯一 temp 名并协调最终发布。
-
 ### QRP-023：损坏或不兼容的现有纹理缓存无法被新结果修复
 
 - 严重度：低至中
