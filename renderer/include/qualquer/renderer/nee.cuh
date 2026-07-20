@@ -375,6 +375,20 @@ __forceinline__ __device__ float3 evaluate_emissive_nee(
                    + (tri.uv2.x - tri.uv0.x) * light_bary.z,
         tri.uv0.y + (tri.uv1.y - tri.uv0.y) * light_bary.y
                    + (tri.uv2.y - tri.uv0.y) * light_bary.z);
+
+    // Alpha-mask test: replicate the anyhit Mask logic so NEE does not
+    // sample from regions that regular intersections treat as transparent.
+    if (tri.alpha_mode == 1u) {
+        const float texel_alpha = tex2D<float4>(
+            params.texture_objects[tri.base_color_tex], light_uv.x, light_uv.y).w;
+        const float vert_alpha = light_bary.x * tri.vert_alpha0
+                               + light_bary.y * tri.vert_alpha1
+                               + light_bary.z * tri.vert_alpha2;
+        if (texel_alpha * tri.base_color_factor_a * vert_alpha < tri.alpha_cutoff) {
+            return make_float3(0.0f, 0.0f, 0.0f);
+        }
+    }
+
     const auto le_texel = tex2D<float4>(
         params.texture_objects[tri.emissive_tex], light_uv.x, light_uv.y);
     const float3 Le = make_float3(

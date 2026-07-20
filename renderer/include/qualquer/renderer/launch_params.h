@@ -63,10 +63,11 @@ static_assert(sizeof(EnvAliasEntry) == 12);
 /**
  * @brief World-space emissive triangle for NEE sampling.
  *
- * 96 bytes (16-byte aligned for vertex vector loads across array elements).
- * Stores precomputed edges, face normal, and material properties so the
- * device NEE evaluator avoids recomputing edges/cross/normalize and
- * eliminates a random Material array lookup per sample.
+ * 128 bytes (16-byte aligned for vertex vector loads across array elements).
+ * Stores precomputed edges, face normal, material properties and alpha-mask
+ * data so the device NEE evaluator avoids recomputing edges/cross/normalize,
+ * eliminates a random Material array lookup per sample, and can replicate
+ * the same alpha test that anyhit performs on regular intersections.
  */
 struct EmissiveTriangle {
     /** @brief First vertex position (world space). */
@@ -98,10 +99,26 @@ struct EmissiveTriangle {
     float2 uv2;
     /** @brief 1 if the material is double-sided, 0 otherwise. */
     uint32_t double_sided;
-    uint32_t _pad; ///< Pads to 16-byte aligned struct size (96 = 16 × 6).
+    /** @brief AlphaMode (0 = Opaque, 1 = Mask, 2 = Blend). */
+    uint32_t alpha_mode;
+
+    /** @brief Index into the texture-object array for base-color alpha. */
+    uint32_t base_color_tex;
+    /** @brief Alpha component of the material base_color_factor. */
+    float base_color_factor_a;
+    /** @brief Mask-mode discard threshold. */
+    float alpha_cutoff;
+    /** @brief Interpolated vertex-color alpha at v0. */
+    float vert_alpha0;
+
+    /** @brief Interpolated vertex-color alpha at v1. */
+    float vert_alpha1;
+    /** @brief Interpolated vertex-color alpha at v2. */
+    float vert_alpha2;
+    uint32_t _pad[2]; ///< Pads to 16-byte aligned struct size (128 = 16 × 8).
 };
 
-static_assert(sizeof(EmissiveTriangle) == 96);
+static_assert(sizeof(EmissiveTriangle) == 128);
 
 /**
  * @brief Environment-map light resources for miss sampling and env NEE.

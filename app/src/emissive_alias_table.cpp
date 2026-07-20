@@ -96,7 +96,14 @@ namespace qualquer::app {
                     .uv1 = {verts[i1].uv0.x, verts[i1].uv0.y},
                     .uv2 = {verts[i2].uv0.x, verts[i2].uv0.y},
                     .double_sided = mat.double_sided,
-                    ._pad = 0,
+                    .alpha_mode = mat.alpha_mode,
+                    .base_color_tex = mat.base_color_tex,
+                    .base_color_factor_a = mat.base_color_factor.w,
+                    .alpha_cutoff = mat.alpha_cutoff,
+                    .vert_alpha0 = verts[i0].color.w,
+                    .vert_alpha1 = verts[i1].color.w,
+                    .vert_alpha2 = verts[i2].color.w,
+                    ._pad = {},
                 });
 
                 powers.push_back(emissive_lum * area);
