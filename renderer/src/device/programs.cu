@@ -50,6 +50,12 @@ namespace qualquer::renderer {
 #include <qualquer/renderer/tonemap.cuh>
 #include <qualquer/renderer/nee.cuh>
 
+// GGX alpha floor: prevents the Dirac-delta singularity at roughness = 0.
+// Applied to alpha (= roughness²), not to linear roughness, so glTF roughness
+// values reach EON, energy fits and DLSS guides unmodified.  This is a
+// renderer approximation; polished-metal A/B should confirm acceptable error.
+constexpr float kMinGgxAlpha = 1e-7f;
+
 // OptiX locates program groups by the entry function symbol name (e.g.
 // "__raygen__rg"), so entry points must be extern "C" at global scope. The
 // launch-params constant is bound by name to pipelineLaunchParamsVariableName.
@@ -564,8 +570,8 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
 
     const auto mr_texel = tex2D<float4>(tex[mat.metallic_roughness_tex], uv.x, uv.y);
     const float metallic = mr_texel.z * mat.metallic_factor;
-    const float roughness = fmaxf(mr_texel.y * mat.roughness_factor, 0.04f);
-    const float alpha = roughness * roughness;
+    const float roughness = mr_texel.y * mat.roughness_factor;
+    const float alpha = fmaxf(roughness * roughness, kMinGgxAlpha);
 
     // ---- Normal mapping + consistency ----
     const auto nm_texel = tex2D<float4>(tex[mat.normal_tex], uv.x, uv.y);

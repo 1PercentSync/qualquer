@@ -45,12 +45,17 @@ __forceinline__ __device__ float3 compute_F0(const float3 base_color,
 /**
  * @brief GGX / Trowbridge-Reitz NDF.
  *
+ * Uses the identity n²·a² + (1 − n²) instead of n²·(a² − 1) + 1 to avoid
+ * catastrophic cancellation when a² ≪ 1 (the latter subtracts a² − 1 ≈ −1,
+ * losing the roughness term entirely in single precision).
+ *
  * @param NdotH Must be >= 0.
- * @param alpha roughness^2; caller clamps >= 1e-4 (Dirac-delta at 0).
+ * @param alpha roughness²; may be very small but must be > 0.
  */
 __forceinline__ __device__ float D_GGX(const float NdotH, const float alpha) {
     const float a2 = alpha * alpha;
-    const float d  = NdotH * NdotH * (a2 - 1.0f) + 1.0f;
+    const float n2 = NdotH * NdotH;
+    const float d  = fmaf(n2, a2, 1.0f - n2);
     return a2 / (kPi * d * d);
 }
 
@@ -63,7 +68,7 @@ __forceinline__ __device__ float D_GGX(const float NdotH, const float alpha) {
  *
  * @param NdotV Must be > 0.
  * @param NdotL Must be > 0.
- * @param alpha roughness^2; caller clamps >= 1e-4.
+ * @param alpha roughness²; may be very small but must be > 0.
  */
 __forceinline__ __device__ float V_SmithGGXCorrelated(const float NdotV,
                                                       const float NdotL,
@@ -133,7 +138,7 @@ __forceinline__ __device__ float3 sample_ggx_vndf(const float3 Ve,
  *
  * @param NdotH dot(N, H), must be >= 0.
  * @param NdotV dot(N, V), must be > 0.
- * @param alpha roughness^2; caller clamps >= 1e-4.
+ * @param alpha roughness²; may be very small but must be > 0.
  */
 __forceinline__ __device__ float pdf_ggx_vndf(const float NdotH,
                                               const float NdotV,
@@ -170,7 +175,7 @@ struct VndfWeightAndPdf {
  * @param NdotH dot(N, H), must be >= 0 (needed for PDF only).
  * @param NdotV dot(N, V), must be > 0.
  * @param NdotL dot(N, L), must be > 0.
- * @param alpha roughness^2; caller clamps >= 1e-4.
+ * @param alpha roughness²; may be very small but must be > 0.
  */
 __forceinline__ __device__ VndfWeightAndPdf vndf_weight_and_pdf(
         const float NdotH, const float NdotV, const float NdotL, const float alpha) {
@@ -272,7 +277,7 @@ struct BrdfParams {
     float3 turquin_comp;   ///< Per-channel specular compensation multiplier (RGB).
     float3 E_glossy_rgb;   ///< Per-channel specular directional reflectance (DLSS-RR specular albedo).
     float3 diffuse_weight; ///< (1-metallic) * (1 - E_glossy_per_channel); RGB.
-    float  alpha;          ///< roughness^2 (specular primitives); caller clamps >= 1e-4.
+    float  alpha;          ///< roughness² (specular primitives); must be > 0.
     float  r;              ///< Linear roughness in [0,1] (EON / E_ss / E_glossy).
     float  NdotV;          ///< Clamped dot(N, V), must be > 0.
     float  p_spec;         ///< Specular lobe selection probability.
@@ -789,8 +794,9 @@ __forceinline__ __device__ float specular_probability(const float NdotV,
  * @param B_basis        Bitangent axis (world).
  * @param base_color     Linear RGB base color.
  * @param metallic       Metallic factor in [0,1].
- * @param roughness      Linear roughness in [0,1] (glTF value, caller clamps >= 0.04).
- * @param alpha          roughness^2, caller-clamped >= 1e-4 (NaN guard at alpha=0).
+ * @param roughness      Linear roughness in [0,1] (glTF value, unclamped).
+ * @param alpha          roughness²; caller applies a small floor (e.g. 1e-7)
+ *                       to avoid GGX delta singularity at zero.
  */
 __forceinline__ __device__ BrdfParams init_brdf_params(
         const float3 V, const float3 N,
