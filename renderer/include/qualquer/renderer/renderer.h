@@ -460,6 +460,19 @@ namespace qualquer::renderer {
         /** @brief Device-side launch-params buffer (one LaunchParams). */
         optix::CudaBuffer<LaunchParams> params_buffer_;
 
+        /**
+         * @brief Per-frame pinned host staging buffers for launch-params upload.
+         *
+         * Page-locked memory ensures cudaMemcpyAsync is truly asynchronous — the
+         * DMA engine reads directly from host memory without driver-side staging
+         * or implicit stream synchronization that pageable memory may cause.
+         *
+         * Double-buffered because the CPU writes next frame's params before the
+         * GPU's DMA may have read the current frame's staging data (the fence
+         * only guarantees frame N-2 completion, not frame N-1).
+         */
+        std::array<LaunchParams *, 2> params_staging_ = {nullptr, nullptr};
+
         /** @brief Read slot index; flipped only after producing a new sample frame. */
         uint32_t accum_index_ = 0;
 

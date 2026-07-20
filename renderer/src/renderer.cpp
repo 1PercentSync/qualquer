@@ -9,6 +9,7 @@
 #include <bit>
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 #include <vector>
 
 #include <glm/glm.hpp>
@@ -446,6 +447,9 @@ namespace qualquer::renderer {
         render_height_ = height;
 
         params_buffer_.alloc(1);
+        for (auto &staging : params_staging_) {
+            CUDA_CHECK(cudaHostAlloc(&staging, sizeof(LaunchParams), cudaHostAllocDefault));
+        }
         accum_index_ = 0;
 
 #ifndef NDEBUG
@@ -486,6 +490,12 @@ namespace qualquer::renderer {
         }
         dlss_output_.free();
         params_buffer_.free();
+        for (auto &staging : params_staging_) {
+            if (staging != nullptr) {
+                CUDA_CHECK(cudaFreeHost(staging));
+                staging = nullptr;
+            }
+        }
 #ifndef NDEBUG
         for (auto *arr : {&event_display_start_, &event_display_end_,
                           &event_pt_start_, &event_pt_end_}) {
@@ -820,7 +830,9 @@ namespace qualquer::renderer {
                 event_pt_start_[timing_slot], cuda_context.compute_stream));
 #endif
 
-            params_buffer_.upload(&params, 1, cuda_context.compute_stream);
+            auto *staging = params_staging_[frame_index % params_staging_.size()];
+            std::memcpy(staging, &params, sizeof(LaunchParams));
+            params_buffer_.upload(staging, 1, cuda_context.compute_stream);
 
             const OptixShaderBindingTable sbt{
                 .raygenRecord = sbt_raygen_.device_ptr(),
