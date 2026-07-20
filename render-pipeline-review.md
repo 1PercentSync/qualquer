@@ -323,15 +323,4 @@ CLion/Nsight 常用 `RelWithDebInfo` 保留符号做 profiling；此时 DLSS tim
 
 用高-overdraw foliage scene 比较 any-hit invocation 数、RT core busy、texture requests、GAS/OMM VRAM、build time 和稳态 frame time；简单低覆盖 mesh 可能因额外内存/构建成本得不偿失，应按材质/triangle coverage 选择性启用。
 
-### QRP-O18：normal-map variance 未反馈到 microfacet roughness，specular aliasing 只能交给采样/DLSS
-
-#### 代码事实
-
-- normal map mips 只对 encoded RG 做普通 resize/BC5 压缩；device 端重建 Z 并归一化 shading normal。
-- GGX `roughness/alpha` 完全来自 metallic-roughness texture/factor，不依据当前 ray footprint 内的 normal variance 调整。
-- QRP-029 又表明当前尚未选择正确 normal-map mip；即使先补 LOD，单纯平均并重新归一化 normal 也会丢失被滤掉的法线方差。
-
-#### 优化机会与验证
-
-Ray Cone LOD 落地后同步加入 Toksvig/LEAN 类 normal-map specular AA 或等价 variance-to-roughness 策略，可把 subpixel normal 高频转为更宽的 microfacet lobe，降低远景/运动中的闪烁、firefly 与 DLSS 输入噪声。代价包括额外 mip metadata/channel、roughness 算术与材质偏软风险；用高频 normal、grazing highlight、不同 render scale 做 temporal flicker/RMSE 与 frame-time A/B。该项已在 Phase 4.5 路线中规划，当前属于尚未落地的画质优化，不单独视为 API 错误。
 
