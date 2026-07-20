@@ -1,36 +1,5 @@
 ## 3. 已确认问题
 
-### QRP-021：逐帧 LaunchParams 使用 pageable stack memory 的 `cudaMemcpyAsync`，可能隐式同步 compute stream
-
-- 严重度：中高（性能）
-- 置信度：高
-- 类型：CPU–GPU 提交并行性 / 既有优化反作用
-
-#### 代码证据
-
-- `renderer/src/renderer.cpp:755-815` 每帧在栈上构造 `LaunchParams`，其中包含 4096 个 Sobol direction words（约 16 KiB）。
-- `renderer/src/renderer.cpp:819` 通过 `CudaBuffer::upload()` 上传该栈对象。
-- `optix/include/qualquer/optix/cuda_buffer.h:102-108` 的 `upload()` 无条件调用 `cudaMemcpyAsync`，但 host source 没有通过 `cudaHostAlloc`/`cudaHostRegister` page-lock。
-
-#### 官方依据
-
-CUDA 官方 API synchronization behavior 说明：pageable host-to-device copy 需要先 staging 到内部 pinned memory；driver 可能先同步目标 stream，再执行 staging。只有 page-locked host memory 才能提供可靠的真正异步 H2D copy 与 copy/compute overlap。
-
-- <https://docs.nvidia.com/cuda/cuda-driver-api/api-sync-behavior.html>
-- <https://docs.nvidia.com/cuda/cuda-c-best-practices-guide/index.html>
-
-#### 触发条件
-
-每一个产生新样本的 frame 都会执行；LaunchParams 内嵌 Sobol 表使 staging 数据量远大于普通 launch constants。
-
-#### 影响
-
-host 侧 `submit_cuda()` 可能在参数上传处等待此前 compute-stream 工作，削弱 CPU 提交提前量和双 stream 流水线；所谓 async upload 不能与 GPU 工作可靠重叠。场景/SBT 初始化上传最终有显式同步，主要帧时风险集中在逐帧 LaunchParams。
-
-#### 与 QRP-O05 的关系
-
-QRP-O05 关注 16 KiB 不变 Sobol 表的 constant-cache 与重复传输收益；本项进一步确认重复传输还走 pageable staging。可将不变 Sobol 数据改为一次上传的独立只读/constant 资源，并为真正变化的小型参数使用持久 pinned staging ring；若直接把当前栈地址注册或改成临时 pinned 对象，则必须重新保证其生命周期覆盖异步 copy。
-
 ### QRP-025：DLSS 关闭或不可用时仍常驻分配双份完整 guides 与 DLSS output
 
 - 严重度：高（VRAM / 可用性）
