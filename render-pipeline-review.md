@@ -335,14 +335,3 @@ CLion/Nsight 常用 `RelWithDebInfo` 保留符号做 profiling；此时 DLSS tim
 
 Ray Cone LOD 落地后同步加入 Toksvig/LEAN 类 normal-map specular AA 或等价 variance-to-roughness 策略，可把 subpixel normal 高频转为更宽的 microfacet lobe，降低远景/运动中的闪烁、firefly 与 DLSS 输入噪声。代价包括额外 mip metadata/channel、roughness 算术与材质偏软风险；用高频 normal、grazing highlight、不同 render scale 做 temporal flicker/RMSE 与 frame-time A/B。该项已在 Phase 4.5 路线中规划，当前属于尚未落地的画质优化，不单独视为 API 错误。
 
-### QRP-O19：DLSS-off Catmull–Rom upscale 每个 display pixel 执行 16 次 point fetch
-
-#### 代码事实
-
-- `renderer/src/tonemap.cu:40-78` 显式遍历 4×4 taps，并从 RGBA32F accumulation array 做 16 次 `tex2D<float4>` point read。
-- 仅在 `render < display` 且 DLSS 未产出结果时触发；native 1:1 与 downscale 不走该分支。
-- `tasks/phase4.5.md` Step 14.9 已把“Catmull-Rom tonemap 16→4 fetch”列为当前未完成项。
-
-#### 优化机会与验证
-
-利用 bilinear texture fetch 合并同号/相邻 taps 可把多数 Catmull–Rom reconstruction 降到 4 次 fetch，显著减少低分辨率 fallback 的 texture traffic；但负权重、edge clamp 与精确 kernel 等价必须推导正确，不能用普通 bicubic 近似冒充。对边界/半像素坐标做逐像素 reference diff，并用 CUDA display event、L1/L2/texture throughput 比较 16-fetch 与 4-fetch；若 fallback 很少使用，工程收益应与实现复杂度一并评估。
