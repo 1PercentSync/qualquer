@@ -309,18 +309,4 @@ Blackwell/后续 GPU 会在首次使用普通 CUDA kernels 时承担 PTX JIT/cac
 
 CLion/Nsight 常用 `RelWithDebInfo` 保留符号做 profiling；此时 DLSS timing、VRAM、日志与画质行为可能不代表 release runtime，导致错误归因。部署规则应按“仅 Debug 用 dev，其余优化配置用 rel”或显式 profile option 选择，并在启动日志中记录实际 DLL/version。用同一 scene 对 dev/rel DLL 比较 evaluate 时间与输出，正式性能结论必须基于可发布 runtime。
 
-### QRP-O17：静态 alpha-mask geometry 未利用 Ada 的 opacity micromaps
-
-#### 代码事实与官方依据
-
-- Mask geometry 当前始终走 any-hit，并为每个候选 intersection 插值 UV/vertex alpha、执行 bindless BC7 texture fetch 与 cutoff：`programs.cu:746-781`。
-- `OptixPipelineCompileOptions::allowOpacityMicromaps` 保持 false，BLAS build input 也没有 OMM attachment；在当前“不使用 OMM”的实现下保持 false 本身是正确且更高效的配置。
-- OptiX 9.1 Programming Guide §5.12 明确说明 OMM 可把 triangle microregions 预分类为 opaque/transparent，只让 unknown 区域调用昂贵 any-hit，专门降低高分辨率 alpha content 的 traversal 开销。
-
-#### 优化机会与取舍
-
-对静态 foliage/fence 等 `alphaMode=MASK` 资产，可从 base alpha、factor、vertex alpha 与 cutoff 预构建 2-state/4-state OMM；透明区由 traversal 直接跳过、实心区直接接受，边界 unknown 才运行现有 any-hit。这尤其适合 Ada 及更新 RT core，但会增加 scene preprocessing、OMM array/GAS 显存、cache/version 管理，并必须正确处理 UV wrap、texture transform、alpha coverage 与 QRP-039 的 emissive mask。
-
-用高-overdraw foliage scene 比较 any-hit invocation 数、RT core busy、texture requests、GAS/OMM VRAM、build time 和稳态 frame time；简单低覆盖 mesh 可能因额外内存/构建成本得不偿失，应按材质/triangle coverage 选择性启用。
-
 
