@@ -230,6 +230,9 @@ namespace qualquer::app {
          */
         uint32_t image_index_ = 0;
 
+        /** @brief Set when acquire returns SUBOPTIMAL; consumed after present to trigger recreate. */
+        bool acquire_suboptimal_ = false;
+
 #ifndef NDEBUG
         /** @brief Timestamp query pool (4 queries: 2 per frame-in-flight). */
         VkQueryPool timestamp_pool_ = VK_NULL_HANDLE;

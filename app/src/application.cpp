@@ -342,7 +342,7 @@ namespace qualquer::app {
             recreate_swapchain();
             return false;
         }
-        // SUBOPTIMAL succeeds; handled at present time.
+        acquire_suboptimal_ = (acquire_result == VK_SUBOPTIMAL_KHR);
         if (acquire_result != VK_SUCCESS && acquire_result != VK_SUBOPTIMAL_KHR) {
             spdlog::critical("vkAcquireNextImageKHR returned {}", static_cast<int>(acquire_result));
             std::abort();
@@ -453,11 +453,13 @@ namespace qualquer::app {
             .pImageIndices = &image_index_,
         };
 
-        // Recreate on driver-reported staleness or when the polled framebuffer size
-        // diverges from the swapchain extent (Windows may not report a size change
-        // via acquire/present in the same frame).
-        if (const VkResult present_result = vkQueuePresentKHR(context_.graphics_queue, &present_info);
-            present_result == VK_ERROR_OUT_OF_DATE_KHR || present_result == VK_SUBOPTIMAL_KHR) {
+        // Recreate on driver-reported staleness, acquire-time SUBOPTIMAL, or when
+        // the polled framebuffer size diverges from the swapchain extent (Windows
+        // may not report a size change via acquire/present in the same frame).
+        const VkResult present_result = vkQueuePresentKHR(context_.graphics_queue, &present_info);
+        if (present_result == VK_ERROR_OUT_OF_DATE_KHR || present_result == VK_SUBOPTIMAL_KHR
+            || acquire_suboptimal_) {
+            acquire_suboptimal_ = false;
             recreate_swapchain();
         } else if (present_result != VK_SUCCESS) {
             spdlog::critical("vkQueuePresentKHR returned {}", static_cast<int>(present_result));
