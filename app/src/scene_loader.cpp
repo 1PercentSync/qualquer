@@ -20,8 +20,8 @@
 
 #include <algorithm>
 #include <cassert>
-#include <cstddef>
 #include <cmath>
+#include <cstddef>
 #include <filesystem>
 #include <limits>
 #include <map>
@@ -111,8 +111,7 @@ namespace qualquer::app {
                 const glm::vec3 corner(
                     (i & 1) ? local.max.x : local.min.x,
                     (i & 2) ? local.max.y : local.min.y,
-                    (i & 4) ? local.max.z : local.min.z
-                );
+                    (i & 4) ? local.max.z : local.min.z);
                 const auto world = glm::vec3(transform * glm::vec4(corner, 1.0f));
                 new_min = glm::min(new_min, world);
                 new_max = glm::max(new_max, world);
@@ -129,16 +128,18 @@ namespace qualquer::app {
          * Weight priority per glTF 2.0 §Instantiation:
          * node.weights > mesh.weights > zeros.
          */
-        bool has_nonzero_morph_weights(const fastgltf::Node &node,
-                                       const fastgltf::Mesh &mesh) {
-            const bool has_targets = std::ranges::any_of(mesh.primitives
-                                                         ,
-                                                         [](const auto &p) { return !p.targets.empty(); });
+        bool has_nonzero_morph_weights(
+            const fastgltf::Node &node,
+            const fastgltf::Mesh &mesh) {
+            const bool has_targets = std::ranges::any_of(
+                mesh.primitives,
+                [](const auto &p) { return !p.targets.empty(); });
             if (!has_targets) { return false; }
 
             const auto &weights = !node.weights.empty() ? node.weights : mesh.weights;
-            return std::ranges::any_of(weights,
-                                       [](const auto w) { return static_cast<float>(w) != 0.0f; });
+            return std::ranges::any_of(
+                weights,
+                [](const auto w) { return static_cast<float>(w) != 0.0f; });
         }
 
         /**
@@ -186,8 +187,9 @@ namespace qualquer::app {
 
             fastgltf::iterateSceneNodes(
                 gltf, scene_index, fastgltf::math::fmat4x4(1.0f),
-                [&](const fastgltf::Node &node,
-                    const fastgltf::math::fmat4x4 &world_transform) {
+                [&](
+            const fastgltf::Node &node,
+            const fastgltf::math::fmat4x4 &world_transform) {
                     if (!node.meshIndex.has_value()) { return; }
 
                     const auto mesh_idx = *node.meshIndex;
@@ -227,72 +229,76 @@ namespace qualquer::app {
          * Handles all fastgltf source types used with LoadExternalImages.
          */
         template<typename Fn>
-        void visit_gltf_image_bytes(const fastgltf::Asset &gltf,
-                                    const fastgltf::Image &image,
-                                    Fn &&callback) {
+        void visit_gltf_image_bytes(
+            const fastgltf::Asset &gltf,
+            const fastgltf::Image &image,
+            Fn &&callback) {
             auto invoke = [&](const auto *data, const std::size_t size) {
                 callback(reinterpret_cast<const uint8_t *>(data), size);
             };
 
-            std::visit(fastgltf::visitor{
-                           [](const fastgltf::sources::URI &) {
-                               assert(false && "URI source should not appear with LoadExternalImages");
-                           },
-                           [&](const fastgltf::sources::Array &array) {
-                               invoke(array.bytes.data(), array.bytes.size_bytes());
-                           },
-                           [&](const fastgltf::sources::Vector &vec) {
-                               invoke(vec.bytes.data(), vec.bytes.size());
-                           },
-                           [&](const fastgltf::sources::BufferView &bv) {
-                               const auto &view = gltf.bufferViews[bv.bufferViewIndex];
-                               const auto &buffer = gltf.buffers[view.bufferIndex];
-                               std::visit(fastgltf::visitor{
-                                              [&](const fastgltf::sources::Array &arr) {
-                                                  invoke(arr.bytes.data() + view.byteOffset,
-                                                         view.byteLength);
-                                              },
-                                              [&](const fastgltf::sources::Vector &v) {
-                                                  invoke(v.bytes.data() + view.byteOffset,
-                                                         view.byteLength);
-                                              },
-                                              [&](const fastgltf::sources::ByteView &bytes) {
-                                                  invoke(bytes.bytes.data() + view.byteOffset,
-                                                         view.byteLength);
-                                              },
-                                              [](auto &&) {
-                                                  throw std::runtime_error(
-                                                      "Unsupported buffer data source for image");
-                                              }
-                                          }, buffer.data);
-                           },
-                           [&](const fastgltf::sources::ByteView &bytes) {
-                               invoke(bytes.bytes.data(), bytes.bytes.size());
-                           },
-                           [](auto &&) {
-                               throw std::runtime_error("Unsupported image source type");
-                           }
-                       }, image.data);
+            std::visit(
+                fastgltf::visitor{
+                    [](const fastgltf::sources::URI &) {
+                        assert(false && "URI source should not appear with LoadExternalImages");
+                    },
+                    [&](const fastgltf::sources::Array &array) {
+                        invoke(array.bytes.data(), array.bytes.size_bytes());
+                    },
+                    [&](const fastgltf::sources::Vector &vec) {
+                        invoke(vec.bytes.data(), vec.bytes.size());
+                    },
+                    [&](const fastgltf::sources::BufferView &bv) {
+                        const auto &view = gltf.bufferViews[bv.bufferViewIndex];
+                        const auto &buffer = gltf.buffers[view.bufferIndex];
+                        std::visit(
+                            fastgltf::visitor{
+                                [&](const fastgltf::sources::Array &arr) {
+                                    invoke(arr.bytes.data() + view.byteOffset, view.byteLength);
+                                },
+                                [&](const fastgltf::sources::Vector &v) {
+                                    invoke(v.bytes.data() + view.byteOffset, view.byteLength);
+                                },
+                                [&](const fastgltf::sources::ByteView &bytes) {
+                                    invoke(bytes.bytes.data() + view.byteOffset, view.byteLength);
+                                },
+                                [](auto &&) {
+                                    throw std::runtime_error(
+                                        "Unsupported buffer data source for image");
+                                }
+                            },
+                            buffer.data);
+                    },
+                    [&](const fastgltf::sources::ByteView &bytes) {
+                        invoke(bytes.bytes.data(), bytes.bytes.size());
+                    },
+                    [](auto &&) {
+                        throw std::runtime_error("Unsupported image source type");
+                    }
+                },
+                image.data);
         }
 
         /** @brief Decodes a glTF image into CPU RGBA8 pixel data. */
-        ImageData decode_gltf_image(const fastgltf::Asset &gltf,
-                                    const fastgltf::Image &image) {
+        ImageData decode_gltf_image(
+            const fastgltf::Asset &gltf,
+            const fastgltf::Image &image) {
             ImageData result;
             visit_gltf_image_bytes(gltf, image, [&](const uint8_t *data, const std::size_t size) {
                 result = load_image_from_memory(data, size);
             });
 
             if (!result.valid()) {
-                throw std::runtime_error("Failed to decode glTF image '"
-                                         + std::string(image.name) + "'");
+                throw std::runtime_error(
+                    "Failed to decode glTF image '" + std::string(image.name) + "'");
             }
             return result;
         }
 
         /** @brief Computes a content hash of the raw source bytes without decoding. */
-        std::string hash_gltf_image(const fastgltf::Asset &gltf,
-                                    const fastgltf::Image &image) {
+        std::string hash_gltf_image(
+            const fastgltf::Asset &gltf,
+            const fastgltf::Image &image) {
             std::string hash;
             visit_gltf_image_bytes(gltf, image, [&](const uint8_t *data, const std::size_t size) {
                 hash = content_hash(data, size);
@@ -350,9 +356,10 @@ namespace qualquer::app {
         }
     } // anonymous namespace
 
-    bool SceneLoader::load(const std::string &path,
-                           const optix::DefaultTextures &default_textures,
-                           cudaStream_t stream) {
+    bool SceneLoader::load(
+        const std::string &path,
+        const optix::DefaultTextures &default_textures,
+        cudaStream_t stream) {
         spdlog::info("Loading scene: {}", path);
 
         try {
@@ -369,8 +376,9 @@ namespace qualquer::app {
             auto asset = parser.loadGltf(
                 gltf_data.get(), file_path.parent_path(), options);
             if (asset.error() != fastgltf::Error::None) {
-                throw std::runtime_error("Failed to parse glTF '" + path
-                                         + "' (error " + std::to_string(static_cast<int>(asset.error())) + ")");
+                throw std::runtime_error(
+                    "Failed to parse glTF '" + path + "' (error "
+                    + std::to_string(static_cast<int>(asset.error())) + ")");
             }
 
             auto &gltf = asset.get();
@@ -428,11 +436,11 @@ namespace qualquer::app {
             // Extract flat vertex/index arrays for emissive alias table (which
             // expects parallel std::vector spans matching meshes_). Data is moved
             // out of mesh_data since it is not needed after this point.
-            std::vector<std::vector<renderer::Vertex>> cpu_vertices;
-            std::vector<std::vector<uint32_t>> cpu_indices;
+            std::vector<std::vector<renderer::Vertex> > cpu_vertices;
+            std::vector<std::vector<uint32_t> > cpu_indices;
             cpu_vertices.reserve(mesh_data.primitives.size());
             cpu_indices.reserve(mesh_data.primitives.size());
-            for (auto &prim : mesh_data.primitives) {
+            for (auto &prim: mesh_data.primitives) {
                 cpu_vertices.push_back(std::move(prim.vertices));
                 cpu_indices.push_back(std::move(prim.indices));
             }
@@ -445,12 +453,16 @@ namespace qualquer::app {
 
             if (!emissive_result.triangles.empty()) {
                 emissive_triangles_.alloc(emissive_result.triangles.size());
-                emissive_triangles_.upload(emissive_result.triangles.data(),
-                                           emissive_result.triangles.size(), stream);
+                emissive_triangles_.upload(
+                    emissive_result.triangles.data(),
+                    emissive_result.triangles.size(),
+                    stream);
 
                 emissive_alias_table_.alloc(emissive_result.alias_table.size());
-                emissive_alias_table_.upload(emissive_result.alias_table.data(),
-                                             emissive_result.alias_table.size(), stream);
+                emissive_alias_table_.upload(
+                    emissive_result.alias_table.data(),
+                    emissive_result.alias_table.size(),
+                    stream);
             }
 
             // Ensure all async copies complete before local sources are
@@ -468,9 +480,9 @@ namespace qualquer::app {
     }
 
     std::optional<SceneLoader::PrimitiveCpuData> SceneLoader::load_primitive(
-            const fastgltf::Asset &gltf,
-            const fastgltf::Primitive &primitive,
-            const std::string_view mesh_name) {
+        const fastgltf::Asset &gltf,
+        const fastgltf::Primitive &primitive,
+        const std::string_view mesh_name) {
         if (primitive.type != fastgltf::PrimitiveType::Triangles) {
             spdlog::warn("Mesh '{}' primitive skipped: unsupported type {}",
                          mesh_name, static_cast<int>(primitive.type));
@@ -479,9 +491,10 @@ namespace qualquer::app {
 
         const auto pos_it = primitive.findAttribute("POSITION");
         if (pos_it == primitive.attributes.end()) {
-            throw std::runtime_error(std::string("Mesh '")
-                                     .append(mesh_name)
-                                     .append("' primitive missing POSITION attribute"));
+            throw std::runtime_error(
+                std::string("Mesh '")
+                .append(mesh_name)
+                .append("' primitive missing POSITION attribute"));
         }
         const auto &pos_accessor = gltf.accessors[pos_it->accessorIndex];
         auto vertex_count = pos_accessor.count;
@@ -496,7 +509,7 @@ namespace qualquer::app {
 
         {
             std::size_t i = 0;
-            for (auto p : fastgltf::iterateAccessor<fastgltf::math::fvec3>(gltf, pos_accessor)) {
+            for (auto p: fastgltf::iterateAccessor<fastgltf::math::fvec3>(gltf, pos_accessor)) {
                 glm::vec3 pos{p.x(), p.y(), p.z()};
                 if (!std::isfinite(pos.x) || !std::isfinite(pos.y) || !std::isfinite(pos.z)) {
                     pos = {0.0f, 0.0f, 0.0f};
@@ -515,18 +528,17 @@ namespace qualquer::app {
             has_normals = true;
             const auto &accessor = gltf.accessors[it->accessorIndex];
             std::size_t i = 0;
-            for (auto n : fastgltf::iterateAccessor<fastgltf::math::fvec3>(gltf, accessor)) {
+            for (auto n: fastgltf::iterateAccessor<fastgltf::math::fvec3>(gltf, accessor)) {
                 glm::vec3 normal{n.x(), n.y(), n.z()};
                 if (!std::isfinite(normal.x) || !std::isfinite(normal.y)
-                    || !std::isfinite(normal.z)
-                    || glm::dot(normal, normal) < 1e-12f) {
+                    || !std::isfinite(normal.z) || glm::dot(normal, normal) < 1e-12f) {
                     normal = {0.0f, 0.0f, 1.0f};
                 }
                 vertices[i].normal = normal;
                 ++i;
             }
         } else {
-            for (auto &v : vertices) {
+            for (auto &v: vertices) {
                 v.normal = {0.0f, 0.0f, 1.0f};
             }
         }
@@ -541,7 +553,7 @@ namespace qualquer::app {
             has_uv0 = true;
             const auto &accessor = gltf.accessors[it->accessorIndex];
             std::size_t i = 0;
-            for (auto uv : fastgltf::iterateAccessor<fastgltf::math::fvec2>(gltf, accessor)) {
+            for (auto uv: fastgltf::iterateAccessor<fastgltf::math::fvec2>(gltf, accessor)) {
                 const float u = std::isfinite(uv.x()) ? uv.x() : 0.0f;
                 const float v = std::isfinite(uv.y()) ? uv.y() : 0.0f;
                 vertices[i].uv0 = {u, v};
@@ -555,7 +567,7 @@ namespace qualquer::app {
             const auto &accessor = gltf.accessors[it->accessorIndex];
             std::size_t i = 0;
             if (accessor.type == fastgltf::AccessorType::Vec4) {
-                for (auto c : fastgltf::iterateAccessor<fastgltf::math::fvec4>(gltf, accessor)) {
+                for (auto c: fastgltf::iterateAccessor<fastgltf::math::fvec4>(gltf, accessor)) {
                     glm::vec4 color{c.x(), c.y(), c.z(), c.w()};
                     if (!std::isfinite(color.x) || !std::isfinite(color.y)
                         || !std::isfinite(color.z) || !std::isfinite(color.w)) {
@@ -567,10 +579,9 @@ namespace qualquer::app {
                     ++i;
                 }
             } else {
-                for (auto c : fastgltf::iterateAccessor<fastgltf::math::fvec3>(gltf, accessor)) {
+                for (auto c: fastgltf::iterateAccessor<fastgltf::math::fvec3>(gltf, accessor)) {
                     glm::vec3 rgb{c.x(), c.y(), c.z()};
-                    if (!std::isfinite(rgb.x) || !std::isfinite(rgb.y)
-                        || !std::isfinite(rgb.z)) {
+                    if (!std::isfinite(rgb.x) || !std::isfinite(rgb.y) || !std::isfinite(rgb.z)) {
                         rgb = {1.0f, 1.0f, 1.0f};
                     } else {
                         rgb = glm::clamp(rgb, glm::vec3(0.0f), glm::vec3(1.0f));
@@ -580,7 +591,7 @@ namespace qualquer::app {
                 }
             }
         } else {
-            for (auto &v : vertices) {
+            for (auto &v: vertices) {
                 v.color = {1.0f, 1.0f, 1.0f, 1.0f};
             }
         }
@@ -599,14 +610,13 @@ namespace qualquer::app {
                 has_tangent = true;
                 const auto &accessor = gltf.accessors[it->accessorIndex];
                 std::size_t i = 0;
-                for (auto t : fastgltf::iterateAccessor<fastgltf::math::fvec4>(gltf, accessor)) {
+                for (auto t: fastgltf::iterateAccessor<fastgltf::math::fvec4>(gltf, accessor)) {
                     glm::vec4 tan{t.x(), t.y(), t.z(), t.w()};
                     const glm::vec3 xyz{tan.x, tan.y, tan.z};
                     const float len2 = glm::dot(xyz, xyz);
                     if (!std::isfinite(tan.x) || !std::isfinite(tan.y)
                         || !std::isfinite(tan.z) || !std::isfinite(tan.w)
-                        || len2 < 1e-12f
-                        || (tan.w != 1.0f && tan.w != -1.0f)) {
+                        || len2 < 1e-12f || (tan.w != 1.0f && tan.w != -1.0f)) {
                         has_tangent = false;
                         break;
                     }
@@ -623,7 +633,7 @@ namespace qualquer::app {
         if (primitive.indicesAccessor.has_value()) {
             const auto &accessor = gltf.accessors[*primitive.indicesAccessor];
             indices.reserve(accessor.count);
-            for (auto idx : fastgltf::iterateAccessor<uint32_t>(gltf, accessor)) {
+            for (auto idx: fastgltf::iterateAccessor<uint32_t>(gltf, accessor)) {
                 indices.push_back(idx);
             }
         } else {
@@ -642,7 +652,7 @@ namespace qualquer::app {
         }
         const auto last_vertex = static_cast<uint32_t>(vertex_count - 1);
         std::size_t invalid_index_count = 0;
-        for (auto &idx : indices) {
+        for (auto &idx: indices) {
             if (idx >= vertex_count) {
                 ++invalid_index_count;
                 idx = last_vertex;
@@ -713,9 +723,9 @@ namespace qualquer::app {
     }
 
     SceneLoader::MeshLoadResult SceneLoader::load_meshes(
-            const fastgltf::Asset &gltf,
-            cudaStream_t stream,
-            const std::vector<bool> &referenced_meshes) {
+        const fastgltf::Asset &gltf,
+        cudaStream_t stream,
+        const std::vector<bool> &referenced_meshes) {
         MeshLoadResult result;
         result.prim_offsets.reserve(gltf.meshes.size() + 1);
 
@@ -730,7 +740,7 @@ namespace qualquer::app {
             // explicit materials at index gltf.materials.size().
             const auto default_material_idx = static_cast<uint32_t>(gltf.materials.size());
 
-            for (const auto &primitive : gltf_mesh.primitives) {
+            for (const auto &primitive: gltf_mesh.primitives) {
                 auto loaded = load_primitive(gltf, primitive, gltf_mesh.name);
                 if (!loaded) { continue; }
 
@@ -743,11 +753,12 @@ namespace qualquer::app {
                 ib.upload(loaded->indices.data(), loaded->indices.size(), stream);
 
                 const auto prim_material_id = primitive.materialIndex.has_value()
-                    ? static_cast<uint32_t>(*primitive.materialIndex)
-                    : default_material_idx;
+                                                  ? static_cast<uint32_t>(*primitive.materialIndex)
+                                                  : default_material_idx;
 
-                const bool prim_opaque = !primitive.materialIndex.has_value()
-                    || gltf.materials[prim_material_id].alphaMode == fastgltf::AlphaMode::Opaque;
+                const bool prim_opaque =
+                        !primitive.materialIndex.has_value()
+                        || gltf.materials[prim_material_id].alphaMode == fastgltf::AlphaMode::Opaque;
 
                 meshes_.push_back({
                     .vertex_buffer = std::move(vb),
@@ -903,8 +914,9 @@ namespace qualquer::app {
         prepared_textures.clear();
 
         // ---- Fill materials ----
-        auto resolve_texture = [&](const std::size_t texture_index,
-                                   const TextureRole role) -> uint32_t {
+        auto resolve_texture = [&](
+            const std::size_t texture_index,
+            const TextureRole role) -> uint32_t {
             const auto it = tex_index_cache.find({texture_index, role});
             assert(it != tex_index_cache.end() && "Texture must have been prepared");
             return it->second;
@@ -947,27 +959,32 @@ namespace qualquer::app {
             data.double_sided = mat.doubleSided ? 1u : 0u;
 
             data.base_color_tex = pbr.baseColorTexture.has_value()
-                                      ? resolve_texture(pbr.baseColorTexture->textureIndex,
-                                                        TextureRole::Color)
+                                      ? resolve_texture(pbr.baseColorTexture->textureIndex, TextureRole::Color)
                                       : UINT32_MAX;
             data.metallic_roughness_tex = pbr.metallicRoughnessTexture.has_value()
                                               ? resolve_texture(
-                                                  pbr.metallicRoughnessTexture->textureIndex,
-                                                  TextureRole::Linear)
+                                                  pbr.metallicRoughnessTexture->textureIndex, TextureRole::Linear)
                                               : UINT32_MAX;
             data.normal_tex = mat.normalTexture.has_value()
-                                  ? resolve_texture(mat.normalTexture->textureIndex,
-                                                    TextureRole::Normal)
+                                  ? resolve_texture(mat.normalTexture->textureIndex, TextureRole::Normal)
                                   : UINT32_MAX;
-            data.emissive_tex = (emissive != glm::vec3(0.0f) && mat.emissiveTexture.has_value())
-                                    ? resolve_texture(mat.emissiveTexture->textureIndex,
-                                                      TextureRole::Color)
-                                    : UINT32_MAX;
+            data.emissive_tex =
+                    (emissive != glm::vec3(0.0f) && mat.emissiveTexture.has_value())
+                        ? resolve_texture(mat.emissiveTexture->textureIndex, TextureRole::Color)
+                        : UINT32_MAX;
 
-            if (data.base_color_tex == UINT32_MAX) { data.base_color_tex = kDefaultWhiteTexIdx; }
-            if (data.metallic_roughness_tex == UINT32_MAX) { data.metallic_roughness_tex = kDefaultWhiteTexIdx; }
-            if (data.normal_tex == UINT32_MAX) { data.normal_tex = kDefaultFlatNormalTexIdx; }
-            if (data.emissive_tex == UINT32_MAX) { data.emissive_tex = kDefaultWhiteTexIdx; }
+            if (data.base_color_tex == UINT32_MAX) {
+                data.base_color_tex = kDefaultWhiteTexIdx;
+            }
+            if (data.metallic_roughness_tex == UINT32_MAX) {
+                data.metallic_roughness_tex = kDefaultWhiteTexIdx;
+            }
+            if (data.normal_tex == UINT32_MAX) {
+                data.normal_tex = kDefaultFlatNormalTexIdx;
+            }
+            if (data.emissive_tex == UINT32_MAX) {
+                data.emissive_tex = kDefaultWhiteTexIdx;
+            }
 
             material_remap[mat_idx] = static_cast<uint32_t>(gpu_materials_.size());
             gpu_materials_.push_back(data);
@@ -1074,8 +1091,10 @@ namespace qualquer::app {
 
         // Upload alias table to device
         env_alias_table_.alloc(alias_result.entries.size());
-        env_alias_table_.upload(alias_result.entries.data(),
-                                alias_result.entries.size(), stream);
+        env_alias_table_.upload(
+            alias_result.entries.data(),
+            alias_result.entries.size(),
+            stream);
 
         // Ensure the async copy completes before alias_result is destroyed.
         CUDA_CHECK(cudaStreamSynchronize(stream));

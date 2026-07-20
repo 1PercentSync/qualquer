@@ -7,10 +7,10 @@
 
 #include <qualquer/optix/cuda_buffer.h>
 #include <qualquer/optix/cuda_texture.h>
+#include <qualquer/optix/cuda_texture_upload.h>
 #include <qualquer/renderer/launch_params.h>
 #include <qualquer/renderer/material.h>
 #include <qualquer/renderer/scene_types.h>
-#include <qualquer/optix/cuda_texture_upload.h>
 
 #include <cstdint>
 #include <optional>
@@ -47,9 +47,7 @@ namespace qualquer::app {
          *                         stream used by downstream consumers like AS build).
          * @return true on success, false on failure (scene remains empty).
          */
-        bool load(const std::string &path,
-                  const optix::DefaultTextures &default_textures,
-                  cudaStream_t stream);
+        bool load(const std::string &path, const optix::DefaultTextures &default_textures, cudaStream_t stream);
 
         /**
          * @brief Loads an HDR environment map and prepares GPU resources.
@@ -114,10 +112,14 @@ namespace qualquer::app {
         [[nodiscard]] renderer::EnvLightData env_light() const;
 
         /** @brief Source equirect width (0 when no env loaded). */
-        [[nodiscard]] uint32_t env_source_width() const { return env_source_width_; }
+        [[nodiscard]] uint32_t env_source_width() const {
+            return env_source_width_;
+        }
 
         /** @brief Source equirect height (0 when no env loaded). */
-        [[nodiscard]] uint32_t env_source_height() const { return env_source_height_; }
+        [[nodiscard]] uint32_t env_source_height() const {
+            return env_source_height_;
+        }
 
         /**
          * @brief Packed emissive-triangle light resources for SceneRenderInput / LaunchParams.
