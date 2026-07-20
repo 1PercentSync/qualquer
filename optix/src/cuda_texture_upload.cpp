@@ -178,7 +178,6 @@ namespace qualquer::optix {
         DefaultTextures defaults;
         defaults.white = create_solid_texture(1.0f, 1.0f, 1.0f, 1.0f);
         defaults.flat_normal = create_solid_texture(0.5f, 0.5f, 1.0f, 1.0f);
-        defaults.black = create_solid_texture(0.0f, 0.0f, 0.0f, 1.0f);
         return defaults;
     }
 } // namespace qualquer::optix

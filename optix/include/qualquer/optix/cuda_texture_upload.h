@@ -100,20 +100,17 @@ namespace qualquer::optix {
     // ---- Default textures ----
 
     /**
-     * @brief Holds the three default 1×1 textures for material fallback.
+     * @brief Holds the default 1×1 textures for material fallback.
      *
      * Missing material texture slots are filled with these neutral values
      * so the shader can always sample without special-casing.
      */
     struct DefaultTextures {
-        /** @brief 1×1 (1,1,1,1) — neutral base color / metallic-roughness / occlusion. */
+        /** @brief 1×1 (1,1,1,1) — neutral base color / metallic-roughness / emissive. */
         CudaTexture white;
 
         /** @brief 1×1 (0.5,0.5,1.0,1.0) — tangent-space Z-up, no perturbation. */
         CudaTexture flat_normal;
-
-        /** @brief 1×1 (0,0,0,1) — no emission. */
-        CudaTexture black;
     };
 
     // ---- GPU upload ----
@@ -136,7 +133,7 @@ namespace qualquer::optix {
         const PreparedTexture &prepared, const SamplerDesc &sampler);
 
     /**
-     * @brief Creates three default 1×1 fp16×4 textures for material fallback.
+     * @brief Creates default 1×1 fp16×4 textures for material fallback.
      *
      * Each texture is a single half-precision (fp16) RGBA texel allocated via
      * @c cudaMallocMipmappedArray (1 level) with @c cudaReadModeElementType,
@@ -145,7 +142,7 @@ namespace qualquer::optix {
      * Sampler is point-filter + clamp (1×1 has only one texel, so filter/wrap
      * mode has no practical effect).
      *
-     * @return DefaultTextures holding three RAII CudaTexture handles.
+     * @return DefaultTextures holding RAII CudaTexture handles.
      */
     [[nodiscard]] DefaultTextures create_default_textures();
 

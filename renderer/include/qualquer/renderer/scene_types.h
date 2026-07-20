@@ -86,15 +86,12 @@ namespace qualquer::renderer {
     /**
      * @brief A renderable mesh placed in the scene.
      *
-     * References a Mesh and a material by index and carries the world transform
-     * plus a world-space AABB. Only the current-frame transform is carried.
+     * References a Mesh by index and carries the world transform plus a
+     * world-space AABB. Material is accessed through Mesh::material_id.
      */
     struct MeshInstance {
         /** @brief Index into the loaded mesh array. */
         uint32_t mesh_id = 0;
-
-        /** @brief Index into the material instance array. */
-        uint32_t material_id = 0;
 
         /** @brief World-space transform (local-to-world). */
         glm::mat4 transform{1.0f};

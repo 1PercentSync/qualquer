@@ -13,12 +13,15 @@
 #include <qualquer/optix/cuda_texture_upload.h>
 
 #include <cstdint>
+#include <optional>
 #include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace fastgltf {
     struct Asset;
+    struct Primitive;
 }
 
 namespace qualquer::app {
@@ -91,7 +94,7 @@ namespace qualquer::app {
         /** @brief Returns the device texture-object array (indexed by Material tex fields). */
         [[nodiscard]] const optix::CudaBuffer<cudaTextureObject_t> &texture_objects_buffer() const;
 
-        /** @brief Number of scene textures loaded from glTF (excluding 3 default textures). */
+        /** @brief Number of scene textures loaded from glTF (excluding 2 default textures). */
         [[nodiscard]] uint32_t scene_texture_count() const;
 
         /**
@@ -189,34 +192,50 @@ namespace qualquer::app {
 
         // ---- Private loading stages ----
 
-        /** @brief Intermediate data from mesh loading, consumed by build_mesh_instances(). */
+        /** @brief CPU-side data for a single loaded primitive; retained for emissive collection. */
+        struct PrimitiveCpuData {
+            /** @brief Local-space AABB computed from vertex positions. */
+            renderer::AABB local_bounds;
+            /** @brief CPU vertex array. */
+            std::vector<renderer::Vertex> vertices;
+            /** @brief CPU index array. */
+            std::vector<uint32_t> indices;
+        };
+
+        /** @brief Intermediate data from mesh loading, consumed by load(). */
         struct MeshLoadResult {
             /** @brief glTF mesh index → starting index in meshes_. Last entry = sentinel. */
             std::vector<uint32_t> prim_offsets;
-
-            /** @brief Per-primitive material index (parallel to meshes_). */
-            std::vector<uint32_t> material_ids;
-
-            /** @brief Per-primitive local-space AABB (parallel to meshes_). */
-            std::vector<renderer::AABB> local_bounds;
-
-            /** @brief Per-primitive CPU vertex data (parallel to meshes_); retained for emissive collection. */
-            std::vector<std::vector<renderer::Vertex>> cpu_vertices;
-
-            /** @brief Per-primitive CPU index data (parallel to meshes_); retained for emissive collection. */
-            std::vector<std::vector<uint32_t>> cpu_indices;
+            /** @brief Per loaded primitive (parallel to meshes_). */
+            std::vector<PrimitiveCpuData> primitives;
         };
 
-        /** @brief Loads all mesh primitives: vertex/index buffers, local AABBs, material IDs. */
-        MeshLoadResult load_meshes(const fastgltf::Asset &gltf, cudaStream_t stream);
+        /**
+         * @brief Loads a single glTF primitive: decode attributes, sanitize,
+         *        validate indices, generate flat normals / MikkTSpace tangents.
+         * @return Loaded geometry on success; std::nullopt (with a warning)
+         *         when the primitive is unsupported or empty.
+         */
+        [[nodiscard]] static std::optional<PrimitiveCpuData> load_primitive(
+            const fastgltf::Asset &gltf,
+            const fastgltf::Primitive &primitive,
+            std::string_view mesh_name);
 
-        /** @brief Loads samplers, textures, and materials from the glTF asset. */
-        void load_materials(const fastgltf::Asset &gltf,
-                            const optix::DefaultTextures &default_textures,
-                            cudaStream_t stream);
+        /** @brief Loads mesh primitives for referenced meshes: GPU buffers and CPU data. */
+        MeshLoadResult load_meshes(const fastgltf::Asset &gltf,
+                                   cudaStream_t stream,
+                                   const std::vector<bool> &referenced_meshes);
 
-        /** @brief Traverses the scene graph and creates MeshInstances with world transforms. */
-        void build_mesh_instances(fastgltf::Asset &gltf,
-                                  const MeshLoadResult &mesh_data);
+        /**
+         * @brief Loads samplers, textures, and material structs for referenced materials only.
+         *
+         * Returns a remap table indexed by old glTF material index (with the
+         * default material at gltf.materials.size()) mapping to the compacted
+         * gpu_materials_ index. Caller must apply it to all material_id references.
+         */
+        std::vector<uint32_t> load_materials(const fastgltf::Asset &gltf,
+                                             const optix::DefaultTextures &default_textures,
+                                             cudaStream_t stream,
+                                             const std::vector<bool> &referenced_materials);
     };
 } // namespace qualquer::app
