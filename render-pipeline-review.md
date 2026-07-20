@@ -61,30 +61,6 @@ native render resolution 等于 display resolution 时，仅这些数组约占 `
 #### 改进方向
 
 color ping-pong 与事件可保持常驻；aux guides 和 `dlss_output_` 应只在 DLSS 实际可用且启用时按需创建，在 feature release 后按策略立即释放或进入明确缓存预算。若保留热切换缓存，应在 UI/统计中显示其 VRAM 成本并允许回收，而不是无条件常驻。
-
-
-
-
-### QRP-042：将 perceptual roughness 强制到 0.04，改变合法的光滑/镜面 glTF 材质
-
-- 严重度：中
-- 置信度：高
-- 类型：material semantics / BRDF domain clamp
-
-#### 代码与规范事实
-
-- `renderer/src/device/programs.cu:551-554` 对 `texture.g × roughnessFactor` 使用 `fmaxf(..., 0.04f)`，随后才平方得到 GGX alpha；所有低于 0.04 的值因此被压成同一 lobe。
-- archived design 把 0.04 称为“glTF 下限/业界通用值”，但 glTF schema 的实际范围是 `[0,1]`，官方规范还直接给出 `roughnessFactor: 0.0` 的 gold material。
-- 依据：`/mnt/d/Github/glTF/specification/2.0/schema/material.pbrMetallicRoughness.schema.json:35-40` 与 `Specification.adoc:1981-1986`。
-
-#### 触发条件与影响
-
-`roughnessFactor` 或 metallic-roughness texel G 小于 0.04 的抛光金属、镜面与锐利高光。当前实现系统性加宽高光/反射，无法表达规范允许的零 roughness；EON、GGX、energy compensation 及 DLSS roughness guide 都读取 clamp 后值，所以这是整体材质外观变化而非单一 guide mismatch。
-
-#### 判断边界与修复方向
-
-GGX alpha 精确为零会造成 delta singularity，保留数值下限有工程依据；问题是把较大的经验阈值包装成 glTF 语义并无条件改变资产。选择显著更小、只防除零的 alpha floor，或为 roughness≈0 实现 delta-specular 分支；把阈值与理由写成 renderer approximation，并用 polished-metal/highlight reference A/B 确认可接受误差。
-
 ## 5. 既有优化可能产生反作用的检查项
 
 以下不是静态代码即可定性的错误。必须通过 release 编译资源报告、Nsight Systems/Compute、GPU 时间线和图像 A/B 验证。
