@@ -3,23 +3,6 @@
 
 以下不是静态代码即可定性的错误。必须通过 release 编译资源报告、Nsight Systems/Compute、GPU 时间线和图像 A/B 验证。
 
-### QRP-O09：DLSS-RR 未提供 specular hit distance，也未实现 Primary Surface Replacement
-
-#### 代码事实
-
-- `optix/src/dlss_rr.cpp:265-267` 明确将 `pInSpecularHitDistance = nullptr`。
-- 当前 guides 总是描述 camera ray 的第一处 shaded surface；除 single-sided pass-through 外，不会沿近镜面路径寻找反射中的 primary replacement surface。
-- 本地 NVIDIA `vk_denoise_dlssrr` 参考实现沿最多 5 层镜面路径寻找 Primary Surface Replacement，并让 depth、normal、motion 与 albedo 描述该 virtual surface；同时写入 reflection path length。
-- 本地 NVIDIA `vk_gltf_renderer` 也捕获第一次 specular bounce 的 hit distance，环境 miss 写 fp16 最大距离，并把该可选 guide 传给 NGX。
-
-#### 优化机会
-
-在高 specular、低 roughness 材质上，加入 specular hit distance 可帮助 RR 区分反射几何与 primary geometry；进一步实现受控深度的 Primary Surface Replacement，可让 motion/depth/normal guides 与镜中实际颜色来源一致，减少镜面拖影与错误重投影。
-
-#### 取舍与验证
-
-该输入是可选项，缺失不构成 API 错误。实现会增加 payload/live state、额外路径分类和至少一张 guide；QRP-025 已表明当前 guide VRAM 很高，因此应先采用 R16F 等 SDK/参考实现支持的紧凑格式，并对镜面场景 A/B 比较 ghosting、disocclusion 与总帧时，不能无条件照搬 5 层 PSR。
-
 ### QRP-O10：DLSS guides 全部使用 32-bit channels，存在显著带宽与 VRAM 压缩空间
 
 #### 代码事实
