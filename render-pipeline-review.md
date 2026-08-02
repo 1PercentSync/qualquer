@@ -1,35 +1,4 @@
-## 3. 已确认问题
 
-### QRP-025：DLSS 关闭或不可用时仍常驻分配双份完整 guides 与 DLSS output
-
-- 严重度：高（VRAM / 可用性）
-- 置信度：高
-- 类型：资源生命周期 / 次优实现
-
-#### 代码证据
-
-- `renderer/src/renderer.cpp:282-301` 的 `FrameSlot::alloc/resize()` 无条件同时分配 color 与全部六个 `AuxBufferSet` guides。
-- `renderer/include/qualquer/renderer/renderer.h:285-311` 每个 slot 的 guides 为：R32F depth、RG32F motion、三张 RGBA32F、R32F roughness，合计 64 bytes/pixel。
-- 两个 slot 的 guides 因此占 128 bytes/pixel；两张 RGBA32F color 再占 32 bytes/pixel。
-- `renderer/src/renderer.cpp:545-557` 又无条件按 display resolution 分配 RGBA32F `dlss_output_`，即使 `dlss_enabled == false` 或 `DlssRR::available() == false`。
-- device 程序在 DLSS off 时不生成/消费 aux guides，这些分配没有渲染用途。
-
-#### 触发条件
-
-所有正常运行都会触发；默认 DLSS 为关闭状态，unsupported GPU/driver 上同样触发。
-
-#### 影响
-
-native render resolution 等于 display resolution 时，仅这些数组约占 `176 bytes/pixel`：
-
-- 1920×1080：约 348 MiB；
-- 3840×2160：约 1.36 GiB。
-
-这还不含 AS、材质纹理、NGX feature、自身临时内存和驱动开销。在 8 GiB GPU 上会显著挤压场景预算、增加 resize 分配成本，并可能把原本可加载的场景推向 OOM；DLSS 完全不可用时浪费仍然存在。
-
-#### 改进方向
-
-color ping-pong 与事件可保持常驻；aux guides 和 `dlss_output_` 应只在 DLSS 实际可用且启用时按需创建，在 feature release 后按策略立即释放或进入明确缓存预算。若保留热切换缓存，应在 UI/统计中显示其 VRAM 成本并允许回收，而不是无条件常驻。
 ## 5. 既有优化可能产生反作用的检查项
 
 以下不是静态代码即可定性的错误。必须通过 release 编译资源报告、Nsight Systems/Compute、GPU 时间线和图像 A/B 验证。
