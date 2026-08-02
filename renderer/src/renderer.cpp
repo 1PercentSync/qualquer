@@ -288,14 +288,16 @@ namespace qualquer::renderer {
 
     void Renderer::FrameSlot::alloc(const uint32_t width, const uint32_t height) {
         color.alloc(width, height);
-        aux.alloc(width, height);
+        // aux guides are allocated/freed by the DLSS lifecycle, not here.
         sample_count = 0;
         dlss_metadata = {};
     }
 
     void Renderer::FrameSlot::resize(const uint32_t width, const uint32_t height) {
         color.resize(width, height);
-        aux.resize(width, height);
+        if (aux.valid()) {
+            aux.resize(width, height);
+        }
         // Resized content is undefined; do not claim prior accumulation
         // or valid DLSS input status.
         sample_count = 0;
@@ -424,7 +426,9 @@ namespace qualquer::renderer {
         sbt_hit_.alloc(1);
         sbt_hit_.upload(&record, 1, cuda_context.compute_stream);
 
-        // Two ping-pong FrameSlots (color + guides + count + metadata + events).
+        // Two ping-pong FrameSlots (color + count + metadata + events).
+        // Aux guides and dlss_output_ are allocated on demand when DLSS is
+        // enabled, avoiding VRAM waste when DLSS is off.
         // No explicit clear: sample_count = 0 makes raygen overwrite on the
         // first frame and tonemap output black (count == 0 guard), so
         // uninitialised content is never read. create_events records both
@@ -434,14 +438,6 @@ namespace qualquer::renderer {
             slot.alloc(width, height);
             slot.create_events(cuda_context.compute_stream);
         }
-
-        // DLSS-RR output at display resolution. Initially display == render
-        // (before any user-driven render-height change); resized in submit_cuda
-        // when the display dimensions change.
-        dlss_output_.alloc(width, height);
-        dlss_output_width_ = width;
-        dlss_output_height_ = height;
-        dlss_output_valid_ = false;
 
         render_width_ = width;
         render_height_ = height;
@@ -556,19 +552,21 @@ namespace qualquer::renderer {
                                const uint32_t height,
                                const uint32_t frame_index) {
         // DLSS output buffer tracks display resolution (window resize), not
-        // render resolution. Drain both streams before reallocating — the
-        // previous frame's tonemap may still be reading the old buffer.
+        // render resolution. Only resize when already allocated (DLSS is on);
+        // first allocation happens when DLSS is enabled below.
         bool display_res_changed = false;
         if (width != dlss_output_width_ || height != dlss_output_height_) {
-            CUDA_CHECK(cudaStreamSynchronize(cuda_context.compute_stream));
-            CUDA_CHECK(cudaStreamSynchronize(cuda_context.display_stream));
-            dlss_output_.resize(width, height);
+            if (dlss_output_.valid()) {
+                CUDA_CHECK(cudaStreamSynchronize(cuda_context.compute_stream));
+                CUDA_CHECK(cudaStreamSynchronize(cuda_context.display_stream));
+                dlss_output_.resize(width, height);
+                dlss_output_valid_ = false;
+                spdlog::info("DLSS output buffer reallocated ({}x{} display resolution)",
+                             width, height);
+            }
             dlss_output_width_ = width;
             dlss_output_height_ = height;
-            dlss_output_valid_ = false;
             display_res_changed = true;
-            spdlog::info("DLSS output buffer reallocated ({}x{} display resolution)",
-                         width, height);
         }
 
         // Ensure DLSS optimal settings are cached before resolving render
@@ -619,6 +617,19 @@ namespace qualquer::renderer {
         // when DLSS is enabled — resolution changes while DLSS is off must
         // not create a feature. Optimal settings are already cached above.
         if (scene.settings.dlss_enabled && dlss_rr_.available()) {
+            // Allocate aux guides and DLSS output on first enable.
+            if (!frame_slots_[0].aux.valid()) {
+                for (auto &slot: frame_slots_) {
+                    slot.aux.alloc(render_width, render_height);
+                }
+            }
+            if (!dlss_output_.valid()) {
+                dlss_output_.alloc(width, height);
+                dlss_output_width_ = width;
+                dlss_output_height_ = height;
+                dlss_output_valid_ = false;
+            }
+
             const bool preset_changed = scene.settings.dlss_preset != prev_dlss_preset_;
             const bool needs_recreate = render_res_changed || display_res_changed
                                         || preset_changed
@@ -636,11 +647,22 @@ namespace qualquer::renderer {
                 invalidate_dlss_state();
             }
         }
-        // Release feature when user disables DLSS (free VRAM immediately).
-        if (!scene.settings.dlss_enabled && dlss_rr_.feature_active()) {
+        // Release feature and free DLSS resources when user disables DLSS.
+        // aux.valid() covers the case where aux was allocated but feature
+        // creation failed — resources must still be freed on disable.
+        if (!scene.settings.dlss_enabled
+            && (dlss_rr_.feature_active() || frame_slots_[0].aux.valid())) {
             CUDA_CHECK(cudaStreamSynchronize(cuda_context.compute_stream));
             CUDA_CHECK(cudaStreamSynchronize(cuda_context.display_stream));
-            dlss_rr_.release_feature();
+            if (dlss_rr_.feature_active()) {
+                dlss_rr_.release_feature();
+            }
+            for (auto &slot: frame_slots_) {
+                slot.aux.free();
+            }
+            dlss_output_.free();
+            dlss_output_width_ = 0;
+            dlss_output_height_ = 0;
             invalidate_dlss_state();
         }
 

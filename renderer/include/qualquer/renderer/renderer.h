@@ -292,6 +292,9 @@ namespace qualquer::renderer {
             /** @brief Releases every guide resource. */
             void free();
 
+            /** @brief Whether the guide resources are allocated. */
+            [[nodiscard]] bool valid() const { return depth.valid(); }
+
             /** @brief View-space Z depth (R32F). */
             optix::CudaArrayBuffer<float> depth;
 
@@ -349,15 +352,22 @@ namespace qualquer::renderer {
          * with metadata from a different frame than the textures.
          */
         struct FrameSlot {
-            /** @brief Allocates color and guide resources at the given resolution. */
+            /**
+             * @brief Allocates color resources at the given resolution.
+             *
+             * Aux guides are not allocated here — they are managed by the
+             * DLSS lifecycle in submit_cuda (allocated on enable, freed on
+             * disable) to avoid wasting VRAM when DLSS is off.
+             */
             void alloc(uint32_t width, uint32_t height);
 
             /**
-             * @brief Resizes color and guide resources, zeros sample_count,
-             *        and clears DLSS metadata.
+             * @brief Resizes color resources, zeros sample_count, and clears
+             *        DLSS metadata.
              *
-             * Resized content is undefined; neither sample_count nor metadata
-             * may claim prior accumulation or valid DLSS input status.
+             * Aux guides are resized separately when allocated. Resized
+             * content is undefined; neither sample_count nor metadata may
+             * claim prior accumulation or valid DLSS input status.
              */
             void resize(uint32_t width, uint32_t height);
 
@@ -449,7 +459,8 @@ namespace qualquer::renderer {
         optix::CudaBuffer<GPUGeometryInfo> geometry_info_buffer_;
 
         /**
-         * @brief Ping-pong resource slots (color + guides + count + metadata + events).
+         * @brief Ping-pong resource slots (color + count + metadata + events;
+         *        aux guides allocated on demand when DLSS is enabled).
          *
          * A produced frame reads slot [accum_index_] and writes [1 - accum_index_],
          * then flips the index. A paused frame keeps the index unchanged. CUDA
