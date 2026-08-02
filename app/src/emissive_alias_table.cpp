@@ -106,6 +106,14 @@ namespace qualquer::app {
                     ._pad = {},
                 });
 
+                // Weight = luminance(emissive_factor) × area. The emissive
+                // texture is not factored in — device NEE samples the texture
+                // after a triangle is selected. Per-triangle average texture
+                // luminance would improve inter-triangle selection probability,
+                // but intra-triangle sampling remains uniform barycentric, so
+                // highly non-uniform textures within a single triangle still
+                // cause variance. Sub-triangle importance sampling or a light
+                // tree would be needed for that level.
                 powers.push_back(emissive_lum * area);
             }
         }
