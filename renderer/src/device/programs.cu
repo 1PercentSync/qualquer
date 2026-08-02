@@ -62,19 +62,31 @@ constexpr float kMinGgxAlpha = 1e-7f;
 extern "C" {
 __constant__ qualquer::renderer::LaunchParams params;
 
+/// Packs linear [0,1] RGB into a uint32_t for RGBA8 surface write.
+///
+/// OptiX bug: surf2Dwrite<uchar4> causes misaligned-address device fault
+/// on Ada (SM 8.9). surf2Dwrite<uint32_t> with identical bytes works.
+/// See: https://forums.developer.nvidia.com/t/367431
+__forceinline__ __device__ uint32_t pack_albedo_u8(const float3 c) {
+    const uint32_t r = __float2uint_rn(fminf(c.x, 1.0f) * 255.0f);
+    const uint32_t g = __float2uint_rn(fminf(c.y, 1.0f) * 255.0f);
+    const uint32_t b = __float2uint_rn(fminf(c.z, 1.0f) * 255.0f);
+    return r | (g << 8) | (b << 16) | 0xFF000000u;
+}
+
 /// Writes "no surface" aux G-buffer defaults (sky / single-sided pass-through).
 ///
 /// depth=inf, specular albedo=0, normals=0, roughness=0; only diffuse_albedo is
 /// parameterized so sky can pass tonemapped env color while pass-through passes
 /// black — both mean "no meaningful surface" to DLSS-RR.
 __forceinline__ __device__ void write_aux_no_surface(
-    const int sx, const int sy, const float4 diffuse_albedo
+    const int sx, const int sy, const uint32_t diffuse_albedo
 ) {
     const float inf = kPosInf;
     surf2Dwrite(inf, params.aux_depth,
                 sx * static_cast<int>(sizeof(float)), sy);
     surf2Dwrite(diffuse_albedo, params.aux_diffuse_albedo,
-                sx * static_cast<int>(sizeof(float4)), sy);
+                sx * static_cast<int>(sizeof(uint32_t)), sy);
     surf2Dwrite(make_float4(0.0f, 0.0f, 0.0f, 0.0f), params.aux_specular_albedo,
                 sx * static_cast<int>(sizeof(float4)), sy);
     surf2Dwrite(make_float4(0.0f, 0.0f, 0.0f, 0.0f), params.aux_normals,
@@ -403,9 +415,7 @@ __global__ void __raygen__rg() { // NOLINT(*-reserved-identifier)
         // [0,1] so DLSS-RR preserves sky detail without denoising it).
         if (!primary_is_hit) {
             const float3 sky_albedo = pbr_neutral_tonemap(primary_sky_color);
-            write_aux_no_surface(
-                sx, sy,
-                make_float4(sky_albedo.x, sky_albedo.y, sky_albedo.z, 1.0f));
+            write_aux_no_surface(sx, sy, pack_albedo_u8(sky_albedo));
         }
     }
 }
@@ -686,9 +696,9 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
                     sx * static_cast<int>(sizeof(float)), sy);
 
         // Diffuse albedo: raw base_color (not pre-multiplied by (1-metallic)).
-        surf2Dwrite(make_float4(base_color.x, base_color.y, base_color.z, 1.0f),
+        surf2Dwrite(pack_albedo_u8(base_color),
                     params.aux_diffuse_albedo,
-                    sx * static_cast<int>(sizeof(float4)), sy);
+                    sx * static_cast<int>(sizeof(uint32_t)), sy);
 
         // Specular albedo: E_glossy per channel (Turquin-compensated specular
         // directional reflectance, self-consistent with our energy compensation).

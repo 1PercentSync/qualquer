@@ -301,8 +301,8 @@ namespace qualquer::renderer {
             /** @brief Screen-space motion vectors (RG32F). */
             optix::CudaArrayBuffer<float2> motion_vectors;
 
-            /** @brief Raw base-color diffuse albedo (RGBA32F). */
-            optix::CudaArrayBuffer<float4> diffuse_albedo;
+            /** @brief Raw base-color diffuse albedo (RGBA8 UNORM). */
+            optix::CudaArrayBuffer<uchar4> diffuse_albedo;
 
             /** @brief Specular reflectance albedo (RGBA32F). */
             optix::CudaArrayBuffer<float4> specular_albedo;

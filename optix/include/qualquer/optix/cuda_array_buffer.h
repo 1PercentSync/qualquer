@@ -6,6 +6,7 @@
  */
 
 #include <cstdint>
+#include <type_traits>
 
 #include <cuda_runtime.h>
 
@@ -21,18 +22,25 @@ namespace qualquer::optix {
      * roughness, motion vectors, etc.) that shaders write via surface writes and
      * DLSS reads via texture objects.
      *
-     * T controls the channel layout through cudaCreateChannelDesc<T>():
+     * T controls the default channel layout through cudaCreateChannelDesc<T>():
      *   - float  → R32F  (1 channel)
      *   - float2 → RG32F (2 channels)
      *   - float4 → RGBA32F (4 channels)
+     *   - uchar4 → RGBA8 (4 channels, texture reads as normalized float [0,1])
+     *
+     * The custom alloc overload accepts an explicit cudaChannelFormatDesc +
+     * read mode, enabling formats not derivable from T (e.g. half4 via
+     * cudaCreateChannelDescHalf4()). resize preserves the format from the
+     * most recent alloc.
      *
      * Move-only: the backing cudaArray, texture object, and surface object name
      * single GPU resources; a copy would double-destroy.
      */
     template<typename T>
     class CudaArrayBuffer {
-        static_assert(std::is_same_v<T, float> || std::is_same_v<T, float2> || std::is_same_v<T, float4>,
-                      "CudaArrayBuffer<T> supports float, float2, float4");
+        static_assert(std::is_same_v<T, float> || std::is_same_v<T, float2>
+                      || std::is_same_v<T, float4> || std::is_same_v<T, uchar4>,
+                      "CudaArrayBuffer<T> supports float, float2, float4, uchar4");
 
     public:
         /** @brief Constructs an empty buffer owning no resources. */
@@ -47,7 +55,8 @@ namespace qualquer::optix {
         /** @brief Steals another buffer's resources; leaves other empty. */
         CudaArrayBuffer(CudaArrayBuffer &&other) noexcept
             : array_(other.array_), tex_obj_(other.tex_obj_), surf_obj_(other.surf_obj_),
-              width_(other.width_), height_(other.height_) {
+              width_(other.width_), height_(other.height_),
+              fmt_desc_(other.fmt_desc_), read_mode_(other.read_mode_) {
             other.array_ = nullptr;
             other.tex_obj_ = 0;
             other.surf_obj_ = 0;
@@ -68,6 +77,8 @@ namespace qualquer::optix {
                 surf_obj_ = other.surf_obj_;
                 width_ = other.width_;
                 height_ = other.height_;
+                fmt_desc_ = other.fmt_desc_;
+                read_mode_ = other.read_mode_;
                 other.array_ = nullptr;
                 other.tex_obj_ = 0;
                 other.surf_obj_ = 0;
@@ -81,29 +92,26 @@ namespace qualquer::optix {
          * @brief Allocates a 2D CUDA array and creates the texture/surface objects.
          *
          * Frees any prior allocation first. Width or height of 0 leaves the
-         * buffer empty.
-         *
-         * Texture object: point sampling, clamp addressing, unnormalized pixel
-         * coordinates, element-type read mode (float), no sRGB. Designed for
-         * DLSS-RR input consumption.
-         *
-         * Surface object: created from the same array for device-side surf2Dwrite.
+         * buffer empty. resize preserves the format from the most recent alloc.
          *
          * @param width  Array width in elements.
          * @param height Array height in elements.
+         * @param desc   Channel format descriptor for the backing array.
+         * @param mode   Texture read mode (element-type or normalized-float).
          */
-        void alloc(uint32_t width, uint32_t height) {
+        void alloc(uint32_t width, uint32_t height,
+                   const cudaChannelFormatDesc &desc,
+                   cudaTextureReadMode mode) {
             free();
             if (width == 0 || height == 0) {
                 return;
             }
 
-            // Allocate 2D array. cudaArraySurfaceLoadStore is required for
-            // surface object creation and surf2Dwrite addressing correctness.
-            const cudaChannelFormatDesc desc = cudaCreateChannelDesc<T>();
+            fmt_desc_ = desc;
+            read_mode_ = mode;
+
             CUDA_CHECK(cudaMallocArray(&array_, &desc, width, height, cudaArraySurfaceLoadStore));
 
-            // Texture object: point sample, clamp, unnormalized pixel coords
             cudaResourceDesc res_desc{};
             res_desc.resType = cudaResourceTypeArray;
             res_desc.res.array.array = array_;
@@ -112,11 +120,10 @@ namespace qualquer::optix {
             tex_desc.addressMode[0] = cudaAddressModeClamp;
             tex_desc.addressMode[1] = cudaAddressModeClamp;
             tex_desc.filterMode = cudaFilterModePoint;
-            tex_desc.readMode = cudaReadModeElementType;
+            tex_desc.readMode = mode;
             tex_desc.normalizedCoords = 0;
             CUDA_CHECK(cudaCreateTextureObject(&tex_obj_, &res_desc, &tex_desc, nullptr));
 
-            // Surface object: same array for writing
             CUDA_CHECK(cudaCreateSurfaceObject(&surf_obj_, &res_desc));
 
             width_ = width;
@@ -128,6 +135,8 @@ namespace qualquer::optix {
          *
          * Idempotent: members are reset, so a repeat call is a no-op.
          * Objects are destroyed before the backing array they reference.
+         * Stored format is preserved so a subsequent resize recreates with
+         * the same format.
          */
         void free() {
             if (surf_obj_ != 0) {
@@ -149,13 +158,14 @@ namespace qualquer::optix {
         /**
          * @brief Ensures the buffer matches the given dimensions.
          *
-         * No-op when the dimensions already match; reallocates otherwise.
+         * No-op when the dimensions already match; reallocates with the
+         * format from the most recent alloc otherwise.
          * @param width  Desired width.
          * @param height Desired height.
          */
         void resize(uint32_t width, uint32_t height) {
             if (width != width_ || height != height_) {
-                alloc(width, height);
+                alloc(width, height, fmt_desc_, read_mode_);
             }
         }
 
@@ -189,5 +199,11 @@ namespace qualquer::optix {
 
         /** @brief Allocated height in elements; 0 when empty. */
         uint32_t height_ = 0;
+
+        /** @brief Channel format used by the most recent alloc. */
+        cudaChannelFormatDesc fmt_desc_ = {};
+
+        /** @brief Texture read mode used by the most recent alloc. */
+        cudaTextureReadMode read_mode_ = cudaReadModeElementType;
     };
 } // namespace qualquer::optix

@@ -270,12 +270,12 @@ namespace qualquer::renderer {
     } // namespace
 
     void Renderer::AuxBufferSet::alloc(const uint32_t width, const uint32_t height) {
-        depth.alloc(width, height);
-        motion_vectors.alloc(width, height);
-        diffuse_albedo.alloc(width, height);
-        specular_albedo.alloc(width, height);
-        normals.alloc(width, height);
-        roughness.alloc(width, height);
+        depth.alloc(width, height, cudaCreateChannelDesc<float>(), cudaReadModeElementType);
+        motion_vectors.alloc(width, height, cudaCreateChannelDesc<float2>(), cudaReadModeElementType);
+        diffuse_albedo.alloc(width, height, cudaCreateChannelDesc<uchar4>(), cudaReadModeNormalizedFloat);
+        specular_albedo.alloc(width, height, cudaCreateChannelDesc<float4>(), cudaReadModeElementType);
+        normals.alloc(width, height, cudaCreateChannelDesc<float4>(), cudaReadModeElementType);
+        roughness.alloc(width, height, cudaCreateChannelDesc<float>(), cudaReadModeElementType);
     }
 
     void Renderer::AuxBufferSet::resize(const uint32_t width, const uint32_t height) {
@@ -297,7 +297,7 @@ namespace qualquer::renderer {
     }
 
     void Renderer::FrameSlot::alloc(const uint32_t width, const uint32_t height) {
-        color.alloc(width, height);
+        color.alloc(width, height, cudaCreateChannelDesc<float4>(), cudaReadModeElementType);
         // aux guides are allocated/freed by the DLSS lifecycle, not here.
         sample_count = 0;
         dlss_metadata = {};
@@ -634,7 +634,9 @@ namespace qualquer::renderer {
                 }
             }
             if (!dlss_output_.valid()) {
-                dlss_output_.alloc(width, height);
+                dlss_output_.alloc(width, height,
+                                   cudaCreateChannelDescHalf4(),
+                                   cudaReadModeElementType);
                 dlss_output_width_ = width;
                 dlss_output_height_ = height;
                 dlss_output_valid_ = false;
