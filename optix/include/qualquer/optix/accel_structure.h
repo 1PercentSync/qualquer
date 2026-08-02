@@ -85,21 +85,20 @@ namespace qualquer::optix {
     class AccelStructure {
     public:
         /**
-         * @brief Builds one multi-geometry BLAS with compaction.
+         * @brief Builds all BLAS groups in a two-sync batch.
          *
-         * Constructs a GAS from the supplied geometries using
-         * PREFER_FAST_TRACE | ALLOW_COMPACTION, queries the compacted size,
-         * and compacts into a tighter buffer. Synchronizes on the stream
-         * (init-time operation). The caller invokes this once per group_id;
-         * each call appends to the internal BLAS list.
+         * Submits all builds with a shared scratch buffer (reused across
+         * stream-ordered launches), synchronizes once to read compacted
+         * sizes, submits all compactions, then synchronizes a second time.
+         * Total: 2 host–device syncs regardless of group count (vs 2N for
+         * sequential per-BLAS build+compact).
          *
-         * @param context    OptiX device context.
-         * @param stream     CUDA stream for build and compaction.
-         * @param geometries Geometries to include (one per primitive in the group).
-         * @return Traversable handle of the built (and compacted) BLAS.
+         * @param context OptiX device context.
+         * @param stream  CUDA stream for builds and compactions.
+         * @param groups  Per-group geometry spans (one BLAS per non-empty span).
          */
-        OptixTraversableHandle build_blas(OptixDeviceContext context, CUstream stream,
-                                          std::span<const BLASGeometry> geometries);
+        void build_all_blas(OptixDeviceContext context, CUstream stream,
+                            const std::vector<std::span<const BLASGeometry>> &groups);
 
         /**
          * @brief Builds the TLAS from pre-assembled instance descriptions.

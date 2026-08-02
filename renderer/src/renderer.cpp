@@ -173,14 +173,24 @@ namespace qualquer::renderer {
                                const optix::Context &cuda_context,
                                SceneGrouping &grouping) {
             grouping.group_to_blas.assign(grouping.group_geometries.size(), UINT32_MAX);
+
+            // Collect non-empty groups for batched build.
+            std::vector<uint32_t> active_groups;
+            std::vector<std::span<const optix::BLASGeometry>> active_geoms;
             for (uint32_t g = 0; g < grouping.group_geometries.size(); ++g) {
-                if (grouping.group_geometries[g].empty()) {
-                    continue;
+                if (!grouping.group_geometries[g].empty()) {
+                    active_groups.push_back(g);
+                    active_geoms.push_back(grouping.group_geometries[g]);
                 }
-                grouping.group_to_blas[g] = static_cast<uint32_t>(accel.blas_handles().size());
-                accel.build_blas(cuda_context.device_context,
+            }
+
+            const auto base = static_cast<uint32_t>(accel.blas_handles().size());
+            accel.build_all_blas(cuda_context.device_context,
                                  cuda_context.compute_stream,
-                                 grouping.group_geometries[g]);
+                                 active_geoms);
+
+            for (uint32_t i = 0; i < active_groups.size(); ++i) {
+                grouping.group_to_blas[active_groups[i]] = base + i;
             }
         }
 
