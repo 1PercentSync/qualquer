@@ -194,7 +194,7 @@ __forceinline__ __device__ float3 trace_sample(
                                        + optixHitObjectGetSbtGASIndex();
                 reorder_hint = params.geometry_infos[geo_idx].material_buffer_offset;
             }
-            optixReorder(reorder_hint & 0x3FFu, 10);
+            optixReorder(reorder_hint, params.ser_hint_bits);
         }
         optixInvoke(kPayloadTypeBounce,
                     p0, p1, p2, p3, p4, p5,

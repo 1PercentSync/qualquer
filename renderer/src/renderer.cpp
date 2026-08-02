@@ -807,6 +807,13 @@ namespace qualquer::renderer {
             .inv_projection = to_float4x4(scene.camera.inv_projection),
             .max_bounces = scene.settings.max_bounces,
             .samples_per_frame = effective_spp,
+            .ser_hint_bits = [&] {
+                const uint32_t n = scene.materials.count();
+                if (n <= 1) { return 1u; }
+                // ceil(log2(n)): bit_width gives floor(log2)+1 for non-power-of-2.
+                const auto bits = static_cast<uint32_t>(std::bit_width(n - 1));
+                return std::clamp(bits, 1u, 16u);
+            }(),
             .sample_count = chain_count,
             .dlss_enabled = dlss_active ? 1u : 0u,
             .jitter_x = jitter_x,

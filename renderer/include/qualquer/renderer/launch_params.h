@@ -255,6 +255,14 @@ struct LaunchParams {
     uint32_t samples_per_frame;
 
     /**
+     * @brief SER coherence-hint bit width for material reordering.
+     *
+     * ceil(log2(material_count)), clamped to [1, 16]. Sized per scene so
+     * unused hint bits remain available for OptiX spatial sorting.
+     */
+    uint32_t ser_hint_bits;
+
+    /**
      * @brief Samples accumulated in the read buffer (chain count).
      *
      * 0 signals raygen to overwrite the write buffer directly (first sample
