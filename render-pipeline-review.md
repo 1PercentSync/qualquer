@@ -3,26 +3,6 @@
 
 以下不是静态代码即可定性的错误。必须通过 release 编译资源报告、Nsight Systems/Compute、GPU 时间线和图像 A/B 验证。
 
-### QRP-O06：emissive alias 权重忽略发光纹理，纹理化光源可能产生高方差
-
-#### 代码事实
-
-- `app/src/emissive_alias_table.cpp:47-55` 只从 `Material::emissive_factor` 计算 luminance。
-- `app/src/emissive_alias_table.cpp:111` 用 `emissive_factor luminance × triangle area` 构建 triangle alias 权重。
-- `renderer/include/qualquer/renderer/nee.cuh` 只有在三角形已被选中并生成 UV 后才读取 emissive texture；纹理空间亮度不参与三角形选择。
-
-#### 判断
-
-该估计器只要所有实际发光三角形仍具有非零选择概率，就不因此产生偏差；但对亮度集中在少量 texel、不同三角形覆盖纹理亮度差异很大或大面积多数为黑的 emissive texture，采样概率与实际贡献严重失配。
-
-#### 优化方向与代价
-
-可在场景预处理时估算每个三角形覆盖区域的平均 emissive luminance，并把它纳入 alias power。需要权衡纹理解码数据生命周期、UV wrap/filter、mip 代表性和构建成本；不能简单使用整张纹理的全局平均替代每三角形覆盖平均。
-
-#### 验证要求
-
-在高对比 emissive atlas、文字/灯带纹理和大面积稀疏发光纹理场景中比较 variance、有效 light sample 比例、shadow-ray 浪费率及预处理成本。
-
 ### QRP-O07：BLAS 逐个 build/compact 并两次同步，场景上传被完全串行化
 
 #### 代码事实
