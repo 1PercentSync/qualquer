@@ -3,20 +3,6 @@
 
 以下不是静态代码即可定性的错误。必须通过 release 编译资源报告、Nsight Systems/Compute、GPU 时间线和图像 A/B 验证。
 
-### QRP-O04：为缩短 live range 重算 CLTC invariants 未必优于保存
-
-#### 代码事实
-
-当前策略在 shadow trace 后重算一组 CLTC/BRDF invariant，以避免跨 trace 保留状态。
-
-#### 可能反作用
-
-重算包含多次 FMA、除法和幂运算。若编译器本可有效保存，或 continuation stack/寄存器并未成为瓶颈，重算会增加 ALU 与 special-function 压力。
-
-#### 验证要求
-
-比较重算版与保存版的寄存器、continuation stack、spill、issued instructions、occupancy 和总 GPU 时间。
-
 ### QRP-O05：16 KiB Sobol direction table 随 LaunchParams 每帧上传的收益需量化
 
 #### 代码事实
