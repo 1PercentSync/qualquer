@@ -3,26 +3,6 @@
 
 以下不是静态代码即可定性的错误。必须通过 release 编译资源报告、Nsight Systems/Compute、GPU 时间线和图像 A/B 验证。
 
-### QRP-O03：SER 使用固定 10-bit material hint 可能挤占更有价值的排序信息
-
-#### 代码事实
-
-当前 SER reorder 对 material coherence 使用 10 个 hint bits。
-
-#### 官方约束
-
-OptiX Programming Guide 指出 coherence hint bits 会占用 hit-object 排序 key 的位，应尽量减少；排序优先级还包括 shader ID 与空间信息。
-
-#### 可能反作用
-
-- 实际 material 数远少于 1024 时，10 bits 过宽；
-- 牺牲空间局部性排序信息；
-- 小波前或本来已相干的命中上，reorder 固定开销可能超过收益。
-
-#### 官方依据
-
-- OptiX Programming Guide，Shader Execution Reordering：<https://raytracing-docs.nvidia.com/optix9/guide/index.html>
-
 ### QRP-O04：为缩短 live range 重算 CLTC invariants 未必优于保存
 
 #### 代码事实
