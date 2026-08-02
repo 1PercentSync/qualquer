@@ -3,23 +3,6 @@
 
 以下不是静态代码即可定性的错误。必须通过 release 编译资源报告、Nsight Systems/Compute、GPU 时间线和图像 A/B 验证。
 
-### QRP-O01：单策略 NEE 可能以寄存器和重复工作换取一条 shadow ray
-
-#### 代码事实
-
-当前实现先生成环境和发光体两个完整候选，再选择其中一个发射 shadow ray。选择前需要同时保留两套方向、PDF、radiance、距离、法线及有效性状态，并执行两次 alias/sample 与纹理读取。
-
-#### 可能反作用
-
-- 增大 raygen/closest-hit 的寄存器活跃集；
-- 增大 continuation stack 或 local-memory spill；
-- 降低 occupancy；
-- shadow traversal 很便宜、候选构造昂贵或 env/emissive 势均力敌时，总时间可能高于分别采样。
-
-#### 验证要求
-
-比较优化前后：寄存器数、stack size、local load/store、occupancy、shadow traversal 时间、总 frame time，并在纯 env、纯 emissive、混合场景分别测量。
-
 ### QRP-O02：双 CUDA stream 重叠可能形成资源争用而非净并行
 
 #### 代码事实
