@@ -3,22 +3,6 @@
 
 以下不是静态代码即可定性的错误。必须通过 release 编译资源报告、Nsight Systems/Compute、GPU 时间线和图像 A/B 验证。
 
-### QRP-O07：BLAS 逐个 build/compact 并两次同步，场景上传被完全串行化
-
-#### 代码事实
-
-- `renderer/src/renderer.cpp:175-183` 对每个 glTF mesh group 依次调用一次 `AccelStructure::build_blas()`。
-- `optix/src/accel_structure.cpp:80-111` 每个 BLAS build 后立刻 `cudaStreamSynchronize()`，回读 compacted size。
-- `optix/src/accel_structure.cpp:120-133` 若执行 compact，又对同一 BLAS 再同步一次，之后才开始下一个 BLAS。
-
-#### 可能代价
-
-大量 mesh 的场景会产生每 BLAS 两个 host/device round trip，GPU build、CPU 调度和内存分配无法批处理；小 BLAS 场景尤其容易被同步延迟主导。这不影响逐帧 tracing 性能，但会显著增加首次加载和切场景时间。
-
-#### 优化方向与取舍
-
-可批量提交多个 build、统一回读 compacted sizes，再批量 compact，或至少把每阶段同步合并。代价是同时保留更多 uncompacted buffer 与 scratch memory，峰值显存更高；应以加载时间与峰值显存 A/B 决定批量大小，而非无条件全量并行。
-
 ### QRP-O08：GPU 选择把 compute capability 置于实际吞吐能力之上，可能选择更慢的新架构 GPU
 
 #### 代码事实
