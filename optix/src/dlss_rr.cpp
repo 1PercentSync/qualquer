@@ -274,8 +274,16 @@ namespace qualquer::optix {
         eval.pInNormals = const_cast<cudaTextureObject_t *>(&input.normals_tex);
         eval.pInRoughness = const_cast<cudaTextureObject_t *>(&input.roughness_tex);
 
-        // Specular hit distance: not provided (D32). nullptr tells the SDK
-        // this signal is absent, which is more correct than feeding all-infinity.
+        // Specular hit distance: not provided. nullptr tells the SDK this
+        // signal is absent, which is more correct than feeding all-infinity.
+        // Potential improvement: provide specular hit distance (R16F) and
+        // implement Primary Surface Replacement (PSR) — for near-mirror
+        // materials, follow the deterministic specular reflection chain
+        // (once per pixel, independent of spp) and let all guides describe
+        // the first non-mirror surface. This helps DLSS-RR correctly
+        // reproject reflections instead of tracking the mirror surface
+        // itself. The PSR trace is orthogonal to the stochastic sample
+        // loop and does not scale with samples_per_frame.
         eval.pInSpecularHitDistance = nullptr;
 
         // ---- Jitter ----
