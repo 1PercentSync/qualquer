@@ -3,22 +3,6 @@
 
 以下不是静态代码即可定性的错误。必须通过 release 编译资源报告、Nsight Systems/Compute、GPU 时间线和图像 A/B 验证。
 
-### QRP-O02：双 CUDA stream 重叠可能形成资源争用而非净并行
-
-#### 代码事实
-
-`renderer/src/renderer.cpp` 让 `compute_stream` 执行 OptiX raygen，同时让 `display_stream` 执行 DLSS/tonemap 与 semaphore signal；FrameSlot 和事件链避免了数据竞争。
-
-#### 可能反作用
-
-- OptiX megakernel 与 DLSS/tonemap 争用 SM、L2、显存带宽和调度资源；
-- 单项 kernel 时间可能同时增长；
-- “时间线上有重叠”不等于端到端吞吐提高，尤其在 Ada 满占用 path tracing 下。
-
-#### 验证要求
-
-对照强制串行与当前并行版本的总帧时间、各 kernel duration、SM/L2/DRAM 指标和 overlap 区间。
-
 ### QRP-O03：SER 使用固定 10-bit material hint 可能挤占更有价值的排序信息
 
 #### 代码事实
