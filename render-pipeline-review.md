@@ -3,21 +3,6 @@
 
 以下不是静态代码即可定性的错误。必须通过 release 编译资源报告、Nsight Systems/Compute、GPU 时间线和图像 A/B 验证。
 
-### QRP-O08：GPU 选择把 compute capability 置于实际吞吐能力之上，可能选择更慢的新架构 GPU
-
-#### 代码事实
-
-- `optix/src/context.cpp:119-157` 先按 compute capability `(major, minor)` 选择最大值，只有 capability 完全相同时才调用 `rate_device()`。
-- `rate_device()` 仅用 discrete 标志和 `totalGlobalMem` 做同架构 tiebreak，没有比较 SM 数、显存带宽、时钟或实际 ray-tracing 吞吐。
-
-#### 可能反作用
-
-在多张可呈现 NVIDIA GPU 共存时，低端但 compute capability 更新的 GPU 会无条件压过高端上一代 GPU。例如低端 Blackwell 与高端 Ada 同机时，当前策略可能选择前者，即使其 OptiX、DLSS 和显存吞吐明显更低。compute capability 表示功能/ISA 世代，不是跨产品级别的性能分数。
-
-#### 验证与改进方向
-
-设备选择应首先尊重用户显式选择；自动模式可综合 multiprocessor count、核心时钟、memory bus/bandwidth、VRAM 与架构能力，或进行极短校准。不能仅以理论峰值字段替代实测，但至少不应把 capability 作为绝对性能排序。
-
 ### QRP-O09：DLSS-RR 未提供 specular hit distance，也未实现 Primary Surface Replacement
 
 #### 代码事实
