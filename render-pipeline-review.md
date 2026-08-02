@@ -3,26 +3,6 @@
 
 以下不是静态代码即可定性的错误。必须通过 release 编译资源报告、Nsight Systems/Compute、GPU 时间线和图像 A/B 验证。
 
-### QRP-O05：16 KiB Sobol direction table 随 LaunchParams 每帧上传的收益需量化
-
-#### 代码事实
-
-Sobol direction data 内嵌在 LaunchParams/constant 参数路径，每帧随参数上传；高维采样随后退化到 hash。
-
-#### 潜在收益
-
-warp 内相同维度读取具有 constant-memory broadcast 优势。
-
-#### 可能反作用
-
-- 每帧重复上传不变表；
-- 占据 constant cache 工作集；
-- 分支和表访问成本可能在高 bounce/低相干路径中抵消低差异收益。
-
-#### 验证要求
-
-对比 constant 参数、独立只读全局表和编译期常量方案的上传成本、constant-cache 命中率、kernel 时间与收敛效率。
-
 ### QRP-O06：emissive alias 权重忽略发光纹理，纹理化光源可能产生高方差
 
 #### 代码事实
