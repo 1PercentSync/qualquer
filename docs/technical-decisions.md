@@ -63,26 +63,26 @@ Vulkan 创建 VkImage（启用 external memory 标志），导出 Win32 HANDLE�
 
 ### Buffer 架构
 
-**决策**：FrameSlot 双缓冲（每槽 color + aux + metadata，共 2 槽，CUDA 独占）+ DLSS 中间 HDR（显示分辨率；仅 DLSS-RR 开启时使用）+
-单份 LDR 显示 buffer（Vulkan 分配、CUDA 导入，blit 到 swapchain）。display 消费上一帧 write 的 read slot；HDR→LDR 在 CUDA
-tonemap，Vulkan 只 blit。不直接写入 swapchain image。
+**决策**：单 FrameSlot（color + aux，CUDA 独占）+ DLSS 中间 HDR（显示分辨率；仅 DLSS-RR 开启时使用）+ 单份 LDR 显示
+buffer（Vulkan 分配、CUDA 导入，blit 到 swapchain）。串行流程：raygen → DLSS evaluate（ON 时）→ tonemap → Vulkan blit。不直接写入
+swapchain image。
 
 MUSTREAD:8
 
 **理由（独立中间 buffer，不写 swapchain）**：
 
 - Swapchain image 由 WSI 创建，无法添加 external memory 标志，不能导出给 CUDA
-- Swapchain 格式通常是 8-bit sRGB，不适合 HDR 累积（需要浮点格式避免量化误差）
+- Swapchain 格式通常是 8-bit sRGB，不适合 HDR（需要浮点格式避免量化误差）
 - Blit 是后处理的天然边界（tone mapping、gamma 校正）
 
-**同槽所有权**：color / aux / host metadata 必须同 slot 生产消费；evaluate 由 read slot validity 驱动。单份 aux 在双 stream
-下会与 display 竞态，且 color 与 aux/jitter/矩阵易帧错配。
-
-**Separate Sum + per-slot 计数**：tonemap 除数与所读 buffer 同槽。全局 count + 清零在 reset 帧与 tonemap 跨 stream 竞态；改
-`chain_count = 0` 覆写 write slot。`frame_counter_` 永不 reset（选 slot + device `frame_index`），不单设 `frame_seed_`。
+**单 buffer（无 ping-pong）**：raygen 每帧写 per-frame mean（`frame_radiance / samples_per_frame`），不做跨帧 Separate Sum
+累积。DLSS ON 时 DLSS-RR 内部管理时域历史；DLSS OFF 时每帧独立输出。单 buffer 将 color 显存减半，释放 L2 缓存空间给 BVH / 纹理。
 
 **提交顺序**：先 `submit_cuda` 再 acquire。异步只保证 CPU 不阻塞；先 CUDA 才能在 acquire 等待期间启动计算（正确性靠 external
-semaphore，重叠靠顺序）。
+semaphore）。
+
+**相对早期决策**：Phase 2–4 使用 ping-pong 双缓冲 + 双 stream 并行 + Separate Sum 累积。测量表明 DLSS 内部 ctx sync 使 PT 与
+DLSS 已实际串行；绕过后 L2 争用导致并行反而更差（两份 buffer 挤占 L2）。串行单 buffer 在消除架构复杂度的同时保持或改善吞吐。
 
 ### 显示 Buffer
 
@@ -120,24 +120,25 @@ VMA。Swapchain 为 `B8G8R8A8_SRGB`（blit 时硬件 swizzle + 线性→sRGB 编
 
 ### CUDA Stream 架构
 
-**决策**：双显式 stream（`compute_stream` + `display_stream`），均由 `optix::Context` 持有。
+**决策**：双显式 stream（`compute_stream` + `display_stream`），串行执行，均由 `optix::Context` 持有。
 
 | Stream           | 每帧工作                                                      |
 |------------------|---------------------------------------------------------------|
 | `compute_stream` | params upload + optixLaunch（raygen）                         |
 | `display_stream` | DLSS-RR evaluate（ON 时）+ tonemap + signal interop semaphore |
 
-`compute_stream` 为 non-blocking stream；`display_stream` 为 blocking stream。
+`compute_stream` 为 non-blocking stream；`display_stream` 为 blocking stream。display_stream 通过 CUDA event 等待
+compute_stream 的 raygen 完成后再启动。
 
 **理由**：
 
-- 默认流会与所有显式流隐式同步，等于全局序列化点，堵死重叠空间
-- raygen 写 buf[X] 而 tonemap 读 buf[Y]（ping-pong），无数据依赖，可并行
-- 单 stream 下 tonemap 被迫串行等 raygen 完成，raygen 连续执行的间隙 = T_tonemap；双 stream 下间隙 ≈ 0
-- **display 必须 blocking**：DLSS-RR feature 绑在 display stream 上，其 CUDA 路径仍可能提交 legacy default-stream
-  work；non-blocking display 的前置等待与 completion event 不覆盖该顺序，SER + 高帧率会放大时序敏感性。blocking display 恢复与
-  default stream 的排序，且不取消 compute/display 并行。若后续再出现偶发崩溃，用标准 `optixTrace` 做稳定性对照后再决定是否关
-  SER。
+- 默认流会与所有显式流隐式同步，等于全局序列化点，两条显式 stream 避免此问题
+- 分 stream 是因为 DLSS-RR feature 绑在 display stream 上，且 display stream 必须 blocking（NGX 的 CUDA 路径可能提交 legacy
+  default-stream work）；raygen 留在 compute_stream 上避免 blocking 属性对 optixLaunch 的影响
+- 串行而非并行：DLSS 内部 ctx sync 使 PT 与 DLSS 已实际串行；绕过后 L2 争用导致并行反而更差
+
+**相对早期决策**：Phase 2–4 期间两条 stream 并行执行（raygen 写 buf[A] 同时 tonemap 读 buf[B]），以 ping-pong 缓冲消除数据
+依赖。串行化后两条 stream 保持存在但执行顺序固定为 compute → display。
 
 ### Vulkan 帧同步与 in-flight
 
@@ -366,15 +367,13 @@ vk_gltf_renderer 静态默认一致。有偏，故允许关闭以做无偏对照
 
 ### 自适应帧率（策略）
 
-**决策**：三级降级，通过调节 `samples_per_frame` 逼近目标帧率；与呈现模式（MAILBOX/FIFO）解耦。
+**决策**：串行架构下通过调节 `samples_per_frame` 逼近目标帧率；与呈现模式（MAILBOX/FIFO）解耦。
 
-| Mode | 架构           | 条件          | 目标帧率                                |
-|------|----------------|---------------|-----------------------------------------|
-| 1    | ping-pong 并行 | 1spp 足够快   | min { n×refresh ≥ 150 }                 |
-| 2    | 串行           | 无法达 Mode 1 | refresh（<150Hz）或 refresh/2（≥150Hz） |
-| 3    | 串行           | 无法达 Mode 2 | 反复减半；低于 60fps 则 1spp 放开跑     |
+目标帧率为 refresh 或其整数分之一（取最高可达值），用帧时间余量调节 spp（上限 64，TDR）；低于 60fps 时 1spp 放开跑。
 
-**理由**：ping-pong 多一帧显示延迟，需 ≥150fps 才不可感知；达不到则串行换更低目标以消除额外延迟。整数倍刷新率避免微卡顿。
+**理由**：整数倍刷新率避免微卡顿。
+
+**相对早期决策**：原三级 Mode（Mode 1 ping-pong 并行 ≥150fps → Mode 2/3 串行）。串行化重构后 ping-pong Mode 不存在，简化为纯 spp 调节。
 
 ---
 

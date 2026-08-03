@@ -39,13 +39,20 @@
 - [x] Sobol temporal offset 收敛验证
 - [ ] 请求用户在 CLion 中编译验证（吞吐优化无画质回退；A/B 结论已记录）
 
+## Step 14.95：串行化重构
+
+- [ ] Device 侧统一 mean 输出（launch_params.h, programs.cu）
+- [ ] 单 buffer 串行替换 ping-pong（renderer.h, renderer.cpp）
+- [ ] UI 适配（debug_ui.h/cpp, application.cpp）
+- [ ] 文档与注释清理
+- [ ] 请求用户在 CLion 中编译验证（串行单 buffer 运行正常，DLSS ON/OFF 均无回归）
+
 ## Step 15：自适应 Sample 数
 
 - [ ] 刷新率查询
 - [ ] 帧时间测量
 - [ ] Mode 选择逻辑
 MUSTREAD:4
-- [ ] Ping-pong / 串行切换
 - [ ] UI：mode 显示与手动/自动切换
 - [ ] 请求用户在 CLion 中编译验证（自适应切换正常，各 mode 帧率符合目标）
 

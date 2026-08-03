@@ -16,7 +16,9 @@ Step 14.7（小修复与清理）       ← 独立
 Step 14.8（采样与光照优化）     ← 独立
 Step 14.9（吞吐与收敛）         ← primary 复用与 Step 15 叠加；可先于 15
      ↓
-Step 15（自适应 sample 数）     ← 独立
+Step 14.95（串行化重构）        ← 依赖 14.9；ping-pong→串行、去多帧累积
+     ↓
+Step 15（自适应 sample 数）     ← 依赖 14.95（串行架构下纯 spp 调节）
 
 Step 16（Stochastic Alpha）     ← 独立
 
@@ -181,11 +183,45 @@ object，按 GPU Gems 2 Ch.20 将相邻权重合并为 bilinear fetch（2×2 = 4
 
 ---
 
+## Step 14.95：串行化重构
+
+**验证**：串行单 buffer 运行正常，DLSS ON/OFF 均无回归。
+
+**背景**：测量表明 PT 与 DLSS 因 ctx sync 已实际串行（并行 815fps vs 串行 730fps）；绕过后 L2 争用使并行反而更差。两份 ping-pong
+buffer 额外占 L2。串行化消除架构复杂度，同时为 NRC + Ray Cone LOD 后的缓存优化腾出空间。
+
+### Device 侧统一 mean 输出
+
+raygen 不再区分 Separate Sum 和 single-frame mean，统一为 `frame_radiance / samples_per_frame`。
+
+- `launch_params.h`：移除 `color_input`（不再读旧累积）和 `sample_count`（不再有累积链）
+- `programs.cu`：移除 Separate Sum 三分支，统一写 mean；DLSS ON/OFF 仍保留各自 sample 循环（jitter 方式不同、aux 仅 DLSS ON 捕获）
+
+### 单 buffer 串行替换 ping-pong
+
+`frame_slots_[2]` → 单个 `frame_slot_`；移除 `accum_index_`。submit_cuda 流程改为
+compute_stream（wait consumption → raygen → record production）→ display_stream（wait reverse_sem → wait production → DLSS/tonemap → record consumption → signal forward_sem）。
+
+- `DlssFrameMetadata` 从 FrameSlot 移到 Renderer 成员 `prev_dlss_metadata_`（前一帧 VP 用于 motion vector）
+- DLSS evaluate 读当前帧 color（串行，raygen 已完成），消除 ping-pong 引入的一帧显示延迟
+- `sample_count` 简化为 0（无效）/ 1（有效 mean）有效性标志
+
+### UI 适配
+
+移除 `accumulated_samples` 显示（每帧独立无累积计数意义）。DLSS ON/OFF 统一显示 sps。`accumulation_enabled` 保留（false 时
+不启动 raygen，display 冻结上一帧 mean）。
+
+### 文档与注释清理
+
+renderer.h/cpp、launch_params.h、context.h/cpp、tonemap.h、render_settings.h、technical-decisions.md 中 ping-pong / 双 stream 并行 / Separate Sum 相关注释和文档更新为串行单 buffer 语义。
+
+---
+
 ## Step 15：自适应 Sample 数
 
-**验证**：Mode 1/2/3 自动切换，帧率符合目标。
+**验证**：自适应切换正常，各 mode 帧率符合目标。
 
-策略与目标帧率表见 `technical-decisions.md`「自适应帧率」。
+策略与目标帧率表见 `technical-decisions.md`「自适应帧率」。Step 14.95 已将架构固定为串行，本 Step 纯调 spp。
 
 ### 刷新率查询
 
@@ -198,12 +234,7 @@ raygen 测量。
 
 ### Mode 选择逻辑
 
-按 1spp 能否满足 Mode 1 目标 → 否则 Mode 2 → 否则 Mode 3；Mode 内用帧时间余量调节 `samples_per_frame`（上限 64，TDR）。
-
-### Ping-pong / 串行切换
-
-Mode 1 保持双 stream ping-pong 并行；Mode 2/3 切到单 stream 串行（消除额外一帧显示延迟）。切换时注意 FrameSlot event /
-interop semaphore 语义不破坏。
+串行架构下无 ping-pong Mode；按帧时间预算调节 `samples_per_frame`（上限 64，TDR），以目标帧率的整数倍刷新率为目标。
 
 ### UI：mode 显示与手动/自动切换
 
