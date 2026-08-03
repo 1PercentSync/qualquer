@@ -199,11 +199,10 @@ raygen 不再区分 Separate Sum 和 single-frame mean，统一为 `frame_radian
 
 ### 单 buffer 串行替换 ping-pong
 
-`frame_slots_[2]` → 单个 `frame_slot_`；移除 `accum_index_`。submit_cuda 流程改为
-compute_stream（wait consumption → raygen → record production）→ display_stream（wait reverse_sem → wait production → DLSS/tonemap → record consumption → signal forward_sem）。
+`frame_slots_[2]` → 单个 `frame_slot_`；双 stream 合并为单 blocking stream；CUDA events 全部移除（stream ordering 保证顺序）。submit_cuda 管线：reverse sem wait → raygen → DLSS evaluate → tonemap → forward sem signal。
 
 - `DlssFrameMetadata` 从 FrameSlot 移到 Renderer 成员 `prev_dlss_metadata_`（前一帧 VP 用于 motion vector）
-- DLSS evaluate 读当前帧 color（串行，raygen 已完成），消除 ping-pong 引入的一帧显示延迟
+- DLSS evaluate 读当前帧 color（stream ordering 保证 raygen 完成）
 - `sample_count` 简化为 0（无效）/ 1（有效 mean）有效性标志
 
 ### UI 适配
@@ -229,8 +228,7 @@ renderer.h/cpp、launch_params.h、context.h/cpp、tonemap.h、render_settings.h
 
 ### 帧时间测量
 
-CUDA events 测 raygen（compute_stream）执行时间，作为 spp 调节与 Mode 判定输入。呈现链路 debug 计时（Phase 4 已有）可辅助观察，不替代
-raygen 测量。
+CUDA events 测 raygen 执行时间，作为 spp 调节与 Mode 判定输入。呈现链路 debug 计时（Phase 4 已有）可辅助观察，不替代 raygen 测量。
 
 ### Mode 选择逻辑
 
