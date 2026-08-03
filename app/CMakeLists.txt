@@ -72,7 +72,7 @@ target_sources(qualquer_app PRIVATE ${_deployed_optixir})
 # (nvsdk_ngx_d.lib) loads this DLL at runtime via NVSDK_NGX_CUDA_Init.
 add_custom_command(TARGET qualquer_app POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "$<IF:$<CONFIG:Release>,${DLSS_RUNTIME_DLL_REL},${DLSS_RUNTIME_DLL_DEV}>"
+        "$<IF:$<CONFIG:Debug>,${DLSS_RUNTIME_DLL_DEV},${DLSS_RUNTIME_DLL_REL}>"
         "$<TARGET_FILE_DIR:qualquer_app>/nvngx_dlssd.dll"
     COMMENT "Deploying DLSS-RR runtime: nvngx_dlssd.dll"
 )
