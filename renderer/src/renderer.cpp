@@ -609,8 +609,9 @@ namespace qualquer::renderer {
             invalidate_dlss_state();
         }
 
-        // --- Serial pipeline: reverse sem wait → raygen → DLSS → tonemap → signal ---
-        // All work on the default stream; ordering is implicit.
+        // --- Serial pipeline: raygen → reverse sem wait → DLSS → tonemap → signal ---
+        // All work on the default stream; ordering is implicit. Reverse wait
+        // is after raygen so raygen overlaps with the previous frame's blit.
 #ifndef NDEBUG
         const uint32_t timing_slot = frame_counter_ % 2;
 #endif

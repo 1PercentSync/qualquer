@@ -189,8 +189,10 @@ namespace qualquer::renderer {
         /**
          * @brief Submits the serial render pipeline on a single CUDA stream.
          *
-         * Pipeline: reverse semaphore wait → raygen → DLSS evaluate (if ON)
-         * → tonemap → forward semaphore signal. Stream ordering guarantees
+         * Pipeline: raygen → reverse semaphore wait → DLSS evaluate (if ON)
+         * → tonemap → forward semaphore signal. Reverse wait is after raygen
+         * so raygen overlaps with the previous frame's Vulkan blit (raygen
+         * writes color/aux, not display_surface). Stream ordering guarantees
          * each stage completes before the next begins.
          *
          * The render resolution derives from scene.settings.render_height and the

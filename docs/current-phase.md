@@ -199,7 +199,7 @@ raygen 不再区分 Separate Sum 和 single-frame mean，统一为 `frame_radian
 
 ### 单 buffer 串行替换 ping-pong
 
-`frame_slots_[2]` → 单个 `frame_slot_`；双 stream 合并为单 blocking stream；CUDA events 全部移除（stream ordering 保证顺序）。submit_cuda 管线：reverse sem wait → raygen → DLSS evaluate → tonemap → forward sem signal。
+`frame_slots_[2]` → 单个 `frame_slot_`；双 stream 合并后进一步简化为 default stream；CUDA events 全部移除（stream ordering 保证顺序）。submit_cuda 管线：raygen → reverse sem wait → DLSS evaluate → tonemap → forward sem signal（reverse wait 在 raygen 后，允许 raygen 与上一帧 blit 重叠）。
 
 - `DlssFrameMetadata` 从 FrameSlot 移到 Renderer 成员 `prev_dlss_metadata_`（前一帧 VP 用于 motion vector）
 - DLSS evaluate 读当前帧 color（stream ordering 保证 raygen 完成）

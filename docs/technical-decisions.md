@@ -101,7 +101,7 @@ VMA。Swapchain 为 `B8G8R8A8_SRGB`（blit 时硬件 swizzle + 线性→sRGB 编
 | 方向                   | 数量           | CUDA 侧                              | Vulkan 侧                 | 保护的依赖                              |
 |------------------------|----------------|--------------------------------------|---------------------------|-----------------------------------------|
 | CUDA→Vulkan（forward） | per-frame（2） | signal（CUDA stream，tonemap 后） | wait（submit，blit 前）   | blit 读 display_surface 前 tonemap 写完 |
-| Vulkan→CUDA（reverse） | 单个（1）      | wait（CUDA stream，raygen 前）    | signal（submit，blit 后） | tonemap 写 display_surface 前 blit 读完 |
+| Vulkan→CUDA（reverse） | 单个（1）      | wait（CUDA stream，tonemap 前）   | signal（submit，blit 后） | tonemap 写 display_surface 前 blit 读完 |
 
 **理由**：
 
@@ -117,8 +117,9 @@ VMA。Swapchain 为 `B8G8R8A8_SRGB`（blit 时硬件 swizzle + 线性→sRGB 编
 
 ### CUDA Stream 架构
 
-**决策**：使用 default stream（stream 0）。每帧管线：reverse semaphore wait → raygen → DLSS-RR evaluate（ON 时）→ tonemap →
-forward semaphore signal。Stream ordering 保证各阶段顺序。不创建显式 stream。
+**决策**：使用 default stream（stream 0）。每帧管线：raygen → reverse semaphore wait → DLSS-RR evaluate（ON 时）→ tonemap →
+forward semaphore signal。Reverse wait 在 raygen 后，允许 raygen 与上一帧 Vulkan blit 重叠（raygen 写 color/aux，不写
+display_surface）。Stream ordering 保证各阶段顺序。不创建显式 stream。
 
 **理由**：
 
