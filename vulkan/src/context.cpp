@@ -158,12 +158,10 @@ namespace qualquer::vulkan {
 #endif
 
             // Display buffer format: R16G16B16A16_SFLOAT must support blit-src
-            // with linear filter (tonemap output → swapchain blit).
+            // (tonemap output → swapchain blit with nearest filter).
             VkFormatProperties src_fmt{};
             vkGetPhysicalDeviceFormatProperties(dev, VK_FORMAT_R16G16B16A16_SFLOAT, &src_fmt);
-            constexpr auto kSrcBits = VK_FORMAT_FEATURE_BLIT_SRC_BIT
-                                    | VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT;
-            if ((src_fmt.optimalTilingFeatures & kSrcBits) != kSrcBits) {
+            if (!(src_fmt.optimalTilingFeatures & VK_FORMAT_FEATURE_BLIT_SRC_BIT)) {
                 return false;
             }
 

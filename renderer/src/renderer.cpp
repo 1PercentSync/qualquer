@@ -1125,7 +1125,7 @@ namespace qualquer::renderer {
             .dstImageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
             .regionCount = 1,
             .pRegions = &region,
-            .filter = VK_FILTER_LINEAR,
+            .filter = VK_FILTER_NEAREST,
         };
         vkCmdBlitImage2(cmd, &blit_info);
 
