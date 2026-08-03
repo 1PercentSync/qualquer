@@ -2,7 +2,7 @@
 
 /**
  * @file payload_helpers.cuh
- * @brief 15-register OptiX payload pack/unpack helpers (renderer layer).
+ * @brief OptiX payload pack/unpack helpers (renderer layer).
  */
 
 // Register layout:

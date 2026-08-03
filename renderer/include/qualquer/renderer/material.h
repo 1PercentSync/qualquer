@@ -2,7 +2,7 @@
 
 /**
  * @file material.h
- * @brief Material data structures: Material, GPUGeometryInfo (renderer layer).
+ * @brief GPU material and geometry data structures (renderer layer).
  */
 
 #include <cstddef>

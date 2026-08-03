@@ -2,7 +2,7 @@
 
 /**
  * @file scene_types.h
- * @brief Scene data structures: AABB, Mesh, MeshInstance, AlphaMode (renderer layer).
+ * @brief Scene data structures (renderer layer).
  */
 
 #include <cstdint>

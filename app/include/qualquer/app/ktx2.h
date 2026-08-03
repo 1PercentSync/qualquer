@@ -2,11 +2,7 @@
 
 /**
  * @file ktx2.h
- * @brief Minimal KTX2 reader/writer for texture and IBL caching.
- *
- * Supports a fixed set of formats (BC5, BC6H UFloat, BC7 SRGB/UNORM)
- * for 2D and cubemap textures with mip chains. No supercompression or Basis Universal
- * support.
+ * @brief KTX2 reader/writer for texture and IBL caching (app layer).
  */
 
 #include <cstdint>

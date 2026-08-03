@@ -2,12 +2,7 @@
 
 /**
  * @file cuda_check_kernel.h
- * @brief CUDA error checking macro for nvcc-compiled translation units (optix layer).
- *
- * nvcc compilation of .cu files with spdlog/fmt headers triggers MSVC C4819
- * (code page cannot represent non-ASCII characters in NVIDIA headers). This
- * header provides the same abort-on-error behavior as cuda_check.h but uses
- * fprintf(stderr) instead of spdlog, making it safe for all .cu files.
+ * @brief CUDA_CHECK_KERNEL macro (optix layer).
  */
 
 #include <cstdio>
@@ -15,6 +10,14 @@
 
 #include <cuda_runtime.h>
 
+/**
+ * @brief Checks a cudaError_t and aborts on failure with diagnostic output.
+ *
+ * Equivalent to CUDA_CHECK but uses fprintf(stderr) instead of spdlog.
+ * nvcc compilation of .cu files with spdlog/fmt headers triggers MSVC C4819
+ * (code page cannot represent non-ASCII characters in NVIDIA headers);
+ * this macro avoids that dependency.
+ */
 #define CUDA_CHECK_KERNEL(x)                                                              \
     do {                                                                                  \
         cudaError_t cuda_check_result_ = (x);                                             \
