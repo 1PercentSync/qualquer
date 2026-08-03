@@ -36,7 +36,9 @@ namespace qualquer::optix {
         }
 
         /// Number of 4x4 BC blocks covering a pixel dimension.
-        uint32_t block_count(const uint32_t pixels) { return (pixels + 3u) / 4u; }
+        uint32_t block_count(const uint32_t pixels) {
+            return (pixels + 3u) / 4u;
+        }
 
         /// Creates a 1×1 fp16×4 CUDA texture with the given solid color.
         CudaTexture create_solid_texture(

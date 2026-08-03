@@ -206,16 +206,24 @@ namespace qualquer::optix {
         void evaluate(const EvalInput &input);
 
         /** @brief Whether DLSS-RR is available on this system (valid after init). */
-        [[nodiscard]] bool available() const { return available_; }
+        [[nodiscard]] bool available() const {
+            return available_;
+        }
 
         /** @brief Whether a DLSS-RR feature is currently created. */
-        [[nodiscard]] bool feature_active() const { return ngx_handle_ != nullptr; }
+        [[nodiscard]] bool feature_active() const {
+            return ngx_handle_ != nullptr;
+        }
 
         /** @brief NGX handle for evaluate calls. Null if no feature is active. */
-        [[nodiscard]] NVSDK_NGX_Handle *ngx_handle() const { return ngx_handle_; }
+        [[nodiscard]] NVSDK_NGX_Handle *ngx_handle() const {
+            return ngx_handle_;
+        }
 
         /** @brief NGX parameter interface. Null before init. */
-        [[nodiscard]] NVSDK_NGX_Parameter *ngx_params() const { return ngx_params_; }
+        [[nodiscard]] NVSDK_NGX_Parameter *ngx_params() const {
+            return ngx_params_;
+        }
 
         /**
          * @brief Returns VRAM allocated by the active DLSS-RR feature.
@@ -223,7 +231,9 @@ namespace qualquer::optix {
          * Cached at feature creation time; no per-frame NGX query.
          * @return Bytes allocated, or 0 if no feature is active.
          */
-        [[nodiscard]] uint64_t vram_allocated_bytes() const { return cached_vram_bytes_; }
+        [[nodiscard]] uint64_t vram_allocated_bytes() const {
+            return cached_vram_bytes_;
+        }
 
         /**
          * @brief Releases the current DLSS-RR feature, freeing its VRAM.

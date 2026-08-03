@@ -226,7 +226,9 @@ namespace qualquer::renderer {
          * DebugUIContext uses this for availability / quality / VRAM queries,
          * matching the existing const vulkan::Context& borrow pattern.
          */
-        [[nodiscard]] const optix::DlssRR &dlss() const { return dlss_rr_; }
+        [[nodiscard]] const optix::DlssRR &dlss() const {
+            return dlss_rr_;
+        }
 
         /**
          * @brief Discards DLSS-RR temporal history and cached output.
@@ -272,7 +274,9 @@ namespace qualquer::renderer {
             void free();
 
             /** @brief Whether the guide resources are allocated. */
-            [[nodiscard]] bool valid() const { return depth.valid(); }
+            [[nodiscard]] bool valid() const {
+                return depth.valid();
+            }
 
             /** @brief View-space Z depth (R32F). */
             optix::CudaArrayBuffer<float> depth;
@@ -506,10 +510,14 @@ namespace qualquer::renderer {
         float pt_ms_ = 0.0f;
     public:
         /** @brief CUDA display pipeline time (debug only). */
-        [[nodiscard]] float cuda_display_ms() const { return cuda_display_ms_; }
+        [[nodiscard]] float cuda_display_ms() const {
+            return cuda_display_ms_;
+        }
 
         /** @brief PT (raygen) pipeline time (debug only). */
-        [[nodiscard]] float pt_ms() const { return pt_ms_; }
+        [[nodiscard]] float pt_ms() const {
+            return pt_ms_;
+        }
     private:
 #endif
     };

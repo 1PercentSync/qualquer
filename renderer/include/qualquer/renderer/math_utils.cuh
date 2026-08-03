@@ -37,7 +37,9 @@ __forceinline__ __device__ float3 operator-(const float3 a, const float s) {
 __forceinline__ __device__ float3 operator*(const float3 a, const float s) {
     return make_float3(a.x * s, a.y * s, a.z * s);
 }
-__forceinline__ __device__ float3 operator*(const float s, const float3 a) { return a * s; }
+__forceinline__ __device__ float3 operator*(const float s, const float3 a) {
+    return a * s;
+}
 
 __forceinline__ __device__ float3 operator*(const float3 a, const float3 b) {
     return make_float3(a.x * b.x, a.y * b.y, a.z * b.z);
@@ -58,7 +60,9 @@ __forceinline__ __device__ float2 operator-(const float2 a, const float2 b) {
 __forceinline__ __device__ float2 operator*(const float2 a, const float s) {
     return make_float2(a.x * s, a.y * s);
 }
-__forceinline__ __device__ float2 operator*(const float s, const float2 a) { return a * s; }
+__forceinline__ __device__ float2 operator*(const float s, const float2 a) {
+    return a * s;
+}
 
 __forceinline__ __device__ float4 operator+(const float4 a, const float4 b) {
     return make_float4(a.x + b.x, a.y + b.y, a.z + b.z, a.w + b.w);
@@ -66,7 +70,9 @@ __forceinline__ __device__ float4 operator+(const float4 a, const float4 b) {
 __forceinline__ __device__ float4 operator*(const float4 a, const float s) {
     return make_float4(a.x * s, a.y * s, a.z * s, a.w * s);
 }
-__forceinline__ __device__ float4 operator*(const float s, const float4 a) { return a * s; }
+__forceinline__ __device__ float4 operator*(const float s, const float4 a) {
+    return a * s;
+}
 
 // ---- Scalar float3 math -----------------------------------------------------
 

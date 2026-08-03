@@ -91,7 +91,9 @@ namespace qualquer::app {
         bool is_valid_transform(const glm::mat4 &m) {
             for (int col = 0; col < 4; ++col) {
                 for (int row = 0; row < 4; ++row) {
-                    if (!std::isfinite(m[col][row])) { return false; }
+                    if (!std::isfinite(m[col][row])) {
+                        return false;
+                    }
                 }
             }
             const glm::vec3 c0(m[0]);
@@ -866,7 +868,9 @@ namespace qualquer::app {
         {
             std::map<std::pair<std::string, TextureRole>, int> seen;
             for (int i = 0; i < tex_count; ++i) {
-                if (cache_hit[i]) { continue; }
+                if (cache_hit[i]) {
+                    continue;
+                }
                 auto key = std::make_pair(source_hashes[i], unique_entries[i].role);
                 if (auto it = seen.find(key); it != seen.end()) {
                     dedup_source[i] = it->second;
@@ -879,7 +883,9 @@ namespace qualquer::app {
         // ---- Decode cache-miss images (serial) ----
         std::vector<ImageData> decoded_images(tex_count);
         for (int i = 0; i < tex_count; ++i) {
-            if (cache_hit[i] || dedup_source[i] >= 0) { continue; }
+            if (cache_hit[i] || dedup_source[i] >= 0) {
+                continue;
+            }
             const auto &tex = gltf.textures[unique_entries[i].texture_index];
             decoded_images[i] = decode_gltf_image(gltf, gltf.images[*tex.imageIndex]);
         }

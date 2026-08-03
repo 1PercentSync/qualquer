@@ -47,7 +47,9 @@ namespace qualquer::optix {
         CudaArrayBuffer() = default;
 
         /** @brief Releases held GPU resources. */
-        ~CudaArrayBuffer() { free(); }
+        ~CudaArrayBuffer() {
+            free();
+        }
 
         CudaArrayBuffer(const CudaArrayBuffer &) = delete;
         CudaArrayBuffer &operator=(const CudaArrayBuffer &) = delete;
@@ -170,19 +172,29 @@ namespace qualquer::optix {
         }
 
         /** @brief Texture object for device-side reading (DLSS input). */
-        [[nodiscard]] cudaTextureObject_t tex_object() const { return tex_obj_; }
+        [[nodiscard]] cudaTextureObject_t tex_object() const {
+            return tex_obj_;
+        }
 
         /** @brief Surface object for device-side writing (surf2Dwrite). */
-        [[nodiscard]] cudaSurfaceObject_t surf_object() const { return surf_obj_; }
+        [[nodiscard]] cudaSurfaceObject_t surf_object() const {
+            return surf_obj_;
+        }
 
         /** @brief Allocated width in elements. */
-        [[nodiscard]] uint32_t width() const { return width_; }
+        [[nodiscard]] uint32_t width() const {
+            return width_;
+        }
 
         /** @brief Allocated height in elements. */
-        [[nodiscard]] uint32_t height() const { return height_; }
+        [[nodiscard]] uint32_t height() const {
+            return height_;
+        }
 
         /** @brief Whether the buffer holds allocated GPU resources. */
-        [[nodiscard]] bool valid() const { return array_ != nullptr; }
+        [[nodiscard]] bool valid() const {
+            return array_ != nullptr;
+        }
 
     private:
         /** @brief Backing 2D CUDA array; null when empty. */

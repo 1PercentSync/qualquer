@@ -33,7 +33,9 @@ namespace qualquer::optix {
         CudaTexture() = default;
 
         /** @brief Releases held GPU resources. */
-        ~CudaTexture() { destroy(); }
+        ~CudaTexture() {
+            destroy();
+        }
 
         CudaTexture(const CudaTexture &) = delete;
 
@@ -84,6 +86,8 @@ namespace qualquer::optix {
         }
 
         /** @return Whether the texture holds any GPU resources. */
-        [[nodiscard]] bool valid() const { return texture_object != 0; }
+        [[nodiscard]] bool valid() const {
+            return texture_object != 0;
+        }
     };
 } // namespace qualquer::optix

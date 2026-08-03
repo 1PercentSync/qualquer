@@ -57,7 +57,9 @@ namespace qualquer::app {
         }
 
         /** @return Whether the image holds decoded pixels. */
-        [[nodiscard]] bool valid() const { return pixels != nullptr; }
+        [[nodiscard]] bool valid() const {
+            return pixels != nullptr;
+        }
     };
 
     /**
@@ -82,7 +84,9 @@ namespace qualquer::app {
         }
 
         /** @return Whether the image holds decoded pixels. */
-        [[nodiscard]] bool valid() const { return pixels != nullptr; }
+        [[nodiscard]] bool valid() const {
+            return pixels != nullptr;
+        }
     };
 
     // ---- LDR: image decoding ----

@@ -114,10 +114,14 @@ namespace qualquer::app {
             });
         }
         /// Rounds up to the next multiple of 4 (BC block alignment).
-        uint32_t align4(const uint32_t v) { return (v + 3u) & ~3u; }
+        uint32_t align4(const uint32_t v) {
+            return (v + 3u) & ~3u;
+        }
 
         /// Number of 4x4 BC blocks covering a pixel dimension.
-        uint32_t block_count(const uint32_t pixels) { return (pixels + 3u) / 4u; }
+        uint32_t block_count(const uint32_t pixels) {
+            return (pixels + 3u) / 4u;
+        }
 
         /// One RGBA8 level of a CPU mip chain.
         struct CpuMipLevel {

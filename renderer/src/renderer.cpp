@@ -683,7 +683,9 @@ namespace qualquer::renderer {
             .samples_per_frame = effective_spp,
             .ser_hint_bits = [&] {
                 const uint32_t n = scene.materials.count();
-                if (n <= 1) { return 1u; }
+                if (n <= 1) {
+                    return 1u;
+                }
                 const auto bits = static_cast<uint32_t>(std::bit_width(n - 1));
                 return std::clamp(bits, 1u, 16u);
             }(),

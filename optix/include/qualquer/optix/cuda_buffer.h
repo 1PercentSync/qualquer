@@ -35,15 +35,18 @@ namespace qualquer::optix {
         CudaBuffer() = default;
 
         /** @brief Releases held device memory. */
-        ~CudaBuffer() { free(); }
+        ~CudaBuffer() {
+            free();
+        }
 
+        /** @brief Non-copyable: device memory has a single owner. */
         CudaBuffer(const CudaBuffer &) = delete;
 
+        /** @brief Non-copyable: device memory has a single owner. */
         CudaBuffer &operator=(const CudaBuffer &) = delete;
 
         /** @brief Steals another buffer's memory; leaves other empty. */
-        CudaBuffer(CudaBuffer &&other) noexcept
-            : data_(other.data_), count_(other.count_) {
+        CudaBuffer(CudaBuffer &&other) noexcept : data_(other.data_), count_(other.count_) {
             other.data_ = nullptr;
             other.count_ = 0;
         }
@@ -142,10 +145,14 @@ namespace qualquer::optix {
          * the buffer is empty.
          * @return Device-side T*.
          */
-        T *data() { return data_; }
+        T *data() {
+            return data_;
+        }
 
         /** @brief Const overload of data(); null when the buffer is empty. */
-        const T *data() const { return data_; }
+        const T *data() const {
+            return data_;
+        }
 
         /**
          * @brief Device pointer reinterpreted as CUdeviceptr for OptiX API use.
@@ -161,10 +168,14 @@ namespace qualquer::optix {
         }
 
         /** @return Number of elements currently allocated (0 when empty). */
-        [[nodiscard]] std::size_t count() const { return count_; }
+        [[nodiscard]] std::size_t count() const {
+            return count_;
+        }
 
         /** @return Allocated size in bytes (count() * sizeof(T)). */
-        [[nodiscard]] std::size_t size_bytes() const { return count_ * sizeof(T); }
+        [[nodiscard]] std::size_t size_bytes() const {
+            return count_ * sizeof(T);
+        }
 
     private:
         /** @brief Device pointer to the first element; null when empty. */

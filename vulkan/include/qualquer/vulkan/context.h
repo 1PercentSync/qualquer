@@ -155,10 +155,14 @@ namespace qualquer::vulkan {
         uint32_t frame_index = 0;
 
         /** @brief Returns the FrameData for the current in-flight frame. */
-        FrameData &current_frame() { return frames[frame_index]; }
+        FrameData &current_frame() {
+            return frames[frame_index];
+        }
 
         /** @brief Advances to the next in-flight frame index. */
-        void advance_frame() { frame_index = (frame_index + 1) % kMaxFramesInFlight; }
+        void advance_frame() {
+            frame_index = (frame_index + 1) % kMaxFramesInFlight;
+        }
 
         /**
          * @brief Queries aggregated device-local VRAM usage via VMA.

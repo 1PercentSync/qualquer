@@ -226,7 +226,9 @@ namespace qualquer::renderer {
 #ifndef NDEBUG
         const auto avg = [&](const std::vector<float> &v) {
             float sum = 0.0f;
-            for (const float s : v) { sum += s; }
+            for (const float s : v) {
+                sum += s;
+            }
             return sum / static_cast<float>(n);
         };
         avg_pt_ms = avg(pt_samples_);

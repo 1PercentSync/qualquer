@@ -136,7 +136,9 @@ namespace qualquer::optix {
         OptixDeviceContext device_context = nullptr;
 
         /** @brief Selected CUDA device index, for DLSS-RR and other device-level queries. */
-        [[nodiscard]] int device_id() const { return device_id_; }
+        [[nodiscard]] int device_id() const {
+            return device_id_;
+        }
 
     private:
         /** @brief Index of the selected CUDA device, for subsequent runtime calls. */
