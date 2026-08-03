@@ -110,33 +110,29 @@ namespace qualquer::optix {
          *
          * The caller must ensure the buffer holds at least count elements (via a
          * prior alloc/resize) and that src remains valid until the copy completes
-         * on stream. No-op when count is 0.
+         * on the default stream. No-op when count is 0.
          * @param src    Host source address of at least count elements.
          * @param count  Number of elements to copy.
-         * @param stream CUDA stream the copy is enqueued on.
          */
-        // ReSharper disable once CppParameterMayBeConst
-        void upload(const T *src, const std::size_t count, cudaStream_t stream) {
+        void upload(const T *src, const std::size_t count) {
             if (count == 0) {
                 return;
             }
-            CUDA_CHECK(cudaMemcpyAsync(data_, src, count * sizeof(T), cudaMemcpyHostToDevice, stream));
+            CUDA_CHECK(cudaMemcpyAsync(data_, src, count * sizeof(T), cudaMemcpyHostToDevice, nullptr));
         }
 
         /**
-         * @brief Asynchronously zeroes the entire device buffer.
+         * @brief Zeroes the entire device buffer on the default stream.
          *
          * An all-zero byte pattern is the well-defined zero value for any
          * trivially-copyable T, so a byte-wise memset resets every element
          * without a typed fill. No-op when the buffer is empty.
-         * @param stream CUDA stream the memset is enqueued on.
          */
-        // ReSharper disable once CppParameterMayBeConst
-        void clear(cudaStream_t stream) const {
+        void clear() const {
             if (count_ == 0) {
                 return;
             }
-            CUDA_CHECK(cudaMemsetAsync(data_, 0, count_ * sizeof(T), stream));
+            CUDA_CHECK(cudaMemsetAsync(data_, 0, count_ * sizeof(T), nullptr));
         }
 
         /**

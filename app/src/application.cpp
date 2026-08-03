@@ -115,8 +115,7 @@ namespace qualquer::app {
         // --- Scene (default textures → glTF load → AS build → camera framing) ---
         default_textures_ = optix::create_default_textures();
         if (!config_.scene_path.empty()) {
-            if (!scene_loader_.load(config_.scene_path, default_textures_,
-                                    nullptr)) {
+            if (!scene_loader_.load(config_.scene_path, default_textures_)) {
                 error_message_ = "Failed to load scene: " + config_.scene_path;
             }
         }
@@ -128,8 +127,7 @@ namespace qualquer::app {
 
         // --- Environment map (HDR → cubemap + alias table) ---
         if (!config_.env_map_path.empty()) {
-            scene_loader_.load_env_map(config_.env_map_path,
-                                       nullptr);
+            scene_loader_.load_env_map(config_.env_map_path);
         }
 
         update_scene_stats();
@@ -235,8 +233,7 @@ namespace qualquer::app {
                 // cubemap via LaunchParams; it must finish before destruction.
                 CUDA_CHECK(cudaStreamSynchronize(nullptr));
 
-                if (scene_loader_.load_env_map(actions.new_env_map_path,
-                                               nullptr)) {
+                if (scene_loader_.load_env_map(actions.new_env_map_path)) {
                     renderer_.reset_dlss();
                     update_scene_stats();
                     config_.env_map_path = actions.new_env_map_path;
@@ -531,8 +528,7 @@ namespace qualquer::app {
         scene_loader_.destroy_scene_resources();
 
         if (!path.empty()) {
-            if (scene_loader_.load(path, default_textures_,
-                                    nullptr)) {
+            if (scene_loader_.load(path, default_textures_)) {
                 error_message_.clear();
             } else {
                 error_message_ = "Failed to load scene: " + path;

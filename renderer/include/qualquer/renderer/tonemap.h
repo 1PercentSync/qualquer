@@ -38,7 +38,6 @@ namespace qualquer::renderer {
      * @param display_height      Display buffer height in pixels.
      * @param sample_count        Validity flag (0 = black, 1 = valid mean).
      * @param exposure            Linear color multiplier applied before tonemap.
-     * @param stream              CUDA stream to launch on.
      */
     void launch_tonemap(cudaTextureObject_t color_tex,
                         cudaSurfaceObject_t display_surface,
@@ -47,6 +46,5 @@ namespace qualquer::renderer {
                         uint32_t display_width,
                         uint32_t display_height,
                         uint32_t sample_count,
-                        float exposure,
-                        cudaStream_t stream);
+                        float exposure);
 } // namespace qualquer::renderer

@@ -186,7 +186,6 @@ namespace qualquer::renderer {
 
             const auto base = static_cast<uint32_t>(accel.blas_handles().size());
             accel.build_all_blas(cuda_context.device_context,
-                                 nullptr,
                                  active_geoms);
 
             for (uint32_t i = 0; i < active_groups.size(); ++i) {
@@ -198,8 +197,6 @@ namespace qualquer::renderer {
          * @brief Builds and uploads the geometry-info array from the grouping.
          */
         void build_geometry_info(optix::CudaBuffer<GPUGeometryInfo> &buffer,
-                                 // ReSharper disable once CppParameterMayBeConst
-                                 cudaStream_t stream,
                                  const SceneGrouping &grouping) {
             std::vector<GPUGeometryInfo> geometry_infos(grouping.total_geometries);
             for (uint32_t g = 0; g < grouping.group_geometries.size(); ++g) {
@@ -216,7 +213,7 @@ namespace qualquer::renderer {
                 }
             }
             buffer.alloc(grouping.total_geometries);
-            buffer.upload(geometry_infos.data(), grouping.total_geometries, stream);
+            buffer.upload(geometry_infos.data(), grouping.total_geometries);
         }
 
         /**
@@ -392,16 +389,16 @@ namespace qualquer::renderer {
         SbtRecord record{};
         OPTIX_CHECK(optixSbtRecordPackHeader(pipeline_.raygen_program, &record));
         sbt_raygen_.alloc(1);
-        sbt_raygen_.upload(&record, 1, nullptr);
+        sbt_raygen_.upload(&record, 1);
 
         SbtRecord miss_record{};
         OPTIX_CHECK(optixSbtRecordPackHeader(pipeline_.miss_env_program, &miss_record));
         sbt_miss_.alloc(1);
-        sbt_miss_.upload(&miss_record, 1, nullptr);
+        sbt_miss_.upload(&miss_record, 1);
 
         OPTIX_CHECK(optixSbtRecordPackHeader(pipeline_.hitgroup_program, &record));
         sbt_hit_.alloc(1);
-        sbt_hit_.upload(&record, 1, nullptr);
+        sbt_hit_.upload(&record, 1);
 
         // Color buffer. Aux guides and dlss_output_ are allocated on demand
         // when DLSS is enabled. sample_count = 0 makes tonemap output black
@@ -494,7 +491,7 @@ namespace qualquer::renderer {
         // above for the grouping invariants (degenerate primitives, layout offsets).
         SceneGrouping grouping = group_meshes(meshes);
         build_blas_groups(accel_, cuda_context, grouping);
-        build_geometry_info(geometry_info_buffer_, nullptr, grouping);
+        build_geometry_info(geometry_info_buffer_, grouping);
 
         std::vector<OptixInstance> tlas_instances = build_tlas_instances(meshes, instances, grouping, accel_);
         tlas_instance_count_ = static_cast<uint32_t>(tlas_instances.size());
@@ -504,7 +501,6 @@ namespace qualquer::renderer {
         }
 
         accel_.build_tlas(cuda_context.device_context,
-                          nullptr,
                           tlas_instances);
 
         spdlog::info("Renderer::load_scene: {} meshes, {} instances, {} BLAS, {} TLAS instances",
@@ -595,8 +591,7 @@ namespace qualquer::renderer {
                     CUDA_CHECK(cudaStreamSynchronize(nullptr));
                 }
                 dlss_rr_.create_feature(render_width, render_height, width, height,
-                                        scene.settings.dlss_preset,
-                                        nullptr);
+                                        scene.settings.dlss_preset);
                 invalidate_dlss_state();
             }
         }
@@ -726,7 +721,7 @@ namespace qualquer::renderer {
 
             auto *staging = params_staging_[frame_index % params_staging_.size()];
             std::memcpy(staging, &params, sizeof(LaunchParams));
-            params_buffer_.upload(staging, 1, nullptr);
+            params_buffer_.upload(staging, 1);
 
             const OptixShaderBindingTable sbt{
                 .raygenRecord = sbt_raygen_.device_ptr(),
@@ -802,8 +797,7 @@ namespace qualquer::renderer {
                            width, height,
                            width, height,
                            1,
-                           exposure_linear,
-                           nullptr);
+                           exposure_linear);
         } else if (dlss_active && dlss_output_valid_) {
             // No new input but a valid cached DLSS output exists: reuse it.
             launch_tonemap(dlss_output_.tex_object(),
@@ -811,8 +805,7 @@ namespace qualquer::renderer {
                            width, height,
                            width, height,
                            1,
-                           exposure_linear,
-                           nullptr);
+                           exposure_linear);
         } else {
             // DLSS OFF: tonemap the color buffer directly. Raygen writes
             // per-frame mean; pass 1 so tonemap does not re-divide. Zero
@@ -822,8 +815,7 @@ namespace qualquer::renderer {
                            render_width, render_height,
                            width, height,
                            frame_slot_.sample_count > 0 ? 1u : 0u,
-                           exposure_linear,
-                           nullptr);
+                           exposure_linear);
         }
 
 #ifndef NDEBUG

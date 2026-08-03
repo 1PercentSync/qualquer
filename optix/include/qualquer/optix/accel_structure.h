@@ -87,30 +87,27 @@ namespace qualquer::optix {
         /**
          * @brief Builds all BLAS groups in a two-sync batch.
          *
-         * Submits all builds with a shared scratch buffer (reused across
-         * stream-ordered launches), synchronizes once to read compacted
-         * sizes, submits all compactions, then synchronizes a second time.
-         * Total: 2 host–device syncs regardless of group count (vs 2N for
-         * sequential per-BLAS build+compact).
+         * Submits all builds on the default stream with a shared scratch
+         * buffer, synchronizes once to read compacted sizes, submits all
+         * compactions, then synchronizes a second time. Total: 2
+         * host–device syncs regardless of group count.
          *
          * @param context OptiX device context.
-         * @param stream  CUDA stream for builds and compactions.
          * @param groups  Per-group geometry spans (one BLAS per non-empty span).
          */
-        void build_all_blas(OptixDeviceContext context, CUstream stream,
+        void build_all_blas(OptixDeviceContext context,
                             const std::vector<std::span<const BLASGeometry>> &groups);
 
         /**
          * @brief Builds the TLAS from pre-assembled instance descriptions.
          *
-         * Uploads the instance array to the device and builds an IAS with
-         * PREFER_FAST_TRACE. Synchronizes on the stream (init-time operation).
+         * Uploads the instance array and builds an IAS with
+         * PREFER_FAST_TRACE on the default stream.
          *
          * @param context   OptiX device context.
-         * @param stream    CUDA stream for the build.
          * @param instances OptixInstance array (one per deduplicated scene instance).
          */
-        void build_tlas(OptixDeviceContext context, CUstream stream,
+        void build_tlas(OptixDeviceContext context,
                         std::span<const OptixInstance> instances);
 
         /**

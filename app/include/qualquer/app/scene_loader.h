@@ -43,11 +43,9 @@ namespace qualquer::app {
          *
          * @param path             Path to the .gltf or .glb file.
          * @param default_textures Default textures for missing material slots.
-         * @param stream           CUDA stream for GPU uploads (must be the same
-         *                         stream used by downstream consumers like AS build).
          * @return true on success, false on failure (scene remains empty).
          */
-        bool load(const std::string &path, const optix::DefaultTextures &default_textures, cudaStream_t stream);
+        bool load(const std::string &path, const optix::DefaultTextures &default_textures);
 
         /**
          * @brief Loads an HDR environment map and prepares GPU resources.
@@ -61,10 +59,9 @@ namespace qualquer::app {
          * lighting, but rendering continues).
          *
          * @param path   Path to the .hdr environment map file.
-         * @param stream CUDA stream for GPU uploads.
          * @return true on success, false on failure.
          */
-        bool load_env_map(const std::string &path, cudaStream_t stream);
+        bool load_env_map(const std::string &path);
 
         /**
          * @brief Destroys environment map GPU resources only.
@@ -228,7 +225,6 @@ namespace qualquer::app {
 
         /** @brief Loads mesh primitives for referenced meshes: GPU buffers and CPU data. */
         MeshLoadResult load_meshes(const fastgltf::Asset &gltf,
-                                   cudaStream_t stream,
                                    const std::vector<bool> &referenced_meshes);
 
         /**
@@ -240,7 +236,6 @@ namespace qualquer::app {
          */
         std::vector<uint32_t> load_materials(const fastgltf::Asset &gltf,
                                              const optix::DefaultTextures &default_textures,
-                                             cudaStream_t stream,
                                              const std::vector<bool> &referenced_materials);
     };
 } // namespace qualquer::app

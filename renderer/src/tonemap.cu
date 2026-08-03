@@ -198,8 +198,7 @@ namespace qualquer::renderer {
                         const uint32_t display_width,
                         const uint32_t display_height,
                         const uint32_t sample_count,
-                        const float exposure,
-                        cudaStream_t stream) {
+                        const float exposure) {
         constexpr uint32_t kBlockDim = 16;
         constexpr dim3 block(kBlockDim, kBlockDim);
         const dim3 grid((display_width + kBlockDim - 1) / kBlockDim,
@@ -210,7 +209,7 @@ namespace qualquer::renderer {
         const float scale_y = static_cast<float>(render_height)
                              / static_cast<float>(display_height);
 
-        tonemap_kernel<<<grid, block, 0, stream>>>(color_tex, display_surface,
+        tonemap_kernel<<<grid, block>>>(color_tex, display_surface,
                                                    render_width, render_height,
                                                    display_width, display_height,
                                                    scale_x, scale_y,

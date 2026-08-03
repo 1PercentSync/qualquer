@@ -14,9 +14,8 @@
 
 namespace qualquer::optix {
     void AccelStructure::build_all_blas(
-        // ReSharper disable CppParameterMayBeConst
-        OptixDeviceContext context, CUstream stream,
-        // ReSharper restore CppParameterMayBeConst
+        // ReSharper disable once CppParameterMayBeConst
+        OptixDeviceContext context,
         const std::vector<std::span<const BLASGeometry>> &groups) {
 
         if (groups.empty()) {
@@ -103,7 +102,7 @@ namespace qualquer::optix {
             };
 
             OPTIX_CHECK(optixAccelBuild(
-                context, stream,
+                context, nullptr,
                 &accel_options,
                 info.build_inputs.data(),
                 static_cast<unsigned int>(info.build_inputs.size()),
@@ -115,7 +114,7 @@ namespace qualquer::optix {
 
         // --- Sync 1: all builds complete, compacted sizes available ---
 
-        CUDA_CHECK(cudaStreamSynchronize(stream));
+        CUDA_CHECK(cudaStreamSynchronize(nullptr));
         scratch.free();
 
         std::vector<uint64_t> compacted_sizes(count);
@@ -135,7 +134,7 @@ namespace qualquer::optix {
             if (compacted_sizes[i] < info.output_buffer.size_bytes()) {
                 result.buffer.alloc(compacted_sizes[i]);
                 OPTIX_CHECK(optixAccelCompact(
-                    context, stream,
+                    context, nullptr,
                     info.uncompacted_handle,
                     result.buffer.device_ptr(), result.buffer.size_bytes(),
                     &result.handle));
@@ -147,7 +146,7 @@ namespace qualquer::optix {
 
         // --- Sync 2: all compactions complete, uncompacted buffers can be freed ---
 
-        CUDA_CHECK(cudaStreamSynchronize(stream));
+        CUDA_CHECK(cudaStreamSynchronize(nullptr));
 
         // Log per-BLAS results.
         for (size_t i = 0; i < count; ++i) {
@@ -169,9 +168,8 @@ namespace qualquer::optix {
     }
 
     void AccelStructure::build_tlas(
-        // ReSharper disable CppParameterMayBeConst
-        OptixDeviceContext context, CUstream stream,
-        // ReSharper restore CppParameterMayBeConst
+        // ReSharper disable once CppParameterMayBeConst
+        OptixDeviceContext context,
         const std::span<const OptixInstance> instances) {
         const auto instance_count = static_cast<unsigned int>(instances.size());
 
@@ -225,7 +223,7 @@ namespace qualquer::optix {
         };
 
         OPTIX_CHECK(optixAccelBuild(
-            context, stream,
+            context, nullptr,
             &accel_options,
             &build_input, 1,
             temp_buffer.device_ptr(), temp_buffer.size_bytes(),
@@ -233,7 +231,7 @@ namespace qualquer::optix {
             &tlas_.handle,
             &emit_desc, 1));
 
-        CUDA_CHECK(cudaStreamSynchronize(stream));
+        CUDA_CHECK(cudaStreamSynchronize(nullptr));
 
         temp_buffer.free();
 
@@ -251,12 +249,12 @@ namespace qualquer::optix {
 
             const auto uncompacted_handle = tlas_.handle;
             OPTIX_CHECK(optixAccelCompact(
-                context, stream,
+                context, nullptr,
                 uncompacted_handle,
                 tlas_.buffer.device_ptr(), tlas_.buffer.size_bytes(),
                 &tlas_.handle));
 
-            CUDA_CHECK(cudaStreamSynchronize(stream));
+            CUDA_CHECK(cudaStreamSynchronize(nullptr));
 
             spdlog::info("TLAS: {} instances, {:.1f} KB -> {:.1f} KB (compacted {:.0f}%)",
                          instance_count,

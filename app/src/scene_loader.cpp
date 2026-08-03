@@ -356,8 +356,7 @@ namespace qualquer::app {
 
     bool SceneLoader::load(
         const std::string &path,
-        const optix::DefaultTextures &default_textures,
-        cudaStream_t stream) {
+        const optix::DefaultTextures &default_textures) {
         spdlog::info("Loading scene: {}", path);
 
         try {
@@ -386,7 +385,7 @@ namespace qualquer::app {
                          gltf.nodes.size());
 
             auto scan = pre_scan_scene(gltf);
-            auto mesh_data = load_meshes(gltf, stream, scan.referenced_meshes);
+            auto mesh_data = load_meshes(gltf, scan.referenced_meshes);
 
             // Referenced materials: dense bitmap from meshes_[].material_id
             // (single source of truth for material assignment).
@@ -397,7 +396,7 @@ namespace qualquer::app {
             }
 
             const auto material_remap =
-                    load_materials(gltf, default_textures, stream, referenced_materials);
+                    load_materials(gltf, default_textures, referenced_materials);
 
             // Remap material IDs from glTF indices to compacted gpu_materials_ indices.
             for (auto &mesh: meshes_) {
@@ -731,8 +730,6 @@ namespace qualquer::app {
 
     SceneLoader::MeshLoadResult SceneLoader::load_meshes(
         const fastgltf::Asset &gltf,
-        // ReSharper disable once CppParameterMayBeConst
-        cudaStream_t stream,
         const std::vector<bool> &referenced_meshes) {
         MeshLoadResult result;
         result.prim_offsets.reserve(gltf.meshes.size() + 1);
@@ -758,11 +755,11 @@ namespace qualquer::app {
 
                 optix::CudaBuffer<renderer::Vertex> vb;
                 vb.alloc(loaded->vertices.size());
-                vb.upload(loaded->vertices.data(), loaded->vertices.size(), stream);
+                vb.upload(loaded->vertices.data(), loaded->vertices.size());
 
                 optix::CudaBuffer<uint32_t> ib;
                 ib.alloc(loaded->indices.size());
-                ib.upload(loaded->indices.data(), loaded->indices.size(), stream);
+                ib.upload(loaded->indices.data(), loaded->indices.size());
 
                 const auto prim_material_id = primitive.materialIndex.has_value()
                                                   ? static_cast<uint32_t>(*primitive.materialIndex)
@@ -794,7 +791,6 @@ namespace qualquer::app {
 
     std::vector<uint32_t> SceneLoader::load_materials(const fastgltf::Asset &gltf,
                                                       const optix::DefaultTextures &default_textures,
-                                                      cudaStream_t stream,
                                                       const std::vector<bool> &referenced_materials) {
         // ---- Default texture indices (reserved at the front of texture_objects_) ----
         // Index 0: white (fallback for missing base_color / metallic_roughness / emissive)
@@ -1030,11 +1026,11 @@ namespace qualquer::app {
         }
 
         material_buffer_.alloc(gpu_materials_.size());
-        material_buffer_.upload(gpu_materials_.data(), gpu_materials_.size(), stream);
+        material_buffer_.upload(gpu_materials_.data(), gpu_materials_.size());
 
         if (!texture_objects_.empty()) {
             texture_objects_buffer_.alloc(texture_objects_.size());
-            texture_objects_buffer_.upload(texture_objects_.data(), texture_objects_.size(), stream);
+            texture_objects_buffer_.upload(texture_objects_.data(), texture_objects_.size());
         }
 
         spdlog::info("Loaded {} materials, {} scene textures (+ 2 defaults)",
@@ -1045,7 +1041,7 @@ namespace qualquer::app {
 
     // ---- Environment map ----
 
-    bool SceneLoader::load_env_map(const std::string &path, cudaStream_t stream) {
+    bool SceneLoader::load_env_map(const std::string &path) {
         destroy_env_map();
 
         if (path.empty()) {
@@ -1112,7 +1108,7 @@ namespace qualquer::app {
 
         // Upload alias table to device
         env_alias_table_.alloc(alias_result.entries.size());
-        env_alias_table_.upload(alias_result.entries.data(), alias_result.entries.size(), stream);
+        env_alias_table_.upload(alias_result.entries.data(), alias_result.entries.size());
 
         // Ensure the async copy completes before alias_result is destroyed.
         CUDA_CHECK(cudaStreamSynchronize(stream));
