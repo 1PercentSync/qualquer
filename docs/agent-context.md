@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4.5 — 自适应帧率 + 采样质量收尾
-- **进度**：Phase 4.5 Step 14.95 第四小项完成：文档与注释清理（14 文件中 ping-pong / Separate Sum / accumulation 相关注释更新为串行单 buffer 语义）
+- **进度**：Phase 4.5 Step 14.95 完成（串行单 buffer + default stream + 去累积 + 去 event + stream 参数全部移除）
 
 ### 下一个任务
 
-Phase 4.5 Step 14.95 编译验证：请求用户在 CLion 中编译验证（串行单 buffer 运行正常，DLSS ON/OFF 均无回归）
+Phase 4.5 Step 14.9 第一小项：Catmull-Rom tonemap 16→4 fetch
 
 ---
 

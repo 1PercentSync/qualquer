@@ -45,7 +45,7 @@
 - [x] 单 buffer 串行替换 ping-pong（renderer.h, renderer.cpp）
 - [x] UI 适配（debug_ui.h/cpp, application.cpp）
 - [x] 文档与注释清理
-- [ ] 请求用户在 CLion 中编译验证（串行单 buffer 运行正常，DLSS ON/OFF 均无回归）
+- [x] 请求用户在 CLion 中编译验证（串行单 buffer 运行正常，DLSS ON/OFF 均无回归）
 
 ## Step 15：自适应 Sample 数
 
