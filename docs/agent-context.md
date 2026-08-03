@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4.5 — 自适应帧率 + 采样质量收尾
-- **进度**：Phase 4.5 Step 14.95 第三小项完成：UI 适配（DebugUIContext 移除 has_valid_frame，Application 移除对应赋值；核心 UI 功能适配已在第二小项中完成）
+- **进度**：Phase 4.5 Step 14.95 第四小项完成：文档与注释清理（14 文件中 ping-pong / Separate Sum / accumulation 相关注释更新为串行单 buffer 语义）
 
 ### 下一个任务
 
-Phase 4.5 Step 14.95 第四小项：文档与注释清理
+Phase 4.5 Step 14.95 编译验证：请求用户在 CLion 中编译验证（串行单 buffer 运行正常，DLSS ON/OFF 均无回归）
 
 ---
 
