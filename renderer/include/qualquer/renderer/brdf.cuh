@@ -752,26 +752,6 @@ __forceinline__ __device__ void build_orthonormal_basis(const float3 N,
     B = cross(N, T);
 }
 
-// ---- Multi-lobe BRDF selection ----------------------------------------------
-
-/**
- * @brief Probability of selecting the specular lobe over diffuse.
- *
- * Fresnel reflectance luminance at the view angle, clamped to [0.01, 0.99]
- * to avoid division by a zero selection probability. Ported from Himalaya
- * pt_common.glsl.
- *
- * @param NdotV Clamped dot(N, V), must be > 0.
- * @param F0    Normal-incidence reflectance (RGB).
- * @return Specular lobe selection probability in [0.01, 0.99].
- */
-__forceinline__ __device__ float specular_probability(const float NdotV,
-                                                      const float3 F0) {
-    const float3 F = F_Schlick(NdotV, F0);
-    const float spec_weight = luminance(F);
-    return fmaxf(fminf(spec_weight, 0.99f), 0.01f);
-}
-
 // ---- BRDF parameter bundle --------------------------------------------------
 
 /**
@@ -842,7 +822,11 @@ __forceinline__ __device__ BrdfParams init_brdf_params(
 
     const float3 one = make_float3(1.0f, 1.0f, 1.0f);
     p.diffuse_weight = (1.0f - metallic) * (one - p.E_glossy_rgb);
-    p.p_spec = specular_probability(p.NdotV, p.F0);
+
+    // Lobe selection proportional to estimated directional energy.
+    const float spec_lum = luminance(p.E_glossy_rgb);
+    const float diff_lum = luminance(p.diffuse_weight * base_color);
+    p.p_spec = fmaxf(fminf(spec_lum / (spec_lum + diff_lum), 0.99f), 0.01f);
 
     return p;
 }
