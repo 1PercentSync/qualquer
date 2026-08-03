@@ -41,7 +41,7 @@
 
 ## Step 14.95：串行化重构
 
-- [ ] Device 侧统一 mean 输出（launch_params.h, programs.cu）
+- [x] Device 侧统一 mean 输出（launch_params.h, programs.cu）
 - [ ] 单 buffer 串行替换 ping-pong（renderer.h, renderer.cpp）
 - [ ] UI 适配（debug_ui.h/cpp, application.cpp）
 - [ ] 文档与注释清理

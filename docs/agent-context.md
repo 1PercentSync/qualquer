@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4.5 — 自适应帧率 + 采样质量收尾
-- **进度**：Phase 4.5 Step 14.8 第三���项完成：单策略 NEE 混合（每 bounce 仅评估 env/emissive 之一，kDimsPerBounce 12→8，Sobol 覆盖 10→15 bounces）
+- **进度**：Phase 4.5 Step 14.95 第一小项完成：Device 侧统一 mean 输出（launch_params.h 移除 color_input/sample_count，programs.cu raygen 统一写 per-frame mean）
 
 ### 下一个任务
 
-Phase 4.5 Step 14.9 第一小项：Catmull-Rom tonemap 16→4 fetch
+Phase 4.5 Step 14.95 第二小项：单 buffer 串行替换 ping-pong（代码已写，待编译验证）
 
 ---
 
