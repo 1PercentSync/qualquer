@@ -3,20 +3,6 @@
 
 以下不是静态代码即可定性的错误。必须通过 release 编译资源报告、Nsight Systems/Compute、GPU 时间线和图像 A/B 验证。
 
-### QRP-O10：DLSS guides 全部使用 32-bit channels，存在显著带宽与 VRAM 压缩空间
-
-#### 代码事实
-
-当前每 slot guides 为 64 bytes/pixel：R32F depth、RG32F motion、三张 RGBA32F、R32F roughness；双 slot 为 128 bytes/pixel。`vk_gltf_renderer` 官方参考则使用 RGBA8 diffuse、RGBA16F specular、RGBA16F packed normal/roughness、RG16F motion、R16F depth/specular distance。
-
-#### 优化机会
-
-若 CUDA RR 路径对对应格式的 texture/surface object 支持经当前 SDK 验证，可将 normal 与 roughness 打包，并把适合的 guides 降到 fp16/UNORM；这会同时降低 QRP-025 的常驻 VRAM、raygen surface-write 带宽和 NGX input read 带宽。按上述参考布局，现有 64 bytes/pixel guides 理论上可降至约 26 bytes/pixel（不含新增 specular distance）。
-
-#### 风险与验证
-
-格式支持不能从 Vulkan wrapper 直接外推到 CUDA wrapper；必须用当前 DLSS SDK 官方格式契约或 feature create/evaluate 验证。depth 量程、motion 精度、world normal 量化和高动态 specular albedo 均需画质 A/B；R16F depth 在大尺度场景可能不够，不能只按 VRAM 最小化。
-
 ### QRP-O11：OptiX pipeline 未把 primitive type 限定为 triangles
 
 #### 代码事实
