@@ -3,18 +3,6 @@
 
 以下不是静态代码即可定性的错误。必须通过 release 编译资源报告、Nsight Systems/Compute、GPU 时间线和图像 A/B 验证。
 
-### QRP-O12：场景切换无条件销毁并重新加载独立的 environment map
-
-#### 代码事实
-
-- `app/src/scene_loader.cpp:899-918` 的 `SceneLoader::destroy()` 同时调用 `destroy_env_map()`。
-- `app/src/application.cpp:534-563` 每次 `switch_scene()` 先销毁整个 loader，场景/AS 重建后再按同一路径重新调用 `load_env_map()`。
-- BC6H cubemap 可命中磁盘 cache，但 `load_env_map()` 仍重新读取并解码完整 HDR、从原始像素重建 env alias table、重新分配和上传资源。
-
-#### 优化机会
-
-环境光与 glTF scene geometry/material 生命周期独立；普通 scene switch 不需要销毁不变的 env cubemap/alias table。拆分 scene resources 与 environment resources 的所有权可降低切换延迟、CPU 峰值与 GPU allocation churn。只有 env path 变化或显式卸载时才重建环境资源。
-
 ### QRP-O13：BRDF lobe selection 只看 Schlick Fresnel，可能把多数 samples 分给近零能量 lobe
 
 #### 代码事实
