@@ -266,10 +266,10 @@ namespace qualquer::optix {
 
     void Context::destroy() {
         // Display-buffer import first (surface wraps the imported image memory), then
-        // the independent semaphores, then OptiX device context, then the streams last
-        // — cudaStreamDestroy waits for pending work, so destroying them last drains
-        // any in-flight kernel/signal. device_id_ needs no
-        // cleanup — the runtime-managed primary context is left intact for other holders.
+        // the independent semaphores, then OptiX device context, then the stream last
+        // — cudaStreamDestroy waits for pending work, so destroying it last drains
+        // any in-flight kernel/signal. device_id_ needs no cleanup — the
+        // runtime-managed primary context is left intact for other holders.
         release_display_buffer();
         for (auto &sem: external_semaphores) {
             if (sem != nullptr) {

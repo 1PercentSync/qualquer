@@ -290,35 +290,6 @@ namespace qualquer::renderer {
             optix::CudaArrayBuffer<float4> normal_roughness;
         };
 
-        /**
-         * @brief Previous-frame DLSS input metadata for motion vector computation.
-         *
-         * Stores the jitter and camera matrices from the last frame that
-         * produced a valid DLSS input, so the current frame can compute
-         * previous_vp for motion vectors and has_temporal_predecessor.
-         */
-        struct DlssFrameMetadata {
-            /** @brief Raw horizontal Sobol jitter in [0,1). */
-            float jitter_x = 0.0f;
-
-            /** @brief Raw vertical Sobol jitter in [0,1). */
-            float jitter_y = 0.0f;
-
-            /** @brief World-to-view matrix for this input frame. */
-            glm::mat4 view_matrix{1.0f};
-
-            /** @brief View-to-clip matrix for this input frame. */
-            glm::mat4 projection_matrix{1.0f};
-
-            /** @brief Frame delta supplied with this input frame, in milliseconds. */
-            float frame_time_ms = 0.0f;
-
-            /** @brief Whether evaluation of this input discards DLSS history. */
-            bool reset = false;
-
-            /** @brief Whether this contains a valid DLSS input frame. */
-            bool valid = false;
-        };
 
         /**
          * @brief Color buffer and DLSS guide resources.
@@ -502,12 +473,18 @@ namespace qualquer::renderer {
         optix::DlssRenderPreset prev_dlss_preset_ = optix::DlssRenderPreset::E;
 
         /**
-         * @brief Previous-frame DLSS metadata for motion vector computation.
+         * @brief Whether the previous frame produced a valid DLSS input.
          *
-         * Saved at the end of each producing frame so the next frame can
-         * derive prev_view_projection and has_temporal_predecessor.
+         * Used for has_temporal_predecessor — false on first DLSS frame or
+         * after history invalidation, so previous_vp defaults to current_vp.
          */
-        DlssFrameMetadata prev_dlss_metadata_{};
+        bool prev_dlss_valid_ = false;
+
+        /** @brief Previous-frame view matrix for motion vector VP computation. */
+        glm::mat4 prev_dlss_view_{1.0f};
+
+        /** @brief Previous-frame projection matrix for motion vector VP computation. */
+        glm::mat4 prev_dlss_projection_{1.0f};
 
 #ifndef NDEBUG
         /** @brief Timing event recorded before DLSS + tonemap. */

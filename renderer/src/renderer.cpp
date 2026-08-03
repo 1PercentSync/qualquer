@@ -315,7 +315,7 @@ namespace qualquer::renderer {
     }
 
     void Renderer::invalidate_dlss_history() {
-        prev_dlss_metadata_.valid = false;
+        prev_dlss_valid_ = false;
         dlss_reset_requested_ = true;
     }
 
@@ -664,24 +664,13 @@ namespace qualquer::renderer {
         // Unjittered VP for motion vector computation (row-major for device mul()).
         const float4x4 current_vp = to_float4x4(scene.camera.projection * scene.camera.view);
         const bool has_temporal_predecessor = dlss_active
-                                              && prev_dlss_metadata_.valid
+                                              && prev_dlss_valid_
                                               && !slot_reset;
         const float4x4 previous_vp = has_temporal_predecessor
                                               ? to_float4x4(
-                                                    prev_dlss_metadata_.projection_matrix
-                                                    * prev_dlss_metadata_.view_matrix)
+                                                    prev_dlss_projection_
+                                                    * prev_dlss_view_)
                                               : current_vp;
-
-        // Build current-frame DLSS metadata (used for evaluate + saved as prev).
-        const DlssFrameMetadata current_dlss_metadata{
-            .jitter_x = jitter_x,
-            .jitter_y = jitter_y,
-            .view_matrix = scene.camera.view,
-            .projection_matrix = scene.camera.projection,
-            .frame_time_ms = scene.frame_time_ms,
-            .reset = slot_reset,
-            .valid = produces_dlss_input,
-        };
 
         LaunchParams params{
             .color_output = frame_slot_.color.surf_object(),
@@ -798,12 +787,12 @@ namespace qualquer::renderer {
                 .normal_roughness_tex = frame_slot_.aux.normal_roughness.tex_object(),
                 .render_width = render_width,
                 .render_height = render_height,
-                .jitter_x = current_dlss_metadata.jitter_x,
-                .jitter_y = current_dlss_metadata.jitter_y,
-                .view_matrix = glm::value_ptr(current_dlss_metadata.view_matrix),
-                .projection_matrix = glm::value_ptr(current_dlss_metadata.projection_matrix),
-                .reset = current_dlss_metadata.reset,
-                .frame_time_ms = current_dlss_metadata.frame_time_ms,
+                .jitter_x = jitter_x,
+                .jitter_y = jitter_y,
+                .view_matrix = glm::value_ptr(scene.camera.view),
+                .projection_matrix = glm::value_ptr(scene.camera.projection),
+                .reset = slot_reset,
+                .frame_time_ms = scene.frame_time_ms,
             };
             dlss_rr_.evaluate(eval_input);
             dlss_output_valid_ = true;
@@ -851,8 +840,9 @@ namespace qualquer::renderer {
         if (has_new_samples) {
             frame_slot_.sample_count = 1;
             sequence_base_ += effective_spp;
-            // Save current metadata as prev for next frame's motion vectors.
-            prev_dlss_metadata_ = current_dlss_metadata;
+            prev_dlss_valid_ = produces_dlss_input;
+            prev_dlss_view_ = scene.camera.view;
+            prev_dlss_projection_ = scene.camera.projection;
         }
         ++frame_counter_;
     }
