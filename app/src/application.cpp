@@ -165,7 +165,7 @@ namespace qualquer::app {
             camera_controller_.update(ImGui::GetIO().DeltaTime);
             update_ibl_drag();
 
-            // F-key teleport: reset accumulation + DLSS history.
+            // F-key teleport: reset DLSS history.
             if (camera_controller_.teleported) {
                 renderer_.reset_accumulation();
                 camera_controller_.teleported = false;

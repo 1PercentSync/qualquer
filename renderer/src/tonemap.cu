@@ -127,11 +127,9 @@ namespace qualquer::renderer {
                 return;
             }
 
-            // sample_count == 0: the buffer holds uninitialised or stale data
-            // (init/first-ever frame/just-reallocated after a render-resolution
-            // change). Write black and return without touching the buffer;
-            // raygen is concurrently filling the OTHER buffer with the first
-            // valid sample, which tonemap will read next frame.
+            // sample_count == 0: the buffer holds uninitialised data (init or
+            // just-reallocated after a render-resolution change). Write black;
+            // the next raygen will fill valid data.
             // Display is R16G16B16A16_SFLOAT: write ushort4 half-bit packs, 8 B/texel.
             if (sample_count == 0) {
                 const ushort4 black = pack_half4(make_float4(0.0f, 0.0f, 0.0f, 1.0f));

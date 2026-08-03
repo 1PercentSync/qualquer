@@ -146,7 +146,7 @@ namespace qualquer::renderer {
          *
          * @param cuda_context CUDA context owning the stream and device context the
          *                      pipeline builds against; the stream sequences SBT
-         *                      uploads and accumulation-buffer clears before the first
+         *                      uploads and color-buffer allocation before the first
          *                      frame's optixLaunch on the same stream. Its device_id
          *                      also seeds DlssRR::init.
          * @param width          Initial render resolution width in pixels
@@ -501,7 +501,7 @@ namespace qualquer::renderer {
          * @brief Intermediate HDR buffer at output resolution (RGBA32F).
          *
          * DLSS-RR writes its denoised+upscaled result here (via surfaceObject);
-         * tonemap reads from here (via textureObject) instead of the accumulation
+         * tonemap reads from here (via textureObject) instead of the color
          * buffer when DLSS-RR is active. Allocated at display resolution, resized
          * on window resize (not on render resolution change).
          */
