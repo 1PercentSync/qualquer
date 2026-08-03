@@ -852,6 +852,52 @@ namespace qualquer::renderer {
         };
         std::memcpy(params.sobol_directions, kSobolDirectionData, sizeof(params.sobol_directions));
 
+        // --- DLSS evaluate before raygen (submission reorder) ---
+        // NGX's evaluate() internally calls cuCtxSynchronize, which waits
+        // for all GPU work across all streams. By evaluating BEFORE
+        // submitting raygen, cuCtxSync waits for the previous frame's
+        // raygen (likely already complete after a full DLSS main-network
+        // cycle) rather than a freshly-submitted one. After evaluate()
+        // returns on the CPU, the DLSS main neural network is in-flight
+        // on display_stream; raygen submitted below overlaps with it on
+        // the GPU — recovering the ping-pong parallelism that cuCtxSync
+        // would otherwise destroy.
+        const bool evaluate_dlss = dlss_active
+                                   && has_new_samples
+                                   && read.dlss_metadata.valid;
+        if (evaluate_dlss) {
+            // Reverse semaphore + production-event waits go on
+            // display_stream here (before raygen) instead of below.
+            // ReSharper disable once CppLocalVariableMayBeConst
+            cudaExternalSemaphore_t reverse_sem = cuda_context.reverse_external_semaphore;
+            constexpr cudaExternalSemaphoreWaitParams reverse_wait_params{};
+            CUDA_CHECK(cudaWaitExternalSemaphoresAsync(
+                &reverse_sem, &reverse_wait_params, 1,
+                cuda_context.display_stream));
+            CUDA_CHECK(cudaStreamWaitEvent(
+                cuda_context.display_stream, read.production_event));
+
+            const optix::DlssRR::EvalInput eval_input{
+                .color_tex = read.color.tex_object(),
+                .output_surf = dlss_output_.surf_object(),
+                .depth_tex = read.aux.depth.tex_object(),
+                .motion_vectors_tex = read.aux.motion_vectors.tex_object(),
+                .diffuse_albedo_tex = read.aux.diffuse_albedo.tex_object(),
+                .specular_albedo_tex = read.aux.specular_albedo.tex_object(),
+                .normal_roughness_tex = read.aux.normal_roughness.tex_object(),
+                .render_width = render_width,
+                .render_height = render_height,
+                .jitter_x = read.dlss_metadata.jitter_x,
+                .jitter_y = read.dlss_metadata.jitter_y,
+                .view_matrix = glm::value_ptr(read.dlss_metadata.view_matrix),
+                .projection_matrix = glm::value_ptr(read.dlss_metadata.projection_matrix),
+                .reset = read.dlss_metadata.reset,
+                .frame_time_ms = read.dlss_metadata.frame_time_ms,
+            };
+            dlss_rr_.evaluate(eval_input);
+            dlss_output_valid_ = true;
+        }
+
         if (has_new_samples) {
 #ifndef NDEBUG
             // Read frame N-2's PT timing. Synchronize the end event to ensure the
@@ -903,22 +949,20 @@ namespace qualquer::renderer {
                 write.production_event, cuda_context.compute_stream));
         }
 
-        // --- display_stream: wait read-slot production → evaluate/tonemap → record ---
-        // Wait for the previous frame's blit to finish reading display_surface
-        // before this frame's tonemap overwrites it (write-after-read). A single
-        // semaphore suffices: the forward chain (tonemap → forward signal → blit →
-        // reverse signal) structurally prevents double-signaling.
-        // Enqueued before the raygen event wait: the reverse semaphore typically
-        // signals earlier (blit is lighter than raygen), so checking it first lets
-        // the GPU scheduler resolve the faster wait and prepare for the next one.
-        // ReSharper disable once CppLocalVariableMayBeConst
-        cudaExternalSemaphore_t reverse_sem = cuda_context.reverse_external_semaphore;
-        constexpr cudaExternalSemaphoreWaitParams reverse_wait_params{};
-        CUDA_CHECK(cudaWaitExternalSemaphoresAsync(&reverse_sem, &reverse_wait_params, 1, cuda_context.display_stream));
+        // --- display_stream: tonemap → consumption → signal ---
+        // When DLSS is active, the reverse-sem wait, production-event wait,
+        // and evaluate() were already submitted above (before raygen) so
+        // that raygen overlaps with the DLSS main network on the GPU.
+        if (!evaluate_dlss) {
+            // Non-DLSS path: reverse-sem and production waits go here.
+            // ReSharper disable once CppLocalVariableMayBeConst
+            cudaExternalSemaphore_t reverse_sem = cuda_context.reverse_external_semaphore;
+            constexpr cudaExternalSemaphoreWaitParams reverse_wait_params{};
+            CUDA_CHECK(cudaWaitExternalSemaphoresAsync(&reverse_sem, &reverse_wait_params, 1, cuda_context.display_stream));
 
-        // Wait until raygen has produced the read slot's color and guides.
-        CUDA_CHECK(cudaStreamWaitEvent(
-            cuda_context.display_stream, read.production_event));
+            CUDA_CHECK(cudaStreamWaitEvent(
+                cuda_context.display_stream, read.production_event));
+        }
 
 #ifndef NDEBUG
         if (frame_counter_ >= 2
@@ -931,34 +975,9 @@ namespace qualquer::renderer {
             event_display_start_[timing_slot], cuda_context.display_stream));
 #endif
 
-        const bool evaluate_dlss = dlss_active
-                                   && has_new_samples
-                                   && read.dlss_metadata.valid;
         if (evaluate_dlss) {
-            // DLSS ON: evaluate reads the previous valid noisy input (read
-            // slot) and writes the denoised+upscaled result to dlss_output.
-            // Then tonemap reads dlss_output at display resolution (1:1, no
-            // resampling, no Separate Sum division — sample_count=1).
-            const optix::DlssRR::EvalInput eval_input{
-                .color_tex = read.color.tex_object(),
-                .output_surf = dlss_output_.surf_object(),
-                .depth_tex = read.aux.depth.tex_object(),
-                .motion_vectors_tex = read.aux.motion_vectors.tex_object(),
-                .diffuse_albedo_tex = read.aux.diffuse_albedo.tex_object(),
-                .specular_albedo_tex = read.aux.specular_albedo.tex_object(),
-                .normal_roughness_tex = read.aux.normal_roughness.tex_object(),
-                .render_width = render_width,
-                .render_height = render_height,
-                .jitter_x = read.dlss_metadata.jitter_x,
-                .jitter_y = read.dlss_metadata.jitter_y,
-                .view_matrix = glm::value_ptr(read.dlss_metadata.view_matrix),
-                .projection_matrix = glm::value_ptr(read.dlss_metadata.projection_matrix),
-                .reset = read.dlss_metadata.reset,
-                .frame_time_ms = read.dlss_metadata.frame_time_ms,
-            };
-            dlss_rr_.evaluate(eval_input);
-            dlss_output_valid_ = true;
-
+            // Tonemap from the denoised+upscaled DLSS output (display
+            // resolution, 1:1, no Separate Sum division).
             launch_tonemap(dlss_output_.tex_object(),
                            cuda_context.display_surface,
                            width, height,      // dlss_output is display resolution
