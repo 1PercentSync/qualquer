@@ -748,6 +748,16 @@ namespace qualquer::renderer {
             CUDA_CHECK(cudaEventRecord(
                 event_pt_end_[timing_slot], nullptr));
 #endif
+
+            // Update CPU state now: stream ordering guarantees raygen is
+            // done before tonemap reads the buffer, so sample_count = 1
+            // is valid immediately (eliminates one-frame black flash on
+            // init and resize).
+            frame_slot_.sample_count = 1;
+            sequence_base_ += effective_spp;
+            prev_dlss_valid_ = produces_dlss_input;
+            prev_dlss_view_ = scene.camera.view;
+            prev_dlss_projection_ = scene.camera.projection;
         }
 
         // Reverse semaphore: wait for the previous frame's blit to finish
@@ -829,13 +839,6 @@ namespace qualquer::renderer {
         constexpr cudaExternalSemaphoreSignalParams signal_params{};
         CUDA_CHECK(cudaSignalExternalSemaphoresAsync(&sem, &signal_params, 1, nullptr));
 
-        if (has_new_samples) {
-            frame_slot_.sample_count = 1;
-            sequence_base_ += effective_spp;
-            prev_dlss_valid_ = produces_dlss_input;
-            prev_dlss_view_ = scene.camera.view;
-            prev_dlss_projection_ = scene.camera.projection;
-        }
         ++frame_counter_;
     }
 
