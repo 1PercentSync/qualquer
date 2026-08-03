@@ -156,9 +156,9 @@ namespace qualquer::optix {
         device_id_ = best_device;
         device_uuid = get_device_uuid(prop);
 
-        // Compute stays independent for PT/display overlap. Display participates
-        // in legacy default-stream ordering because NGX's CUDA path may enqueue
-        // internal work there before tonemap and completion events.
+        // Two explicit streams (serial, not parallel): compute for raygen,
+        // display for DLSS+tonemap. Display is blocking (default-stream ordering)
+        // because NGX's CUDA path may enqueue internal work on the default stream.
         CUDA_CHECK(cudaStreamCreateWithFlags(&compute_stream, cudaStreamNonBlocking));
         CUDA_CHECK(cudaStreamCreate(&display_stream));
 

@@ -111,8 +111,7 @@ __forceinline__ __device__ void write_aux_no_surface(
 /// When capture_primary is true (first sample), writes primary hit/miss
 /// info into the output parameters for MV and sky aux-default computation.
 ///
-/// @param sequence_index Path sequence index for Sobol (sequence_base + s);
-///                       independent of Separate Sum sample_count.
+/// @param sequence_index Path sequence index for Sobol (sequence_base + s).
 __forceinline__ __device__ float3 trace_sample(
     const float3 cam_origin,
     const float3 primary_dir,

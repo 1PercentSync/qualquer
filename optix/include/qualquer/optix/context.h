@@ -145,11 +145,10 @@ namespace qualquer::optix {
         cudaStream_t compute_stream = nullptr;
 
         /**
-         * @brief CUDA stream for display output (tonemap + semaphore signal).
+         * @brief CUDA stream for display output (DLSS evaluate + tonemap + semaphore signal).
          *
-         * Runs in parallel with compute_stream: tonemap reads the previous frame's
-         * accumulation buffer while raygen writes the current frame's, with CUDA
-         * events enforcing the cross-stream dependencies.
+         * Executes serially after compute_stream via CUDA event wait.
+         * Blocking stream (participates in default-stream ordering for NGX).
          * Null before init and after destroy.
          */
         cudaStream_t display_stream = nullptr;

@@ -88,7 +88,7 @@ namespace qualquer::app {
         // adjusts it thereafter, decoupled from window resizes.
         render_settings_.render_height = swapchain_.extent.height;
 
-        // --- Renderer (pipeline + accumulation buffers + DLSS-RR) ---
+        // --- Renderer (pipeline + color buffer + DLSS-RR) ---
         renderer_.init(cuda_context_,
                        swapchain_.extent.width,
                        swapchain_.extent.height,

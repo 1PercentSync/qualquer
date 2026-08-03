@@ -213,8 +213,8 @@ struct LaunchParams {
      * @brief Base Sobol sequence index for this frame's first sample.
      *
      * Raygen computes per-sample index as sequence_base + s. Advances by
-     * samples_per_frame after each frame that produces samples; reset to 0
-     * on accumulation reset. Monotonically increasing regardless of spp changes.
+     * samples_per_frame after each producing frame. Monotonically increasing
+     * regardless of dynamic spp changes.
      */
     uint32_t sequence_base;
 

@@ -835,7 +835,7 @@ namespace qualquer::renderer {
 #endif
 
         // DLSS evaluate reads the current frame's color (serial: raygen is
-        // done). This eliminates the one-frame display latency of ping-pong.
+        // done) rather than the previous frame's.
         const bool evaluate_dlss = dlss_active && has_new_samples;
         if (evaluate_dlss) {
             const optix::DlssRR::EvalInput eval_input{

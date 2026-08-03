@@ -1,6 +1,6 @@
 /**
  * @file tonemap.cu
- * @brief Tone mapping kernel: HDR accumulation buffer -> LDR display surface.
+ * @brief Tone mapping kernel: HDR color buffer -> LDR display surface.
  */
 
 #include <cstdint>
@@ -44,9 +44,8 @@ namespace qualquer::renderer {
         }
 
         // Catmull-Rom bicubic sample at source coordinate (sx, sy) using tex2D
-        // point reads. Operates in the Separate-Sum domain — the caller
-        // divides by the sample count afterwards. The 4x4 tap window is
-        // clamped to the buffer edges via tex2D clamp addressing.
+        // point reads. The 4x4 tap window is clamped to the buffer edges
+        // via tex2D clamp addressing.
         __device__ float3 sample_catmull_rom(const cudaTextureObject_t color_tex,
                                              const float sx,
                                              const float sy) {
@@ -75,9 +74,9 @@ namespace qualquer::renderer {
         }
 
         // Footprint box average over the source interval [x0,x1) x [y0,y1)
-        // using tex2D point reads. Operates in the Separate-Sum domain. Each
-        // covered texel contributes its overlap area with the footprint. The
-        // SSAA resolve: no ringing, no undersampling at any ratio.
+        // using tex2D point reads. Each covered texel contributes its overlap
+        // area with the footprint. SSAA resolve: no ringing, no undersampling
+        // at any ratio.
         __device__ float3 sample_box(const cudaTextureObject_t color_tex,
                                      const uint32_t render_width,
                                      const uint32_t render_height,

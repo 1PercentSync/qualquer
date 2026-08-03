@@ -37,11 +37,7 @@ struct PathState {
     /** @brief Linear pixel index (y * width + x). */
     uint32_t pixel_index;
 
-    /**
-     * @brief Path sequence index for Sobol / xxhash (frame_index * spp + s).
-     *
-     * Independent of Separate Sum sample_count, which is zeroed under DLSS.
-     */
+    /** @brief Path sequence index for Sobol / xxhash (sequence_base + s). */
     uint32_t sample_index;
 
     /** @brief Current bounce index (0-based). */

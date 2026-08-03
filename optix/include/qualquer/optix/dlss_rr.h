@@ -167,7 +167,7 @@ namespace qualquer::optix {
          */
         struct EvalInput {
             // ---- Color I/O ----
-            cudaTextureObject_t color_tex;        ///< Noisy HDR input (read slot).
+            cudaTextureObject_t color_tex;        ///< Noisy HDR input (current frame).
             cudaSurfaceObject_t output_surf;      ///< Denoised+upscaled HDR output.
 
             // ---- Aux G-buffer (render resolution) ----

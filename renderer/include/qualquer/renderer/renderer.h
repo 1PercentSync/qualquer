@@ -150,7 +150,7 @@ namespace qualquer::renderer {
          *                      frame's optixLaunch on the same stream. Its device_id
          *                      also seeds DlssRR::init.
          * @param width          Initial render resolution width in pixels
-         *                       (accumulation buffer size).
+         *                       (color buffer size).
          * @param height         Initial render resolution height in pixels.
          * @param optixir_path   Path to the compiled .optixir file (passed to the
          *                       pipeline; resolved relative to the process working
@@ -251,8 +251,8 @@ namespace qualquer::renderer {
         /**
          * @brief Camera matrices that define the primary-ray integral domain.
          *
-         * Packed for a single defaulted equality check so accumulation reset
-         * detection compares the full camera key without parallel prev_ members.
+         * Packed for a single defaulted equality check so DLSS history
+         * invalidation compares the full camera key without parallel prev_ members.
          */
         struct CameraKey {
             /** @brief Inverse view matrix (view → world). */
@@ -478,9 +478,8 @@ namespace qualquer::renderer {
          * @brief Cumulative Sobol sequence base for the next frame.
          *
          * Advances by samples_per_frame after each frame that produces samples.
-         * Reset to 0 on accumulation reset. Monotonically increasing regardless
-         * of dynamic spp changes — unlike frame_index * spp which can repeat or
-         * skip indices when spp varies.
+         * Monotonically increasing regardless of dynamic spp changes — unlike
+         * frame_index * spp which can repeat or skip indices when spp varies.
          */
         uint32_t sequence_base_ = 0;
 

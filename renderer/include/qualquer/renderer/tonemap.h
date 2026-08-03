@@ -24,9 +24,9 @@ namespace qualquer::renderer {
      * equal resolutions read 1:1 via tex2D; upscaling uses Catmull-Rom bicubic
      * (clamped to >= 0); downscaling uses a footprint box average (SSAA resolve).
      *
-     * The color buffer holds a Separate-Sum total: this kernel divides by
-     * sample_count to recover the mean, then applies exposure (linear multiplier)
-     * and the Khronos PBR Neutral tone mapper before writing LDR pixels.
+     * The color buffer holds a per-frame mean. sample_count serves as a
+     * validity flag: 0 outputs black (uninitialised buffer), 1 reads the
+     * mean as-is, then applies exposure and Khronos PBR Neutral tonemap.
      *
      * @param color_tex           Texture object for the float4 HDR color buffer
      *                            (render_width x render_height, point-sample read).
@@ -36,7 +36,7 @@ namespace qualquer::renderer {
      * @param render_height       Color buffer height in pixels.
      * @param display_width       Display buffer width in pixels.
      * @param display_height      Display buffer height in pixels.
-     * @param sample_count        Total samples accumulated (Separate-Sum divisor).
+     * @param sample_count        Validity flag (0 = black, 1 = valid mean).
      * @param exposure            Linear color multiplier applied before tonemap.
      * @param stream              CUDA stream to launch on.
      */

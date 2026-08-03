@@ -77,7 +77,7 @@ namespace qualquer::renderer {
          * @brief Runtime render settings (mutable for slider write-back).
          *
          * Sliders modify fields directly; the renderer detects changes and
-         * resets accumulation automatically.
+         * resets DLSS history automatically.
          */
         RenderSettings &settings;
 
@@ -152,7 +152,7 @@ namespace qualquer::renderer {
         /** @brief Env map path picked by the user (valid only when env_map_load_requested). */
         std::string new_env_map_path;
 
-        /** @brief True if the user clicked the manual accumulation reset button. */
+        /** @brief True if the user clicked the manual reset button. */
         bool accum_reset_requested = false;
     };
 

@@ -16,9 +16,9 @@ namespace qualquer::renderer {
      * Owned by Application as a runtime-only live state (not persisted to
      * config.json). Passed to the renderer each frame via SceneRenderInput.
      * Content-defining fields (env_rotation, dlss_enabled, max_clamp) trigger
-     * accumulation reset when they change; quality/throughput knobs
+     * DLSS history reset when they change; quality/throughput knobs
      * (max_bounces, samples_per_frame) do not. dlss_preset triggers feature
-     * recreation (not accumulation reset) when it changes.
+     * recreation (not history reset) when it changes.
      *
      * exposure_ev is stored in EV stops for the UI slider; Renderer::submit_cuda
      * converts it to a linear multiplier (pow(2, ev)) before the tonemap kernel,
@@ -41,7 +41,7 @@ namespace qualquer::renderer {
          * When > 0, each path sample with average RGB luminance above this
          * value is scaled so luminance equals the threshold (hue preserved).
          * 0 disables clamping. Default 10 matches vk_gltf_renderer.
-         * Content-defining: changes reset accumulation.
+         * Content-defining: changes reset DLSS history.
          */
         float max_clamp = 10.0f;
 
@@ -62,18 +62,17 @@ namespace qualquer::renderer {
         float exposure_ev = 0.0f;
 
         /**
-         * @brief When false, accumulation is paused: samples_per_frame is set
-         *        to 0 so raygen preserves the current buffer, display freezes.
+         * @brief When false, rendering is paused: effective spp is set to 0
+         *        so raygen does not run, display freezes on the last frame.
          */
         bool accumulation_enabled = true;
 
         /** @brief IBL Y-axis rotation in radians, accumulated from left-drag input. */
         float env_rotation = 0.0f;
 
-        /** @brief DLSS-RR enabled. When true and the feature is active, raygen
-         *  outputs single-frame noisy HDR and DLSS-RR handles temporal
-         *  accumulation + denoising + upscaling. When false, Separate Sum
-         *  accumulation is used. */
+        /** @brief DLSS-RR enabled. When true and the feature is active, DLSS-RR
+         *  handles temporal denoising + upscaling. When false, raygen output
+         *  is tonemapped directly without denoising. */
         bool dlss_enabled = false;
 
         /**

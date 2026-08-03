@@ -406,7 +406,7 @@ namespace qualquer::renderer {
             ctx.settings.samples_per_frame = static_cast<uint32_t>(spp);
         }
 
-        // Content-defining: changing the threshold restarts accumulation.
+        // Content-defining: changing the threshold resets DLSS history.
         // 0 disables the clamp. Default 10 aligns with vk_gltf_renderer;
         // the upper bound is a UI convenience, not part of that alignment.
         slider_float_deferred("Firefly Clamp", &ctx.settings.max_clamp,
@@ -416,8 +416,8 @@ namespace qualquer::renderer {
         }
 
         // On-release commit: each render-height change reallocates the
-        // accumulation buffers, so live application during a drag would
-        // thrash device memory.
+        // color buffer, so live application during a drag would thrash
+        // device memory.
         slider_uint_on_release("Render Height", &ctx.settings.render_height,
                                240, 2160, 16, 8192);
         // When DLSS is on, clamp render_height to the resolved value so
