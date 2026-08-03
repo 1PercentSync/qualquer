@@ -3,20 +3,6 @@
 
 以下不是静态代码即可定性的错误。必须通过 release 编译资源报告、Nsight Systems/Compute、GPU 时间线和图像 A/B 验证。
 
-### QRP-O13：BRDF lobe selection 只看 Schlick Fresnel，可能把多数 samples 分给近零能量 lobe
-
-#### 代码事实
-
-- `renderer/include/qualquer/renderer/brdf.cuh:734-739` 的 `specular_probability()` 仅使用 `luminance(F_Schlick(NdotV,F0))`，再 clamp 到 `[0.01,0.99]`。
-- 该概率不看 diffuse `base_color`/`diffuse_weight`、roughness、Turquin compensation 或已经计算出的 directional `E_glossy_rgb`。
-- 纯 metal 被单独强制 `p_spec=1`，但 dielectric/mixed material 没有等价的零能量 lobe fast path。
-
-#### 反作用示例与验证
-
-黑色 dielectric 的 diffuse BRDF 近零，但 normal-incidence `p_spec≈0.04`，约 96% bounce samples 会选择并评估零贡献 diffuse lobe；剩余 specular samples 再以约 25 倍权重补偿，虽保持无偏却显著增大方差。深色 mixed-metal、rough compensated specular 也可能失配。
-
-应以两 lobe 的估计 directional energy/throughput 构造 selection probability，至少对近零 diffuse/specular lobe 做确定性选择。用相同 ray budget 对黑色 dielectric、深色 rough material 和 furnace scene 比较 RMSE/firefly percentile，并同步观察分支相干性；更精确概率若增加过多寄存器/算术，需以端到端 frame-time × variance 评估净收益。
-
 ### QRP-O14：所有 CUDA/OptiX device code 固定以 compute 8.9 为前端目标，新架构仅依赖 JIT forward compatibility
 
 #### 代码事实
