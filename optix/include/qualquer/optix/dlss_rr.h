@@ -96,13 +96,14 @@ namespace qualquer::optix {
          * Releases any existing feature first. Quality mode is auto-selected
          * from cached optimal settings based on the render/display ratio.
          * Passes CUcontext and the CUDA stream to NGX for internal ordering.
+         * nullptr uses the default stream.
          *
          * @param render_width   Input (render) resolution width.
          * @param render_height  Input (render) resolution height.
          * @param display_width  Output (display) resolution width.
          * @param display_height Output (display) resolution height.
          * @param preset         Render preset (neural network model selection).
-         * @param stream         CUDA stream for DLSS-RR execution.
+         * @param stream         CUDA stream for DLSS-RR execution (nullptr = default).
          */
         void create_feature(uint32_t render_width, uint32_t render_height,
                             uint32_t display_width, uint32_t display_height,

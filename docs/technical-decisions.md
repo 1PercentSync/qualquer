@@ -117,18 +117,18 @@ VMA。Swapchain 为 `B8G8R8A8_SRGB`（blit 时硬件 swizzle + 线性→sRGB 编
 
 ### CUDA Stream 架构
 
-**决策**：单显式 blocking stream（`stream`），由 `optix::Context` 持有。每帧管线：reverse semaphore wait → raygen →
-DLSS-RR evaluate（ON 时）→ tonemap → forward semaphore signal。Stream ordering 保证各阶段顺序。
+**决策**：使用 default stream（stream 0）。每帧管线：reverse semaphore wait → raygen → DLSS-RR evaluate（ON 时）→ tonemap →
+forward semaphore signal。Stream ordering 保证各阶段顺序。不创建显式 stream。
 
 **理由**：
 
-- 默认流会与所有显式流隐式同步，等于全局序列化点，显式 stream 避免此问题
-- Blocking（参与 default-stream ordering）因为 NGX 的 CUDA 路径可能提交 legacy default-stream work
-- 单 stream：DLSS 内部 ctx sync 使 PT 与 DLSS 已实际串行；单 buffer 无数据依赖需要跨 stream 分离；stream ordering 天然
-  保证顺序，不需要 CUDA event
+- 串行单 buffer 架构只有一条执行流，不存在需要显式 stream 隔离的并发
+- Default stream 本身是 blocking，满足 NGX 的 default-stream ordering 需求
+- 无 CUDA event——stream ordering 天然保证顺序
+- Drain 使用 `cudaDeviceSynchronize()`
 
 **相对早期决策**：Phase 2–4 使用双显式 stream（compute non-blocking + display blocking）并行执行，以 ping-pong 缓冲消除
-数据依赖。串行化后合并为单 stream。
+数据依赖。串行化后先合并为单显式 blocking stream，再简化为 default stream。
 
 ### Vulkan 帧同步与 in-flight
 

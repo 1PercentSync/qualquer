@@ -113,8 +113,8 @@ namespace qualquer::app {
         /**
          * @brief Switches to a new scene at runtime.
          *
-         * Drains the CUDA stream (so the in-flight pipeline finishes before its
-         * referenced scene buffers are freed), destroys the current scene, loads
+         * Drains CUDA (so the in-flight pipeline finishes before its referenced
+         * scene buffers are freed), destroys the current scene, loads
          * the new one (or leaves an empty scene on failure), rebuilds the
          * acceleration structures, reframes the camera, and persists the path.
          * No vkQueueWaitIdle is needed: scene resources are all CUDA-owned with no

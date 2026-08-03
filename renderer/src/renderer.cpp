@@ -186,7 +186,7 @@ namespace qualquer::renderer {
 
             const auto base = static_cast<uint32_t>(accel.blas_handles().size());
             accel.build_all_blas(cuda_context.device_context,
-                                 cuda_context.stream,
+                                 nullptr,
                                  active_geoms);
 
             for (uint32_t i = 0; i < active_groups.size(); ++i) {
@@ -392,16 +392,16 @@ namespace qualquer::renderer {
         SbtRecord record{};
         OPTIX_CHECK(optixSbtRecordPackHeader(pipeline_.raygen_program, &record));
         sbt_raygen_.alloc(1);
-        sbt_raygen_.upload(&record, 1, cuda_context.stream);
+        sbt_raygen_.upload(&record, 1, nullptr);
 
         SbtRecord miss_record{};
         OPTIX_CHECK(optixSbtRecordPackHeader(pipeline_.miss_env_program, &miss_record));
         sbt_miss_.alloc(1);
-        sbt_miss_.upload(&miss_record, 1, cuda_context.stream);
+        sbt_miss_.upload(&miss_record, 1, nullptr);
 
         OPTIX_CHECK(optixSbtRecordPackHeader(pipeline_.hitgroup_program, &record));
         sbt_hit_.alloc(1);
-        sbt_hit_.upload(&record, 1, cuda_context.stream);
+        sbt_hit_.upload(&record, 1, nullptr);
 
         // Color buffer. Aux guides and dlss_output_ are allocated on demand
         // when DLSS is enabled. sample_count = 0 makes tonemap output black
@@ -422,7 +422,7 @@ namespace qualquer::renderer {
                           &event_pt_start_, &event_pt_end_}) {
             for (auto &event : *arr) {
                 CUDA_CHECK(cudaEventCreate(&event));
-                CUDA_CHECK(cudaEventRecord(event, cuda_context.stream));
+                CUDA_CHECK(cudaEventRecord(event, nullptr));
             }
         }
 #endif
@@ -494,7 +494,7 @@ namespace qualquer::renderer {
         // above for the grouping invariants (degenerate primitives, layout offsets).
         SceneGrouping grouping = group_meshes(meshes);
         build_blas_groups(accel_, cuda_context, grouping);
-        build_geometry_info(geometry_info_buffer_, cuda_context.stream, grouping);
+        build_geometry_info(geometry_info_buffer_, nullptr, grouping);
 
         std::vector<OptixInstance> tlas_instances = build_tlas_instances(meshes, instances, grouping, accel_);
         tlas_instance_count_ = static_cast<uint32_t>(tlas_instances.size());
@@ -504,7 +504,7 @@ namespace qualquer::renderer {
         }
 
         accel_.build_tlas(cuda_context.device_context,
-                          cuda_context.stream,
+                          nullptr,
                           tlas_instances);
 
         spdlog::info("Renderer::load_scene: {} meshes, {} instances, {} BLAS, {} TLAS instances",
@@ -522,7 +522,7 @@ namespace qualquer::renderer {
         bool display_res_changed = false;
         if (width != dlss_output_width_ || height != dlss_output_height_) {
             if (dlss_output_.valid()) {
-                CUDA_CHECK(cudaStreamSynchronize(cuda_context.stream));
+                CUDA_CHECK(cudaDeviceSynchronize());
                 dlss_output_.resize(width, height);
                 dlss_output_valid_ = false;
                 spdlog::info("DLSS output buffer reallocated ({}x{} display resolution)",
@@ -539,7 +539,7 @@ namespace qualquer::renderer {
         if (scene.settings.dlss_enabled && dlss_rr_.available()) {
             if (!dlss_rr_.feature_active() || display_res_changed) {
                 if (!dlss_rr_.feature_active()) {
-                    CUDA_CHECK(cudaStreamSynchronize(cuda_context.stream));
+                    CUDA_CHECK(cudaDeviceSynchronize());
                 }
                 dlss_rr_.cache_optimal_settings(width, height);
             }
@@ -558,7 +558,7 @@ namespace qualquer::renderer {
         const uint32_t render_width = compute_render_width(render_height, width, height);
         bool render_res_changed = false;
         if (render_width != render_width_ || render_height != render_height_) {
-            CUDA_CHECK(cudaStreamSynchronize(cuda_context.stream));
+            CUDA_CHECK(cudaDeviceSynchronize());
             frame_slot_.resize(render_width, render_height);
             invalidate_dlss_state();
             render_width_ = render_width;
@@ -592,18 +592,18 @@ namespace qualquer::renderer {
                                         || !dlss_rr_.feature_active();
             if (needs_recreate) {
                 if (!dlss_rr_.feature_active() || preset_changed) {
-                    CUDA_CHECK(cudaStreamSynchronize(cuda_context.stream));
+                    CUDA_CHECK(cudaDeviceSynchronize());
                 }
                 dlss_rr_.create_feature(render_width, render_height, width, height,
                                         scene.settings.dlss_preset,
-                                        cuda_context.stream);
+                                        nullptr);
                 invalidate_dlss_state();
             }
         }
         // Release feature and free DLSS resources when user disables DLSS.
         if (!scene.settings.dlss_enabled
             && (dlss_rr_.feature_active() || frame_slot_.aux.valid())) {
-            CUDA_CHECK(cudaStreamSynchronize(cuda_context.stream));
+            CUDA_CHECK(cudaDeviceSynchronize());
             if (dlss_rr_.feature_active()) {
                 dlss_rr_.release_feature();
             }
@@ -721,12 +721,12 @@ namespace qualquer::renderer {
                     &pt_ms_, event_pt_start_[timing_slot], event_pt_end_[timing_slot]);
             }
             CUDA_CHECK(cudaEventRecord(
-                event_pt_start_[timing_slot], cuda_context.stream));
+                event_pt_start_[timing_slot], nullptr));
 #endif
 
             auto *staging = params_staging_[frame_index % params_staging_.size()];
             std::memcpy(staging, &params, sizeof(LaunchParams));
-            params_buffer_.upload(staging, 1, cuda_context.stream);
+            params_buffer_.upload(staging, 1, nullptr);
 
             const OptixShaderBindingTable sbt{
                 .raygenRecord = sbt_raygen_.device_ptr(),
@@ -743,7 +743,7 @@ namespace qualquer::renderer {
             };
 
             OPTIX_CHECK(optixLaunch(pipeline_.handle,
-                cuda_context.stream,
+                nullptr,
                 params_buffer_.device_ptr(),
                 sizeof(LaunchParams),
                 &sbt,
@@ -751,7 +751,7 @@ namespace qualquer::renderer {
 
 #ifndef NDEBUG
             CUDA_CHECK(cudaEventRecord(
-                event_pt_end_[timing_slot], cuda_context.stream));
+                event_pt_end_[timing_slot], nullptr));
 #endif
         }
 
@@ -760,7 +760,7 @@ namespace qualquer::renderer {
         // ReSharper disable once CppLocalVariableMayBeConst
         cudaExternalSemaphore_t reverse_sem = cuda_context.reverse_external_semaphore;
         constexpr cudaExternalSemaphoreWaitParams reverse_wait_params{};
-        CUDA_CHECK(cudaWaitExternalSemaphoresAsync(&reverse_sem, &reverse_wait_params, 1, cuda_context.stream));
+        CUDA_CHECK(cudaWaitExternalSemaphoresAsync(&reverse_sem, &reverse_wait_params, 1, nullptr));
 
 #ifndef NDEBUG
         if (frame_counter_ >= 2
@@ -770,7 +770,7 @@ namespace qualquer::renderer {
                                  event_display_end_[timing_slot]);
         }
         CUDA_CHECK(cudaEventRecord(
-            event_display_start_[timing_slot], cuda_context.stream));
+            event_display_start_[timing_slot], nullptr));
 #endif
 
         // DLSS evaluate reads the current frame's color (stream ordering
@@ -803,7 +803,7 @@ namespace qualquer::renderer {
                            width, height,
                            1,
                            exposure_linear,
-                           cuda_context.stream);
+                           nullptr);
         } else if (dlss_active && dlss_output_valid_) {
             // No new input but a valid cached DLSS output exists: reuse it.
             launch_tonemap(dlss_output_.tex_object(),
@@ -812,7 +812,7 @@ namespace qualquer::renderer {
                            width, height,
                            1,
                            exposure_linear,
-                           cuda_context.stream);
+                           nullptr);
         } else {
             // DLSS OFF: tonemap the color buffer directly. Raygen writes
             // per-frame mean; pass 1 so tonemap does not re-divide. Zero
@@ -823,19 +823,19 @@ namespace qualquer::renderer {
                            width, height,
                            frame_slot_.sample_count > 0 ? 1u : 0u,
                            exposure_linear,
-                           cuda_context.stream);
+                           nullptr);
         }
 
 #ifndef NDEBUG
         CUDA_CHECK(cudaEventRecord(
-            event_display_end_[timing_slot], cuda_context.stream));
+            event_display_end_[timing_slot], nullptr));
 #endif
 
         // Signal forward semaphore after tonemap completes.
         // ReSharper disable once CppLocalVariableMayBeConst
         cudaExternalSemaphore_t sem = cuda_context.external_semaphores[frame_index];
         constexpr cudaExternalSemaphoreSignalParams signal_params{};
-        CUDA_CHECK(cudaSignalExternalSemaphoresAsync(&sem, &signal_params, 1, cuda_context.stream));
+        CUDA_CHECK(cudaSignalExternalSemaphoresAsync(&sem, &signal_params, 1, nullptr));
 
         if (has_new_samples) {
             frame_slot_.sample_count = 1;

@@ -156,11 +156,6 @@ namespace qualquer::optix {
         device_id_ = best_device;
         device_uuid = get_device_uuid(prop);
 
-        // Single blocking stream for the serial render pipeline. Blocking
-        // (default-stream ordering) because NGX may enqueue internal work on
-        // the legacy default stream.
-        CUDA_CHECK(cudaStreamCreate(&stream));
-
         spdlog::info("CUDA device {}: \"{}\" with compute capability {}.{}",
                      best_device, prop.name, best_major, best_minor);
 
@@ -266,10 +261,8 @@ namespace qualquer::optix {
 
     void Context::destroy() {
         // Display-buffer import first (surface wraps the imported image memory), then
-        // the independent semaphores, then OptiX device context, then the stream last
-        // — cudaStreamDestroy waits for pending work, so destroying it last drains
-        // any in-flight kernel/signal. device_id_ needs no cleanup — the
-        // runtime-managed primary context is left intact for other holders.
+        // the independent semaphores, then OptiX device context. device_id_ needs no
+        // cleanup — the runtime-managed primary context is left intact for other holders.
         release_display_buffer();
         for (auto &sem: external_semaphores) {
             if (sem != nullptr) {
@@ -284,10 +277,6 @@ namespace qualquer::optix {
         if (device_context != nullptr) {
             OPTIX_CHECK(optixDeviceContextDestroy(device_context));
             device_context = nullptr;
-        }
-        if (stream != nullptr) {
-            CUDA_CHECK(cudaStreamDestroy(stream));
-            stream = nullptr;
         }
     }
 } // namespace qualquer::optix
