@@ -43,7 +43,7 @@
 
 - [x] Device 侧统一 mean 输出（launch_params.h, programs.cu）
 - [x] 单 buffer 串行替换 ping-pong（renderer.h, renderer.cpp）
-- [ ] UI 适配（debug_ui.h/cpp, application.cpp）
+- [x] UI 适配（debug_ui.h/cpp, application.cpp）
 - [ ] 文档与注释清理
 - [ ] 请求用户在 CLion 中编译验证（串行单 buffer 运行正常，DLSS ON/OFF 均无回归）
 

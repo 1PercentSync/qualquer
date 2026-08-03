@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4.5 — 自适应帧率 + 采样质量收尾
-- **进度**：Phase 4.5 Step 14.95 第二小项完成：单 buffer 串行替换 ping-pong（frame_slots_[2] → frame_slot_，submit_cuda 串行重构，DlssFrameMetadata 移至 prev_dlss_metadata_，accumulated_samples → has_valid_frame，UI sps 显示统一）
+- **进度**：Phase 4.5 Step 14.95 第三小项完成：UI 适配（DebugUIContext 移除 has_valid_frame，Application 移除对应赋值；核心 UI 功能适配已在第二小项中完成）
 
 ### 下一个任务
 
-Phase 4.5 Step 14.95 第三小项：UI 适配（debug_ui.h/cpp, application.cpp）
+Phase 4.5 Step 14.95 第四小项：文档与注释清理
 
 ---
 
