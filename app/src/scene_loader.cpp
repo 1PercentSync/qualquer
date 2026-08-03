@@ -470,7 +470,7 @@ namespace qualquer::app {
             return true;
         } catch (const std::exception &e) {
             spdlog::error("Scene loading failed: {}", e.what());
-            destroy();
+            destroy_scene_resources();
             return false;
         }
     }
@@ -1144,9 +1144,7 @@ namespace qualquer::app {
 
     // ---- Destroy + accessors ----
 
-    void SceneLoader::destroy() {
-        destroy_env_map();
-
+    void SceneLoader::destroy_scene_resources() {
         emissive_triangles_.free();
         emissive_alias_table_.free();
         emissive_total_power_ = 0.0f;

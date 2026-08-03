@@ -74,11 +74,14 @@ namespace qualquer::app {
         void destroy_env_map();
 
         /**
-         * @brief Destroys all loaded resources (CUDA buffers, textures, env map).
+         * @brief Destroys scene geometry, materials and textures, leaving
+         *        the environment map intact.
          *
-         * Safe to call even if load() was never called.
+         * Used by scene switching so that an unchanged env map is not
+         * needlessly rebuilt.
          */
-        void destroy();
+        void destroy_scene_resources();
+
 
         /** @brief Returns the loaded meshes (CUDA buffer handles and counts). */
         [[nodiscard]] std::span<const renderer::Mesh> meshes() const;

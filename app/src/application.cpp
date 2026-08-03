@@ -541,7 +541,7 @@ namespace qualquer::app {
         CUDA_CHECK(cudaStreamSynchronize(cuda_context_.compute_stream));
         CUDA_CHECK(cudaStreamSynchronize(cuda_context_.display_stream));
 
-        scene_loader_.destroy();
+        scene_loader_.destroy_scene_resources();
 
         if (!path.empty()) {
             if (scene_loader_.load(path, default_textures_,
@@ -563,12 +563,6 @@ namespace qualquer::app {
 
         camera_controller_.set_focus_target(&scene_loader_.scene_bounds());
         auto_position_camera(scene_loader_.scene_bounds());
-
-        // Reload env map (destroy() cleared it along with scene resources)
-        if (!config_.env_map_path.empty()) {
-            scene_loader_.load_env_map(config_.env_map_path,
-                                       cuda_context_.compute_stream);
-        }
 
         renderer_.reset_accumulation();
         update_scene_stats();
@@ -697,7 +691,8 @@ namespace qualquer::app {
         // the renderer: its acceleration structures referenced these device
         // pointers. Default textures likewise precede the CUDA context they were
         // created against.
-        scene_loader_.destroy();
+        scene_loader_.destroy_scene_resources();
+        scene_loader_.destroy_env_map();
         default_textures_.white.destroy();
         default_textures_.flat_normal.destroy();
 #ifndef NDEBUG
