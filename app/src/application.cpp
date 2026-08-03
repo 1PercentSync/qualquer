@@ -233,7 +233,7 @@ namespace qualquer::app {
             if (actions.env_map_load_requested) {
                 // Drain CUDA: this frame's pipeline references the current env
                 // cubemap via LaunchParams; it must finish before destruction.
-                CUDA_CHECK(cudaDeviceSynchronize());
+                CUDA_CHECK(cudaStreamSynchronize(nullptr));
 
                 if (scene_loader_.load_env_map(actions.new_env_map_path,
                                                nullptr)) {
@@ -488,7 +488,7 @@ namespace qualquer::app {
 
         // Drain CUDA before releasing resources. The pipeline may still be
         // writing color or display_surface. vkQueueWaitIdle does not cover CUDA.
-        CUDA_CHECK(cudaDeviceSynchronize());
+        CUDA_CHECK(cudaStreamSynchronize(nullptr));
         // The CUDA side must release its imported surface before the Vulkan image is
         // destroyed (the surface wraps that image's memory). External semaphores are
         // resolution-independent and stay.
@@ -526,7 +526,7 @@ namespace qualquer::app {
     void Application::switch_scene(const std::string &path) {
         // Drain CUDA: this frame's pipeline references the current scene's
         // buffers, which must finish before being freed.
-        CUDA_CHECK(cudaDeviceSynchronize());
+        CUDA_CHECK(cudaStreamSynchronize(nullptr));
 
         scene_loader_.destroy_scene_resources();
 
@@ -668,7 +668,7 @@ namespace qualquer::app {
         vkQueueWaitIdle(context_.graphics_queue);
         // vkQueueWaitIdle covers the Vulkan queue but not CUDA — drain before
         // freeing resources.
-        CUDA_CHECK(cudaDeviceSynchronize());
+        CUDA_CHECK(cudaStreamSynchronize(nullptr));
 
         imgui_backend_.destroy();
         // Renderer's OptiX pipeline, CUDA buffers, and DLSS-RR are torn down

@@ -125,7 +125,7 @@ forward semaphore signal。Stream ordering 保证各阶段顺序。不创建显�
 - 串行单 buffer 架构只有一条执行流，不存在需要显式 stream 隔离的并发
 - Default stream 本身是 blocking，满足 NGX 的 default-stream ordering 需求
 - 无 CUDA event——stream ordering 天然保证顺序
-- Drain 使用 `cudaDeviceSynchronize()`
+- Drain 使用 `cudaStreamSynchronize(nullptr)`（仅同步 default stream，不越权同步第三方内部 stream）
 
 **相对早期决策**：Phase 2–4 使用双显式 stream（compute non-blocking + display blocking）并行执行，以 ping-pong 缓冲消除
 数据依赖。串行化后先合并为单显式 blocking stream，再简化为 default stream。

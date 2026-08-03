@@ -522,7 +522,7 @@ namespace qualquer::renderer {
         bool display_res_changed = false;
         if (width != dlss_output_width_ || height != dlss_output_height_) {
             if (dlss_output_.valid()) {
-                CUDA_CHECK(cudaDeviceSynchronize());
+                CUDA_CHECK(cudaStreamSynchronize(nullptr));
                 dlss_output_.resize(width, height);
                 dlss_output_valid_ = false;
                 spdlog::info("DLSS output buffer reallocated ({}x{} display resolution)",
@@ -539,7 +539,7 @@ namespace qualquer::renderer {
         if (scene.settings.dlss_enabled && dlss_rr_.available()) {
             if (!dlss_rr_.feature_active() || display_res_changed) {
                 if (!dlss_rr_.feature_active()) {
-                    CUDA_CHECK(cudaDeviceSynchronize());
+                    CUDA_CHECK(cudaStreamSynchronize(nullptr));
                 }
                 dlss_rr_.cache_optimal_settings(width, height);
             }
@@ -558,7 +558,7 @@ namespace qualquer::renderer {
         const uint32_t render_width = compute_render_width(render_height, width, height);
         bool render_res_changed = false;
         if (render_width != render_width_ || render_height != render_height_) {
-            CUDA_CHECK(cudaDeviceSynchronize());
+            CUDA_CHECK(cudaStreamSynchronize(nullptr));
             frame_slot_.resize(render_width, render_height);
             invalidate_dlss_state();
             render_width_ = render_width;
@@ -592,7 +592,7 @@ namespace qualquer::renderer {
                                         || !dlss_rr_.feature_active();
             if (needs_recreate) {
                 if (!dlss_rr_.feature_active() || preset_changed) {
-                    CUDA_CHECK(cudaDeviceSynchronize());
+                    CUDA_CHECK(cudaStreamSynchronize(nullptr));
                 }
                 dlss_rr_.create_feature(render_width, render_height, width, height,
                                         scene.settings.dlss_preset,
@@ -603,7 +603,7 @@ namespace qualquer::renderer {
         // Release feature and free DLSS resources when user disables DLSS.
         if (!scene.settings.dlss_enabled
             && (dlss_rr_.feature_active() || frame_slot_.aux.valid())) {
-            CUDA_CHECK(cudaDeviceSynchronize());
+            CUDA_CHECK(cudaStreamSynchronize(nullptr));
             if (dlss_rr_.feature_active()) {
                 dlss_rr_.release_feature();
             }
