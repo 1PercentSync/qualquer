@@ -97,18 +97,6 @@ namespace qualquer::optix {
         }
 
         /**
-         * @brief Ensures the buffer holds exactly count elements.
-         *
-         * No-op when count already matches.
-         * @param count Desired element count.
-         */
-        void resize(const std::size_t count) {
-            if (count != count_) {
-                alloc(count);
-            }
-        }
-
-        /**
          * @brief Asynchronously copies count host elements into the device buffer.
          *
          * The caller must ensure the buffer holds at least count elements (via a
@@ -122,20 +110,6 @@ namespace qualquer::optix {
                 return;
             }
             CUDA_CHECK(cudaMemcpyAsync(data_, src, count * sizeof(T), cudaMemcpyHostToDevice, nullptr));
-        }
-
-        /**
-         * @brief Zeroes the entire device buffer on the default stream.
-         *
-         * An all-zero byte pattern is the well-defined zero value for any
-         * trivially-copyable T, so a byte-wise memset resets every element
-         * without a typed fill. No-op when the buffer is empty.
-         */
-        void clear() const {
-            if (count_ == 0) {
-                return;
-            }
-            CUDA_CHECK(cudaMemsetAsync(data_, 0, count_ * sizeof(T), nullptr));
         }
 
         /**

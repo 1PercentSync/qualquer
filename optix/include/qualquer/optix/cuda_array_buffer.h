@@ -181,16 +181,6 @@ namespace qualquer::optix {
             return surf_obj_;
         }
 
-        /** @brief Allocated width in elements. */
-        [[nodiscard]] uint32_t width() const {
-            return width_;
-        }
-
-        /** @brief Allocated height in elements. */
-        [[nodiscard]] uint32_t height() const {
-            return height_;
-        }
-
         /** @brief Whether the buffer holds allocated GPU resources. */
         [[nodiscard]] bool valid() const {
             return array_ != nullptr;
