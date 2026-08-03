@@ -12,7 +12,7 @@
 - [x] `optix/include/.../cuda_check_kernel.h` — device 侧错误检查
 - [x] `optix/include/.../optix_check.h` — OptiX 错误处理宏
 - [x] `optix/include/.../cuda_buffer.h` — 基础 CUDA 内存封装
-- [ ] `optix/include/.../cuda_mipmap_array.h` — mipmapped array 封装
+- [x] `optix/include/.../cuda_mipmap_array.h` — mipmapped array 封装
 - [x] `optix/include/.../cuda_texture.h` — 纹理对象封装
 - [ ] `optix/include/.../cuda_array_buffer.h` — cudaArray 封装
 - [ ] `optix/include/.../cuda_texture_upload.h` + `optix/src/cuda_texture_upload.cpp` — 纹理上传
