@@ -824,9 +824,12 @@ __forceinline__ __device__ BrdfParams init_brdf_params(
     p.diffuse_weight = (1.0f - metallic) * (one - p.E_glossy_rgb);
 
     // Lobe selection proportional to estimated directional energy.
-    const float spec_lum = luminance(p.E_glossy_rgb);
-    const float diff_lum = luminance(p.diffuse_weight * base_color);
-    p.p_spec = fmaxf(fminf(spec_lum / (spec_lum + diff_lum), 0.99f), 0.01f);
+    // Specular includes Turquin multi-scatter compensation; diffuse uses
+    // E_FON directional albedo so both sides reflect actual throughput.
+    const float spec_lum = luminance(p.E_glossy_rgb * p.turquin_comp);
+    const float diff_lum = luminance(p.diffuse_weight * base_color) * E_FON(p.NdotV, roughness);
+    const float sum = spec_lum + diff_lum;
+    p.p_spec = sum > 0.0f ? spec_lum / sum : 0.5f;
 
     return p;
 }
