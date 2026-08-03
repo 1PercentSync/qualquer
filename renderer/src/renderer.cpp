@@ -800,11 +800,7 @@ namespace qualquer::renderer {
         }
 
         LaunchParams params{
-            // Ping-pong color buffers as CUDA arrays: raygen writes via
-            // surf2Dwrite to the write slot, reads (DLSS OFF only) via tex2D
-            // from the read slot.
             .color_output = write.color.surf_object(),
-            .color_input = read.color.tex_object(),
             .width = render_width,
             .height = render_height,
             .sequence_base = sequence_base_,
@@ -823,7 +819,6 @@ namespace qualquer::renderer {
                 const auto bits = static_cast<uint32_t>(std::bit_width(n - 1));
                 return std::clamp(bits, 1u, 16u);
             }(),
-            .sample_count = chain_count,
             .dlss_enabled = dlss_active ? 1u : 0u,
             .jitter_x = jitter_x,
             .jitter_y = jitter_y,
@@ -979,12 +974,14 @@ namespace qualquer::renderer {
                            cuda_context.display_stream);
         } else {
             // DLSS OFF or invalid read slot: tonemap the read color directly.
-            // A zero count produces black without touching uninitialized data.
+            // Raygen writes per-frame mean; pass 1 so tonemap does not
+            // re-divide. A zero count (alloc/resize, no raygen yet) produces
+            // black without touching uninitialized data.
             launch_tonemap(read.color.tex_object(),
                            cuda_context.display_surface,
                            render_width, render_height,
                            width, height,
-                           read.sample_count,
+                           read.sample_count > 0 ? 1u : 0u,
                            exposure_linear,
                            cuda_context.display_stream);
         }

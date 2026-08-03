@@ -198,20 +198,10 @@ struct LaunchParams {
     /**
      * @brief Surface object for raygen color output (write via surf2Dwrite).
      *
-     * Points to the write slot of the ping-pong CudaArrayBuffer pair.
-     * DLSS ON: raygen writes single-frame noisy HDR.
-     * DLSS OFF: raygen writes Separate-Sum total (old + new).
+     * Raygen writes per-frame mean (frame_radiance / samples_per_frame)
+     * regardless of DLSS mode. CUDA array backed.
      */
     cudaSurfaceObject_t color_output;
-
-    /**
-     * @brief Texture object for reading the previous accumulation total.
-     *
-     * Points to the read slot of the ping-pong CudaArrayBuffer pair.
-     * DLSS OFF: raygen reads via tex2D for Separate-Sum accumulation.
-     * DLSS ON: not used (raygen writes single-frame output without reading).
-     */
-    cudaTextureObject_t color_input;
 
     /** @brief Render resolution width in pixels (raygen launch X dimension). */
     uint32_t width;
@@ -263,22 +253,13 @@ struct LaunchParams {
     uint32_t ser_hint_bits;
 
     /**
-     * @brief Samples accumulated in the read buffer (chain count).
-     *
-     * 0 signals raygen to overwrite the write buffer directly (first sample
-     * after reset/init) instead of accumulating from the read buffer.
-     * Only used when dlss_enabled == 0 (Separate Sum fallback).
-     * Not a Sobol path sequence index — that is sequence_base + s.
-     */
-    uint32_t sample_count;
-
-    /**
      * @brief DLSS-RR pipeline mode selector.
      *
-     * 1: raygen writes single-frame noisy HDR (no accumulation, no read),
-     *    and uses jitter_x/jitter_y instead of per-pixel Sobol dim 0-1.
-     * 0: raygen performs Separate Sum accumulation (reads color_input,
-     *    writes accumulated total to color_output), per-pixel Sobol jitter.
+     * 1: raygen uses global jitter_x/jitter_y (uniform across pixels) and
+     *    captures aux G-buffer for DLSS-RR guides.
+     * 0: raygen uses per-pixel Sobol jitter (Cranley-Patterson rotation);
+     *    no aux capture.
+     * Both modes write per-frame mean to color_output.
      */
     uint32_t dlss_enabled;
 

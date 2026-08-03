@@ -290,7 +290,7 @@ __forceinline__ __device__ float3 compute_primary_dir(
 }
 
 /// Ray generation: samples_per_frame paths per pixel with subpixel jitter,
-/// accumulated in registers and written once as a DLSS mean or fallback sum.
+/// accumulated in registers and written once as per-frame mean.
 __global__ void __raygen__rg() { // NOLINT(*-reserved-identifier)
     using namespace qualquer::renderer;
 
@@ -349,34 +349,20 @@ __global__ void __raygen__rg() { // NOLINT(*-reserved-identifier)
     }
 
     // ---- Color output ----
-    // Alpha is always 1.0 — the DLSS-OFF tonemap resampling paths (Catmull-Rom
+    // Alpha is always 1.0 — the tonemap resampling paths (Catmull-Rom
     // upscale / box-filter downscale) skip alpha interpolation and hardcode
     // 1.0, so a non-trivial alpha written here would be silently discarded
     // when render != display resolution. Keep in sync if alpha gains meaning.
-    // DLSS ON: mean single-frame noisy HDR (no persistent accumulation).
-    // DLSS OFF: Separate Sum — read old total via tex2D, add new, write total.
+    // Both modes write per-frame mean (frame_radiance / samples_per_frame).
     {
         const int sx = static_cast<int>(idx.x);
         const int sy = static_cast<int>(idx.y);
-        float4 out_color;
-        if (params.dlss_enabled) {
-            const float inverse_sample_count =
-                1.0f / static_cast<float>(params.samples_per_frame);
-            out_color = make_float4(
-                frame_radiance.x * inverse_sample_count,
-                frame_radiance.y * inverse_sample_count,
-                frame_radiance.z * inverse_sample_count,
-                1.0f);
-        } else if (params.sample_count == 0) {
-            out_color = make_float4(frame_radiance.x, frame_radiance.y, frame_radiance.z, 1.0f);
-        } else {
-            const float4 old = tex2D<float4>(params.color_input,
-                                              static_cast<float>(idx.x) + 0.5f,
-                                              static_cast<float>(idx.y) + 0.5f);
-            out_color = make_float4(old.x + frame_radiance.x,
-                                    old.y + frame_radiance.y,
-                                    old.z + frame_radiance.z, 1.0f);
-        }
+        const float inv_spp = 1.0f / static_cast<float>(params.samples_per_frame);
+        const float4 out_color = make_float4(
+            frame_radiance.x * inv_spp,
+            frame_radiance.y * inv_spp,
+            frame_radiance.z * inv_spp,
+            1.0f);
         surf2Dwrite(out_color, params.color_output,
                     sx * static_cast<int>(sizeof(float4)), sy);
     }
