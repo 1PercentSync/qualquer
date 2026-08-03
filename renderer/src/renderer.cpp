@@ -297,7 +297,6 @@ namespace qualquer::renderer {
         color.alloc(width, height, cudaCreateChannelDesc<float4>(), cudaReadModeElementType);
         // aux guides are allocated/freed by the DLSS lifecycle, not here.
         sample_count = 0;
-        dlss_metadata = {};
     }
 
     void Renderer::FrameSlot::resize(const uint32_t width, const uint32_t height) {
@@ -305,22 +304,14 @@ namespace qualquer::renderer {
         if (aux.valid()) {
             aux.resize(width, height);
         }
-        // Resized content is undefined; do not claim prior accumulation
-        // or valid DLSS input status.
+        // Resized content is undefined.
         sample_count = 0;
-        dlss_metadata = {};
     }
 
     void Renderer::FrameSlot::free() {
         color.free();
         aux.free();
         sample_count = 0;
-        dlss_metadata = {};
-    }
-
-    void Renderer::FrameSlot::invalidate() {
-        dlss_metadata.valid = false;
-        dlss_metadata.reset = false;
     }
 
     // ReSharper disable once CppParameterMayBeConst
@@ -343,9 +334,7 @@ namespace qualquer::renderer {
     }
 
     void Renderer::invalidate_dlss_history() {
-        for (auto &slot: frame_slots_) {
-            slot.invalidate();
-        }
+        prev_dlss_metadata_.valid = false;
         dlss_reset_requested_ = true;
     }
 
@@ -433,18 +422,13 @@ namespace qualquer::renderer {
         sbt_hit_.alloc(1);
         sbt_hit_.upload(&record, 1, cuda_context.compute_stream);
 
-        // Two ping-pong FrameSlots (color + count + metadata + events).
-        // Aux guides and dlss_output_ are allocated on demand when DLSS is
-        // enabled, avoiding VRAM waste when DLSS is off.
-        // No explicit clear: sample_count = 0 makes raygen overwrite on the
-        // first frame and tonemap output black (count == 0 guard), so
-        // uninitialised content is never read. create_events records both
-        // production and consumption events so the first waits pass without
-        // reading event objects that have never been recorded.
-        for (auto &slot: frame_slots_) {
-            slot.alloc(width, height);
-            slot.create_events(cuda_context.compute_stream);
-        }
+        // Single FrameSlot (color + events). Aux guides and dlss_output_ are
+        // allocated on demand when DLSS is enabled. sample_count = 0 makes
+        // tonemap output black until the first raygen writes valid data.
+        // create_events records both events so the first waits pass without
+        // reading unrecorded event objects.
+        frame_slot_.alloc(width, height);
+        frame_slot_.create_events(cuda_context.compute_stream);
 
         render_width_ = width;
         render_height_ = height;
@@ -453,7 +437,6 @@ namespace qualquer::renderer {
         for (auto &staging : params_staging_) {
             CUDA_CHECK(cudaHostAlloc(&staging, sizeof(LaunchParams), cudaHostAllocDefault));
         }
-        accum_index_ = 0;
 
 #ifndef NDEBUG
         // Timing events (no DisableTiming) for pipeline profiling.
@@ -477,20 +460,18 @@ namespace qualquer::renderer {
         // program groups, so it is torn down before the SBT buffers whose device
         // memory it bound. Pipeline::destroy and CudaBuffer::free are both
         // idempotent (null-reset), so a repeat call is a no-op. State members
-        // (accum_index_, frame_counter_, FrameSlot::sample_count) are intentionally
-        // not reset here — release is the sole responsibility; a subsequent init
-        // resets them. DLSS-RR is last among render resources so feature release
-        // and NGX shutdown happen after any stream work that referenced them.
+        // (frame_counter_, FrameSlot::sample_count) are intentionally not reset
+        // here — release is the sole responsibility; a subsequent init resets
+        // them. DLSS-RR is last among render resources so feature release and
+        // NGX shutdown happen after any stream work that referenced them.
         pipeline_.destroy();
         sbt_raygen_.free();
         sbt_miss_.free();
         sbt_hit_.free();
         accel_.destroy();
         geometry_info_buffer_.free();
-        for (auto &slot: frame_slots_) {
-            slot.free();
-            slot.destroy_events();
-        }
+        frame_slot_.free();
+        frame_slot_.destroy_events();
         dlss_output_.free();
         params_buffer_.free();
         for (auto &staging : params_staging_) {
@@ -589,15 +570,13 @@ namespace qualquer::renderer {
             }
         }
 
-        // Accumulation buffers follow the render resolution, not the display
+        // Color buffer follows the render resolution, not the display
         // resolution. When DLSS is on, the render resolution is clamped by
-        // resolve_render_height so that buffers, raygen launch, and NGX all
-        // use the same dimensions.  On mismatch both streams are drained
+        // resolve_render_height so that buffer, raygen launch, and NGX all
+        // use the same dimensions. On mismatch both streams are drained
         // first — the previous frame's raygen/tonemap may still be reading or
-        // writing the old allocations. Counts reset to 0: raygen enters
-        // overwrite mode (never reads the fresh buffers) and tonemap outputs
-        // black until valid data arrives, so the uninitialised contents are
-        // never consumed.
+        // writing the old allocation. sample_count resets to 0: tonemap
+        // outputs black until valid data arrives.
         uint32_t render_height = scene.settings.render_height;
         if (scene.settings.dlss_enabled && dlss_rr_.available()) {
             render_height = dlss_rr_.resolve_render_height(render_height, height).render_height;
@@ -607,15 +586,12 @@ namespace qualquer::renderer {
         if (render_width != render_width_ || render_height != render_height_) {
             CUDA_CHECK(cudaStreamSynchronize(cuda_context.compute_stream));
             CUDA_CHECK(cudaStreamSynchronize(cuda_context.display_stream));
-            // FrameSlot::resize zeros sample_count (content is undefined).
-            for (auto &slot: frame_slots_) {
-                slot.resize(render_width, render_height);
-            }
+            frame_slot_.resize(render_width, render_height);
             invalidate_dlss_state();
             render_width_ = render_width;
             render_height_ = render_height;
             render_res_changed = true;
-            spdlog::info("Render buffers reallocated ({}x{} render resolution)",
+            spdlog::info("Render buffer reallocated ({}x{} render resolution)",
                          render_width, render_height);
         }
 
@@ -625,10 +601,8 @@ namespace qualquer::renderer {
         // not create a feature. Optimal settings are already cached above.
         if (scene.settings.dlss_enabled && dlss_rr_.available()) {
             // Allocate aux guides and DLSS output on first enable.
-            if (!frame_slots_[0].aux.valid()) {
-                for (auto &slot: frame_slots_) {
-                    slot.aux.alloc(render_width, render_height);
-                }
+            if (!frame_slot_.aux.valid()) {
+                frame_slot_.aux.alloc(render_width, render_height);
             }
             if (!dlss_output_.valid()) {
                 dlss_output_.alloc(width, height,
@@ -644,8 +618,6 @@ namespace qualquer::renderer {
                                         || preset_changed
                                         || !dlss_rr_.feature_active();
             if (needs_recreate) {
-                // Drain when no earlier resize block already did: first
-                // creation (!feature_active) or pure preset change.
                 if (!dlss_rr_.feature_active() || preset_changed) {
                     CUDA_CHECK(cudaStreamSynchronize(cuda_context.compute_stream));
                     CUDA_CHECK(cudaStreamSynchronize(cuda_context.display_stream));
@@ -657,110 +629,65 @@ namespace qualquer::renderer {
             }
         }
         // Release feature and free DLSS resources when user disables DLSS.
-        // aux.valid() covers the case where aux was allocated but feature
-        // creation failed — resources must still be freed on disable.
         if (!scene.settings.dlss_enabled
-            && (dlss_rr_.feature_active() || frame_slots_[0].aux.valid())) {
+            && (dlss_rr_.feature_active() || frame_slot_.aux.valid())) {
             CUDA_CHECK(cudaStreamSynchronize(cuda_context.compute_stream));
             CUDA_CHECK(cudaStreamSynchronize(cuda_context.display_stream));
             if (dlss_rr_.feature_active()) {
                 dlss_rr_.release_feature();
             }
-            for (auto &slot: frame_slots_) {
-                slot.aux.free();
-            }
+            frame_slot_.aux.free();
             dlss_output_.free();
             dlss_output_width_ = 0;
             dlss_output_height_ = 0;
             invalidate_dlss_state();
         }
 
-        // Dual-stream overlap: compute_stream runs raygen while display_stream
-        // runs tonemap + semaphore signal in parallel. Ping-pong buffers guarantee
-        // raygen and tonemap access different buffers within the same frame; CUDA
-        // events enforce the cross-frame dependencies (each buffer must finish
-        // being written before tonemap reads it, and finish being read before
-        // raygen overwrites it).
+        // --- Serial pipeline: compute_stream (raygen) → display_stream (DLSS/tonemap) ---
 #ifndef NDEBUG
         const uint32_t timing_slot = frame_counter_ % 2;
 #endif
-        const uint32_t read_slot = accum_index_;
-        const uint32_t write_slot = 1 - read_slot;
-        const FrameSlot &read = frame_slots_[read_slot];
-        FrameSlot &write = frame_slots_[write_slot];
         const uint32_t effective_spp = scene.settings.accumulation_enabled
                                            ? scene.settings.samples_per_frame
                                            : 0;
         const bool has_new_samples = effective_spp > 0;
 
-        // --- compute_stream: wait write-slot consumption → raygen → record ---
-        // The write slot's color and guides share this ownership boundary.
+        // compute_stream: wait until previous display pass finished reading
+        // the color buffer before raygen overwrites it.
         if (has_new_samples) {
             CUDA_CHECK(cudaStreamWaitEvent(
-                cuda_context.compute_stream, write.consumption_event));
+                cuda_context.compute_stream, frame_slot_.consumption_event));
         }
 
-        // Accumulation reset: camera-key or content changes break the chain —
-        // chain_count drops to 0 so raygen overwrites instead of accumulating.
-        // Quality/throughput knobs (max_bounces, samples_per_frame) are excluded:
-        // they do not change the integral domain, and adaptive control may vary
-        // them every frame. No buffer clearing: the read slot keeps its valid
-        // count for tonemap; the write slot's count is set at frame end.
-        //
-        // Accumulation pause (accumulation_enabled=false): no input is
-        // produced, no resource slot flips, and display reuses the last result.
         const float exposure_linear = std::pow(2.0f, scene.settings.exposure_ev);
-
-        // Runtime DLSS flag: user wants it AND feature is actually created.
         const bool dlss_active = scene.settings.dlss_enabled && dlss_rr_.feature_active();
 
+        // DLSS history management: camera or content changes during pause
+        // invalidate temporal history so the first resumed frame starts fresh.
         const CameraKey camera_key{
             .inv_view = scene.camera.inv_view,
             .inv_projection = scene.camera.inv_projection,
         };
         const bool camera_changed = camera_key != prev_camera_;
-        // render_height is intentionally absent: a render-resolution change
-        // triggers FrameSlot::resize above, which zeros sample_count —
-        // chain_count becomes 0 through that path, not through needs_reset.
-        // max_bounces / samples_per_frame are intentionally absent: quality /
-        // throughput knobs that do not redefine the integral object.
-        // max_clamp is content-defining: it biases the path estimator.
         const bool max_clamp_changed =
             scene.settings.max_clamp != prev_max_clamp_;
         const bool content_changed =
             scene.settings.env_rotation != prev_env_rotation_ ||
             scene.settings.dlss_enabled != prev_dlss_enabled_ ||
             max_clamp_changed;
-        const bool needs_reset = camera_changed || content_changed || reset_requested_;
         if (has_new_samples) {
             reset_requested_ = false;
-            // Estimator bias change must not mix with prior DLSS temporal history.
             if (dlss_active && max_clamp_changed) {
                 invalidate_dlss_history();
             }
         } else if (camera_changed || content_changed) {
-            // Preserve automatic reset causes until a frame is actually produced.
             reset_requested_ = true;
-            // Camera/projection change during pause is a temporal discontinuity:
-            // the old DLSS input slots no longer match the new viewpoint. Mark
-            // them invalid and request history reset so the first resumed frame
-            // starts a fresh temporal sequence. max_clamp likewise changes the
-            // estimator and must not resume into mixed history. Other content
-            // changes (env rotation, dlss toggle) only set reset_requested_ —
-            // they do not invalidate DLSS history here. The cached DLSS output
-            // stays displayable as a frozen frame until new data arrives.
             if (dlss_active && (camera_changed || max_clamp_changed)) {
                 invalidate_dlss_history();
             }
         }
 
-        // DLSS ON: always overwrite (single-frame output, no accumulation).
-        // DLSS OFF: normal Separate Sum chain.
-        const uint32_t chain_count = (needs_reset || dlss_active)
-                                         ? 0
-                                         : read.sample_count;
-        const bool produces_dlss_input = dlss_active
-                                         && has_new_samples;
+        const bool produces_dlss_input = dlss_active && has_new_samples;
         const bool slot_reset = produces_dlss_input && dlss_reset_requested_;
         if (produces_dlss_input) {
             dlss_reset_requested_ = false;
@@ -779,28 +706,27 @@ namespace qualquer::renderer {
         // Unjittered VP for motion vector computation (row-major for device mul()).
         const float4x4 current_vp = to_float4x4(scene.camera.projection * scene.camera.view);
         const bool has_temporal_predecessor = dlss_active
-                                              && read.dlss_metadata.valid
+                                              && prev_dlss_metadata_.valid
                                               && !slot_reset;
         const float4x4 previous_vp = has_temporal_predecessor
                                               ? to_float4x4(
-                                                    read.dlss_metadata.projection_matrix
-                                                    * read.dlss_metadata.view_matrix)
+                                                    prev_dlss_metadata_.projection_matrix
+                                                    * prev_dlss_metadata_.view_matrix)
                                               : current_vp;
 
-        if (has_new_samples) {
-            write.dlss_metadata = {
-                .jitter_x = jitter_x,
-                .jitter_y = jitter_y,
-                .view_matrix = scene.camera.view,
-                .projection_matrix = scene.camera.projection,
-                .frame_time_ms = scene.frame_time_ms,
-                .reset = slot_reset,
-                .valid = produces_dlss_input,
-            };
-        }
+        // Build current-frame DLSS metadata (used for evaluate + saved as prev).
+        const DlssFrameMetadata current_dlss_metadata{
+            .jitter_x = jitter_x,
+            .jitter_y = jitter_y,
+            .view_matrix = scene.camera.view,
+            .projection_matrix = scene.camera.projection,
+            .frame_time_ms = scene.frame_time_ms,
+            .reset = slot_reset,
+            .valid = produces_dlss_input,
+        };
 
         LaunchParams params{
-            .color_output = write.color.surf_object(),
+            .color_output = frame_slot_.color.surf_object(),
             .width = render_width,
             .height = render_height,
             .sequence_base = sequence_base_,
@@ -815,7 +741,6 @@ namespace qualquer::renderer {
             .ser_hint_bits = [&] {
                 const uint32_t n = scene.materials.count();
                 if (n <= 1) { return 1u; }
-                // ceil(log2(n)): bit_width gives floor(log2)+1 for non-power-of-2.
                 const auto bits = static_cast<uint32_t>(std::bit_width(n - 1));
                 return std::clamp(bits, 1u, 16u);
             }(),
@@ -823,9 +748,6 @@ namespace qualquer::renderer {
             .jitter_x = jitter_x,
             .jitter_y = jitter_y,
             .max_clamp = scene.settings.max_clamp,
-            // Scene light resources (packed by SceneLoader via SceneRenderInput).
-            // Rotation is a launch constant: copy scene env data, then fill
-            // sin/cos so device code reads orientation from the same env block.
             .env = [&] {
                 auto e = scene.env;
                 e.rotation_sin = std::sin(scene.settings.env_rotation);
@@ -833,26 +755,19 @@ namespace qualquer::renderer {
                 return e;
             }(),
             .emissive = scene.emissive,
-            // Aux surfaces belong to the same write slot as color_output.
-            .aux_depth = write.aux.depth.surf_object(),
-            .aux_motion_vectors = write.aux.motion_vectors.surf_object(),
-            .aux_diffuse_albedo = write.aux.diffuse_albedo.surf_object(),
-            .aux_specular_albedo = write.aux.specular_albedo.surf_object(),
-            .aux_normal_roughness = write.aux.normal_roughness.surf_object(),
-            // Unjittered VP matrices for motion vector computation.
+            .aux_depth = frame_slot_.aux.depth.surf_object(),
+            .aux_motion_vectors = frame_slot_.aux.motion_vectors.surf_object(),
+            .aux_diffuse_albedo = frame_slot_.aux.diffuse_albedo.surf_object(),
+            .aux_specular_albedo = frame_slot_.aux.specular_albedo.surf_object(),
+            .aux_normal_roughness = frame_slot_.aux.normal_roughness.surf_object(),
             .view_projection = current_vp,
             .prev_view_projection = previous_vp,
-            // sobol_directions filled below via memcpy (array can't be
-            // initialized from another array in a designated initializer).
+            // sobol_directions filled below via memcpy.
         };
         std::memcpy(params.sobol_directions, kSobolDirectionData, sizeof(params.sobol_directions));
 
         if (has_new_samples) {
 #ifndef NDEBUG
-            // Read frame N-2's PT timing. Synchronize the end event to ensure the
-            // compute_stream work is complete (fence only guarantees display_stream).
-            // Nearly zero wait in practice — frame N-2's raygen is consumed by
-            // frame N-1's display_stream before the fence.
             if (frame_counter_ >= 2) {
                 CUDA_CHECK(cudaEventSynchronize(event_pt_end_[timing_slot]));
                 cudaEventElapsedTime(
@@ -880,8 +795,6 @@ namespace qualquer::renderer {
                 .callablesRecordCount = 0,
             };
 
-            // traversable=0 is valid: raygen does not call optixTrace, so no
-            // acceleration structure is traversed.
             OPTIX_CHECK(optixLaunch(pipeline_.handle,
                 cuda_context.compute_stream,
                 params_buffer_.device_ptr(),
@@ -895,25 +808,20 @@ namespace qualquer::renderer {
 #endif
 
             CUDA_CHECK(cudaEventRecord(
-                write.production_event, cuda_context.compute_stream));
+                frame_slot_.production_event, cuda_context.compute_stream));
         }
 
-        // --- display_stream: wait read-slot production → evaluate/tonemap → record ---
-        // Wait for the previous frame's blit to finish reading display_surface
-        // before this frame's tonemap overwrites it (write-after-read). A single
-        // semaphore suffices: the forward chain (tonemap → forward signal → blit →
-        // reverse signal) structurally prevents double-signaling.
-        // Enqueued before the raygen event wait: the reverse semaphore typically
-        // signals earlier (blit is lighter than raygen), so checking it first lets
-        // the GPU scheduler resolve the faster wait and prepare for the next one.
+        // --- display_stream: wait production + reverse sem → DLSS/tonemap → signal ---
+        // Reverse semaphore: wait for the previous frame's blit to finish
+        // reading display_surface before tonemap overwrites it.
         // ReSharper disable once CppLocalVariableMayBeConst
         cudaExternalSemaphore_t reverse_sem = cuda_context.reverse_external_semaphore;
         constexpr cudaExternalSemaphoreWaitParams reverse_wait_params{};
         CUDA_CHECK(cudaWaitExternalSemaphoresAsync(&reverse_sem, &reverse_wait_params, 1, cuda_context.display_stream));
 
-        // Wait until raygen has produced the read slot's color and guides.
+        // Wait until raygen has produced color (and guides).
         CUDA_CHECK(cudaStreamWaitEvent(
-            cuda_context.display_stream, read.production_event));
+            cuda_context.display_stream, frame_slot_.production_event));
 
 #ifndef NDEBUG
         if (frame_counter_ >= 2
@@ -926,45 +834,39 @@ namespace qualquer::renderer {
             event_display_start_[timing_slot], cuda_context.display_stream));
 #endif
 
-        const bool evaluate_dlss = dlss_active
-                                   && has_new_samples
-                                   && read.dlss_metadata.valid;
+        // DLSS evaluate reads the current frame's color (serial: raygen is
+        // done). This eliminates the one-frame display latency of ping-pong.
+        const bool evaluate_dlss = dlss_active && has_new_samples;
         if (evaluate_dlss) {
-            // DLSS ON: evaluate reads the previous valid noisy input (read
-            // slot) and writes the denoised+upscaled result to dlss_output.
-            // Then tonemap reads dlss_output at display resolution (1:1, no
-            // resampling, no Separate Sum division — sample_count=1).
             const optix::DlssRR::EvalInput eval_input{
-                .color_tex = read.color.tex_object(),
+                .color_tex = frame_slot_.color.tex_object(),
                 .output_surf = dlss_output_.surf_object(),
-                .depth_tex = read.aux.depth.tex_object(),
-                .motion_vectors_tex = read.aux.motion_vectors.tex_object(),
-                .diffuse_albedo_tex = read.aux.diffuse_albedo.tex_object(),
-                .specular_albedo_tex = read.aux.specular_albedo.tex_object(),
-                .normal_roughness_tex = read.aux.normal_roughness.tex_object(),
+                .depth_tex = frame_slot_.aux.depth.tex_object(),
+                .motion_vectors_tex = frame_slot_.aux.motion_vectors.tex_object(),
+                .diffuse_albedo_tex = frame_slot_.aux.diffuse_albedo.tex_object(),
+                .specular_albedo_tex = frame_slot_.aux.specular_albedo.tex_object(),
+                .normal_roughness_tex = frame_slot_.aux.normal_roughness.tex_object(),
                 .render_width = render_width,
                 .render_height = render_height,
-                .jitter_x = read.dlss_metadata.jitter_x,
-                .jitter_y = read.dlss_metadata.jitter_y,
-                .view_matrix = glm::value_ptr(read.dlss_metadata.view_matrix),
-                .projection_matrix = glm::value_ptr(read.dlss_metadata.projection_matrix),
-                .reset = read.dlss_metadata.reset,
-                .frame_time_ms = read.dlss_metadata.frame_time_ms,
+                .jitter_x = current_dlss_metadata.jitter_x,
+                .jitter_y = current_dlss_metadata.jitter_y,
+                .view_matrix = glm::value_ptr(current_dlss_metadata.view_matrix),
+                .projection_matrix = glm::value_ptr(current_dlss_metadata.projection_matrix),
+                .reset = current_dlss_metadata.reset,
+                .frame_time_ms = current_dlss_metadata.frame_time_ms,
             };
             dlss_rr_.evaluate(eval_input);
             dlss_output_valid_ = true;
 
             launch_tonemap(dlss_output_.tex_object(),
                            cuda_context.display_surface,
-                           width, height,      // dlss_output is display resolution
-                           width, height,      // 1:1, no resampling
-                           1,                  // no Separate Sum division
+                           width, height,
+                           width, height,
+                           1,
                            exposure_linear,
                            cuda_context.display_stream);
         } else if (dlss_active && dlss_output_valid_) {
-            // No evaluable input but a valid cached output exists: reuse it.
-            // Covers both paused frames and the bootstrap frame after a
-            // history-only invalidation (e.g. camera moved while paused).
+            // No new input but a valid cached DLSS output exists: reuse it.
             launch_tonemap(dlss_output_.tex_object(),
                            cuda_context.display_surface,
                            width, height,
@@ -973,15 +875,14 @@ namespace qualquer::renderer {
                            exposure_linear,
                            cuda_context.display_stream);
         } else {
-            // DLSS OFF or invalid read slot: tonemap the read color directly.
-            // Raygen writes per-frame mean; pass 1 so tonemap does not
-            // re-divide. A zero count (alloc/resize, no raygen yet) produces
-            // black without touching uninitialized data.
-            launch_tonemap(read.color.tex_object(),
+            // DLSS OFF: tonemap the color buffer directly. Raygen writes
+            // per-frame mean; pass 1 so tonemap does not re-divide. Zero
+            // count (no raygen yet) produces black.
+            launch_tonemap(frame_slot_.color.tex_object(),
                            cuda_context.display_surface,
                            render_width, render_height,
                            width, height,
-                           read.sample_count > 0 ? 1u : 0u,
+                           frame_slot_.sample_count > 0 ? 1u : 0u,
                            exposure_linear,
                            cuda_context.display_stream);
         }
@@ -991,26 +892,21 @@ namespace qualquer::renderer {
             event_display_end_[timing_slot], cuda_context.display_stream));
 #endif
 
+        // Record consumption so next frame's raygen waits for this tonemap.
         CUDA_CHECK(cudaEventRecord(
-            read.consumption_event, cuda_context.display_stream));
+            frame_slot_.consumption_event, cuda_context.display_stream));
 
-        // Signal after tonemap completes on display_stream. Binary OPAQUE_WIN32
-        // needs no fence value — signal_params stays zeroed.
+        // Signal forward semaphore after tonemap completes.
         // ReSharper disable once CppLocalVariableMayBeConst
         cudaExternalSemaphore_t sem = cuda_context.external_semaphores[frame_index];
         constexpr cudaExternalSemaphoreSignalParams signal_params{};
         CUDA_CHECK(cudaSignalExternalSemaphoresAsync(&sem, &signal_params, 1, cuda_context.display_stream));
 
         if (has_new_samples) {
-            // DLSS color is already a per-frame mean, while the fallback path
-            // stores a Separate Sum paired with its accumulated sample count.
-            if (dlss_active) {
-                write.sample_count = produces_dlss_input ? 1 : 0;
-            } else {
-                write.sample_count = chain_count + effective_spp;
-            }
-            accum_index_ = write_slot;
+            frame_slot_.sample_count = 1;
             sequence_base_ += effective_spp;
+            // Save current metadata as prev for next frame's motion vectors.
+            prev_dlss_metadata_ = current_dlss_metadata;
         }
         ++frame_counter_;
     }
@@ -1246,8 +1142,8 @@ namespace qualquer::renderer {
 #endif
     }
 
-    uint32_t Renderer::accumulated_samples() const {
-        return frame_slots_[accum_index_].sample_count;
+    bool Renderer::has_valid_frame() const {
+        return frame_slot_.sample_count > 0;
     }
 
     uint32_t Renderer::tlas_instance_count() const {

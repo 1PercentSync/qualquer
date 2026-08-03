@@ -205,7 +205,7 @@ namespace qualquer::app {
                 .env_map_path = config_.env_map_path,
                 .settings = render_settings_,
                 .camera = camera_,
-                .accumulated_samples = renderer_.accumulated_samples(),
+                .has_valid_frame = renderer_.has_valid_frame(),
                 .scene_stats = scene_stats_,
                 .dlss_rr = renderer_.dlss(),
 #ifndef NDEBUG

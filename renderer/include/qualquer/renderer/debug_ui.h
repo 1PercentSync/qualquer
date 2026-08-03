@@ -84,8 +84,8 @@ namespace qualquer::renderer {
         /** @brief Camera state (mutable for FOV slider write-back). */
         Camera &camera;
 
-        /** @brief Number of samples accumulated in the displayed buffer. */
-        uint32_t accumulated_samples = 0;
+        /** @brief Whether the color buffer has valid rendered data. */
+        bool has_valid_frame = false;
 
         /** @brief Scene asset statistics (read-only snapshot). */
         const SceneStats &scene_stats;
@@ -320,8 +320,7 @@ namespace qualquer::renderer {
         /**
          * @brief Renders the Path Tracing section: parameter sliders and sample count.
          *
-         * @param ctx    Provides settings (mutable), camera (mutable for FOV),
-         *               and accumulated_samples.
+         * @param ctx    Provides settings (mutable), camera (mutable for FOV).
          * @param action Receives accum_reset_requested on Reset button click.
          * @param stats  Frame-time statistics (avg_fps for samples/s display).
          */

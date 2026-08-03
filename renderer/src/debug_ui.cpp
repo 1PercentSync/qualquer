@@ -394,11 +394,7 @@ namespace qualquer::renderer {
     void DebugUI::draw_path_tracing(const DebugUIContext &ctx, DebugUIActions &action,
                                     const FrameStats &stats) {
         const float sps = stats.avg_fps * static_cast<float>(ctx.settings.samples_per_frame);
-        if (!ctx.settings.dlss_enabled) {
-            ImGui::Text("Samples: %u  (%.0f sps)", ctx.accumulated_samples, sps);
-        } else {
-            ImGui::Text("%.0f sps", sps);
-        }
+        ImGui::Text("%.0f sps", sps);
 
         auto bounces = static_cast<int>(ctx.settings.max_bounces);
         if (ImGui::SliderInt("Max Bounces", &bounces, 1, 32)) {

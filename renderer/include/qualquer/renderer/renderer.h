@@ -132,9 +132,9 @@ namespace qualquer::renderer {
      * Encapsulates what one frame draws — the CUDA write into the display buffer,
      * the Vulkan blit to the swapchain image, and the ImGui overlay — so the
      * Application keeps only the frame-loop timing skeleton. Owns the OptiX
-     * pipeline, SBT record buffers, ping-pong HDR accumulation buffers, the
-     * device-side launch-params buffer, and the DLSS-RR feature lifecycle; the
-     * frame counter driving temporal animation is likewise owned state.
+     * pipeline, SBT record buffers, HDR color buffer, the device-side
+     * launch-params buffer, and the DLSS-RR feature lifecycle; the frame counter
+     * driving temporal animation is likewise owned state.
      */
     class Renderer {
     public:
@@ -190,20 +190,18 @@ namespace qualquer::renderer {
                         std::span<const MeshInstance> instances);
 
         /**
-         * @brief Submits raygen and tonemap on two CUDA streams, then signals the semaphore.
+         * @brief Submits raygen and display work on two CUDA streams (serial).
          *
-         * compute_stream: waits until the write slot is no longer displayed,
-         * then uploads params, launches raygen, and records that slot as produced.
-         * display_stream waits until the read slot is produced plus the reverse
-         * semaphore, evaluates DLSS/tonemaps, records that slot as consumed, and
-         * signals the forward semaphore. The two streams run in parallel while
-         * slot-indexed CUDA events protect color and guide resources together.
+         * compute_stream: waits for the previous display pass to finish reading
+         * the color buffer, then uploads params and launches raygen.
+         * display_stream: waits for raygen + reverse interop semaphore, then
+         * evaluates DLSS (if ON) / tonemaps, and signals the forward semaphore.
+         * The two streams execute serially (display waits for compute via event).
          *
          * The render resolution derives from scene.settings.render_height and the
-         * display aspect ratio; when it differs from the current accumulation-buffer
-         * allocation, both streams are drained and the buffers are reallocated
-         * (sample counts reset to 0). DLSS-RR feature create/evaluate/release is
-         * driven from the owned dlss_rr_ member (settings.dlss_enabled / dlss_preset).
+         * display aspect ratio; on mismatch both streams are drained and the
+         * buffer is reallocated (sample_count reset to 0). DLSS-RR feature
+         * create/evaluate/release is driven from dlss_rr_.
          * @param cuda_context CUDA context (surface, streams, external semaphores).
          * @param scene        Camera and scene data (materials, texture objects).
          * @param width        Display buffer width in pixels.
@@ -223,13 +221,11 @@ namespace qualquer::renderer {
         static void record_vulkan(const RenderInput &input);
 
         /**
-         * @brief Number of samples accumulated in the buffer currently being read
-         *        by tonemap (visible on screen).
+         * @brief Whether the color buffer contains valid data (sample_count > 0).
          *
-         * DebugUI displays this as the live sample counter. The value reflects the
-         * read slot's count, which is the latest fully-written accumulation total.
+         * False only transiently after init or resize, before the first raygen runs.
          */
-        [[nodiscard]] uint32_t accumulated_samples() const;
+        [[nodiscard]] bool has_valid_frame() const;
 
         /** @brief Actual TLAS instance count after group folding (set by load_scene). */
         [[nodiscard]] uint32_t tlas_instance_count() const;
@@ -243,18 +239,11 @@ namespace qualquer::renderer {
         [[nodiscard]] const optix::DlssRR &dlss() const { return dlss_rr_; }
 
         /**
-         * @brief Forces the next frame to overwrite instead of accumulating,
-         *        and discards DLSS-RR temporal history.
+         * @brief Discards DLSS-RR temporal history.
          *
-         * Sets deferred flags consumed by submit_cuda: chain_count=0 triggers
-         * accumulation overwrite, and the next complete DLSS input carries a
-         * history-reset token in its slot metadata.
+         * Sets deferred flags consumed by submit_cuda: the next complete DLSS
+         * input carries a history-reset token.
          * Used for scene switch, camera teleport, env map reload, manual Reset.
-         * Continuous camera motion and content changes (env rotation, DLSS
-         * toggle, max_clamp) trigger accumulation reset through camera_changed /
-         * content_changed in submit_cuda, which intentionally does NOT discard
-         * DLSS history. Quality/throughput knobs (max_bounces, samples_per_frame)
-         * do not reset accumulation.
          */
         void reset_accumulation();
 
@@ -312,10 +301,11 @@ namespace qualquer::renderer {
         };
 
         /**
-         * @brief Host inputs produced with one color/aux slot.
+         * @brief Previous-frame DLSS input metadata for motion vector computation.
          *
-         * These values travel with their GPU resources so DLSS evaluation never
-         * combines previous-frame images with current-frame camera state.
+         * Stores the jitter and camera matrices from the last frame that
+         * produced a valid DLSS input, so the current frame can compute
+         * previous_vp for motion vectors and has_temporal_predecessor.
          */
         struct DlssFrameMetadata {
             /** @brief Raw horizontal Sobol jitter in [0,1). */
@@ -336,17 +326,17 @@ namespace qualquer::renderer {
             /** @brief Whether evaluation of this input discards DLSS history. */
             bool reset = false;
 
-            /** @brief Whether this slot contains a complete DLSS input frame. */
+            /** @brief Whether this contains a valid DLSS input frame. */
             bool valid = false;
         };
 
         /**
-         * @brief One ping-pong resource slot: color, guides, sample count, DLSS
-         *        metadata, and the production/consumption CUDA events that fence them.
+         * @brief Color buffer and DLSS guide resources with serial sync events.
          *
-         * Keeping these six previously parallel arrays under one owner makes it
-         * impossible to resize color without resizing guides, or to evaluate DLSS
-         * with metadata from a different frame than the textures.
+         * Single instance (no ping-pong). production_event and consumption_event
+         * enforce the serial compute → display ordering across frames: raygen
+         * waits for consumption before writing, display waits for production
+         * before reading.
          */
         struct FrameSlot {
             /**
@@ -359,24 +349,15 @@ namespace qualquer::renderer {
             void alloc(uint32_t width, uint32_t height);
 
             /**
-             * @brief Resizes color resources, zeros sample_count, and clears
-             *        DLSS metadata.
+             * @brief Resizes color resources and zeros sample_count.
              *
              * Aux guides are resized separately when allocated. Resized
-             * content is undefined; neither sample_count nor metadata may
-             * claim prior accumulation or valid DLSS input status.
+             * content is undefined.
              */
             void resize(uint32_t width, uint32_t height);
 
             /** @brief Releases color and guide resources. */
             void free();
-
-            /**
-             * @brief Marks DLSS metadata as not containing a valid input frame.
-             *
-             * Does not touch sample_count or GPU resources.
-             */
-            void invalidate();
 
             /**
              * @brief Creates production/consumption sync events and records them once
@@ -394,38 +375,34 @@ namespace qualquer::renderer {
             AuxBufferSet aux;
 
             /**
-             * @brief Normalization count paired with color.
+             * @brief Color buffer validity flag.
              *
-             * DLSS OFF stores a Separate Sum and its accumulated sample count.
-             * DLSS ON stores a per-frame mean and therefore uses count 1.
+             * 0 after alloc/resize (uninitialised); 1 after raygen writes a
+             * valid per-frame mean. Tonemap outputs black when 0.
              */
             uint32_t sample_count = 0;
 
-            /** @brief Host inputs produced with this slot's color/aux. */
-            DlssFrameMetadata dlss_metadata{};
-
             /**
-             * @brief Recorded after raygen produces this slot's color and guides.
+             * @brief Recorded after raygen produces color and guides.
              *
-             * Display waits on this before consuming the slot.
+             * display_stream waits on this before reading.
              */
             cudaEvent_t production_event = nullptr;
 
             /**
-             * @brief Recorded after display finishes consuming this slot.
+             * @brief Recorded after display finishes reading color.
              *
-             * Compute waits on this before overwriting the slot.
+             * compute_stream waits on this before the next raygen overwrites.
              */
             cudaEvent_t consumption_event = nullptr;
         };
 
         /**
-         * @brief Invalidates DLSS input slots and requests history reset.
+         * @brief Requests DLSS history reset.
          *
-         * Marks both slots as not containing a valid DLSS input and sets a
-         * pending reset token. Does NOT clear dlss_output_valid_ — the last
-         * DLSS output remains displayable as a frozen frame (e.g. during
-         * paused camera motion).
+         * Sets the pending reset token so the next DLSS evaluation discards
+         * temporal history. Does NOT clear dlss_output_valid_ — the last
+         * DLSS output remains displayable as a frozen frame.
          */
         void invalidate_dlss_history();
 
@@ -434,8 +411,6 @@ namespace qualquer::renderer {
          *
          * Calls invalidate_dlss_history() and additionally clears
          * dlss_output_valid_, so the display falls back to raw-color tonemap.
-         * Used when the output buffer itself is reallocated or the scene
-         * content changes (feature lifecycle, resize, scene switch).
          */
         void invalidate_dlss_state();
 
@@ -456,14 +431,13 @@ namespace qualquer::renderer {
         optix::CudaBuffer<GPUGeometryInfo> geometry_info_buffer_;
 
         /**
-         * @brief Ping-pong resource slots (color + count + metadata + events;
-         *        aux guides allocated on demand when DLSS is enabled).
+         * @brief Single color/aux resource slot with serial sync events.
          *
-         * A produced frame reads slot [accum_index_] and writes [1 - accum_index_],
-         * then flips the index. A paused frame keeps the index unchanged. CUDA
-         * arrays are required for DLSS CUDA API resource consumption.
+         * Raygen writes per-frame mean; display reads after raygen finishes.
+         * Aux guides allocated on demand when DLSS is enabled.
+         * CUDA arrays are required for DLSS CUDA API resource consumption.
          */
-        std::array<FrameSlot, 2> frame_slots_;
+        FrameSlot frame_slot_;
 
         /** @brief Device-side launch-params buffer (one LaunchParams). */
         optix::CudaBuffer<LaunchParams> params_buffer_;
@@ -481,27 +455,22 @@ namespace qualquer::renderer {
          */
         std::array<LaunchParams *, 2> params_staging_ = {nullptr, nullptr};
 
-        /** @brief Read slot index; flipped only after producing a new sample frame. */
-        uint32_t accum_index_ = 0;
-
         /**
-         * @brief Render resolution width the accumulation buffers are allocated for.
+         * @brief Render resolution width the color buffer is allocated for.
          *
          * submit_cuda compares the desired render resolution (derived from
          * RenderSettings::render_height and the display aspect ratio) against
-         * this pair and reallocates the buffers on mismatch.
+         * this pair and reallocates the buffer on mismatch.
          */
         uint32_t render_width_ = 0;
 
-        /** @brief Render resolution height the accumulation buffers are allocated for (see render_width_). */
+        /** @brief Render resolution height the color buffer is allocated for (see render_width_). */
         uint32_t render_height_ = 0;
 
         /**
          * @brief Monotonic frame counter; never reset.
          *
-         * Uploaded as LaunchParams::frame_index for device-side temporal
-         * variation and indexes debug timing events. Resource ownership uses
-         * accum_index_ independently, so paused frames do not flip resources.
+         * Indexes debug timing events and seeds the global DLSS jitter.
          */
         uint32_t frame_counter_ = 0;
 
@@ -549,11 +518,10 @@ namespace qualquer::renderer {
         bool dlss_output_valid_ = false;
 
         /**
-         * @brief Deferred accumulation reset flag set by reset_accumulation().
+         * @brief Deferred reset flag set by reset_accumulation().
          *
-         * Consumed by submit_cuda on the next frame: forces chain_count to 0
-         * (same path as camera-change reset) without clearing FrameSlot::sample_count,
-         * so the read slot keeps a valid count and tonemap avoids a black frame.
+         * Consumed by submit_cuda on the next producing frame. With no
+         * multi-frame accumulation this only triggers DLSS history reset.
          */
         bool reset_requested_ = false;
 
@@ -566,39 +534,31 @@ namespace qualquer::renderer {
         bool dlss_reset_requested_ = false;
 
         /**
-         * @brief Previous-frame camera key (accumulation-reset detection).
+         * @brief Previous-frame camera key (DLSS history invalidation).
          *
-         * Any change in inv_view or inv_projection zeros chain_count so raygen
-         * overwrites. During pause, a camera change also invalidates DLSS history.
+         * Camera change during pause invalidates DLSS history.
          */
         CameraKey prev_camera_{};
 
-        /**
-         * @brief Previous-frame env_rotation (content-change reset detection).
-         *
-         * Content changes reset accumulation but do not invalidate DLSS history
-         * during pause (continuous lighting change; DLSS adapts temporally).
-         */
+        /** @brief Previous-frame env_rotation (DLSS content-change detection). */
         float prev_env_rotation_ = 0.0f;
 
-        /**
-         * @brief Previous-frame max_clamp (content-change reset detection).
-         *
-         * Firefly threshold changes bias the path estimator and must restart
-         * the Separate Sum chain / DLSS temporal history on the next produced frame.
-         */
+        /** @brief Previous-frame max_clamp (DLSS content-change detection). */
         float prev_max_clamp_ = 10.0f;
 
-        /**
-         * @brief Previous-frame dlss_enabled (content-change reset detection).
-         *
-         * Toggle still resets Separate Sum chain when leaving/entering DLSS;
-         * feature-lifecycle invalidation is handled on the create/release path.
-         */
+        /** @brief Previous-frame dlss_enabled (feature lifecycle detection). */
         bool prev_dlss_enabled_ = false;
 
         /** @brief Previous-frame DLSS render preset (feature-recreation detection). */
         optix::DlssRenderPreset prev_dlss_preset_ = optix::DlssRenderPreset::E;
+
+        /**
+         * @brief Previous-frame DLSS metadata for motion vector computation.
+         *
+         * Saved at the end of each producing frame so the next frame can
+         * derive prev_view_projection and has_temporal_predecessor.
+         */
+        DlssFrameMetadata prev_dlss_metadata_{};
 
 #ifndef NDEBUG
         /** @brief Timing event recorded before display_stream work (DLSS + tonemap). */
