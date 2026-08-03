@@ -82,6 +82,7 @@ namespace qualquer::optix {
             .numAttributeValues = 2,
             .pipelineLaunchParamsVariableName = launch_params_variable_name,
             .pipelineLaunchParamsSizeInBytes = launch_params_size,
+            .usesPrimitiveTypeFlags = static_cast<unsigned int>(OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE),
         };
 
         OPTIX_CHECK(optixModuleCreate(device_context,
