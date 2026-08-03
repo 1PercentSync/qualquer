@@ -548,7 +548,7 @@ namespace qualquer::renderer {
         // Color buffer follows the render resolution, not the display
         // resolution. When DLSS is on, the render resolution is clamped by
         // resolve_render_height so that buffer, raygen launch, and NGX all
-        // use the same dimensions. On mismatch the stream is drained — the
+        // use the same dimensions. On mismatch CUDA is drained — the
         // previous frame's pipeline may still be using the old allocation.
         // sample_count resets to 0: tonemap outputs black until valid data.
         uint32_t render_height = scene.settings.render_height;
@@ -615,7 +615,7 @@ namespace qualquer::renderer {
         }
 
         // --- Serial pipeline: reverse sem wait → raygen → DLSS → tonemap → signal ---
-        // All work is on a single stream; ordering is implicit.
+        // All work on the default stream; ordering is implicit.
 #ifndef NDEBUG
         const uint32_t timing_slot = frame_counter_ % 2;
 #endif

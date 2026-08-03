@@ -58,7 +58,7 @@ namespace qualquer::renderer {
         /** @brief Command buffer to record into (already begun by the caller). */
         VkCommandBuffer cmd = VK_NULL_HANDLE;
 
-        /** @brief CUDA context: surface, stream, external semaphores. */
+        /** @brief CUDA context: surface, external semaphores. */
         optix::Context &cuda_context;
 
         /** @brief Display buffer (interop image) blitted to the swapchain image. */
@@ -144,10 +144,9 @@ namespace qualquer::renderer {
          * Initializes DLSS-RR (NGX SDK) from the CUDA device selected by
          * cuda_context, then builds the OptiX pipeline and frame resources.
          *
-         * @param cuda_context CUDA context owning the stream and device context the
-         *                      pipeline builds against; the stream sequences SBT
-         *                      uploads before the first frame's optixLaunch. Its
-         *                      device_id also seeds DlssRR::init.
+         * @param cuda_context CUDA context providing the device context the
+         *                      pipeline builds against. Its device_id also seeds
+         *                      DlssRR::init.
          * @param width          Initial render resolution width in pixels
          *                       (color buffer size).
          * @param height         Initial render resolution height in pixels.
@@ -179,8 +178,7 @@ namespace qualquer::renderer {
          * An empty mesh list skips AS construction, leaving the TLAS handle at 0
          * (submit_cuda must then keep the traversable at 0 so raygen skips optixTrace).
          *
-         * @param cuda_context CUDA context (device context + stream for AS builds
-         *                     and buffer uploads).
+         * @param cuda_context CUDA context (device context for AS builds).
          * @param meshes       Loaded meshes (one per glTF primitive).
          * @param instances    Scene mesh instances (one per node-primitive).
          */
@@ -196,10 +194,10 @@ namespace qualquer::renderer {
          * each stage completes before the next begins.
          *
          * The render resolution derives from scene.settings.render_height and the
-         * display aspect ratio; on mismatch the stream is drained and the
-         * buffer is reallocated (sample_count reset to 0). DLSS-RR feature
+         * display aspect ratio; on mismatch CUDA is drained and the buffer is
+         * reallocated (sample_count reset to 0). DLSS-RR feature
          * create/evaluate/release is driven from dlss_rr_.
-         * @param cuda_context CUDA context (surface, stream, external semaphores).
+         * @param cuda_context CUDA context (surface, external semaphores).
          * @param scene        Camera and scene data (materials, texture objects).
          * @param width        Display buffer width in pixels.
          * @param height       Display buffer height in pixels.
