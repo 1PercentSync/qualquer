@@ -11,11 +11,11 @@
 - **项目**：Qualquer — 基于 CUDA + OptiX 的 Path Tracer
 - **分支**：main
 - **Phase**：M1 Phase 4.5 — 自适应帧率 + 采样质量收尾
-- **进度**：Phase 4.5 Step 14.95 第一小项完成：Device 侧统一 mean 输出（launch_params.h 移除 color_input/sample_count，programs.cu raygen 统一写 per-frame mean）
+- **进度**：Phase 4.5 Step 14.95 第二小项完成：单 buffer 串行替换 ping-pong（frame_slots_[2] → frame_slot_，submit_cuda 串行重构，DlssFrameMetadata 移至 prev_dlss_metadata_，accumulated_samples → has_valid_frame，UI sps 显示统一）
 
 ### 下一个任务
 
-Phase 4.5 Step 14.95 第二小项：单 buffer 串行替换 ping-pong（代码已写，待编译验证）
+Phase 4.5 Step 14.95 第三小项：UI 适配（debug_ui.h/cpp, application.cpp）
 
 ---
 
