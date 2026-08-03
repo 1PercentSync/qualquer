@@ -662,8 +662,8 @@ namespace qualquer::renderer {
         const float exposure_linear = std::pow(2.0f, scene.settings.exposure_ev);
         const bool dlss_active = scene.settings.dlss_enabled && dlss_rr_.feature_active();
 
-        // DLSS history management: camera or content changes during pause
-        // invalidate temporal history so the first resumed frame starts fresh.
+        // DLSS history management: camera or max_clamp changes invalidate
+        // temporal history so DLSS starts a fresh sequence.
         const CameraKey camera_key{
             .inv_view = scene.camera.inv_view,
             .inv_projection = scene.camera.inv_projection,
@@ -671,20 +671,8 @@ namespace qualquer::renderer {
         const bool camera_changed = camera_key != prev_camera_;
         const bool max_clamp_changed =
             scene.settings.max_clamp != prev_max_clamp_;
-        const bool content_changed =
-            scene.settings.env_rotation != prev_env_rotation_ ||
-            scene.settings.dlss_enabled != prev_dlss_enabled_ ||
-            max_clamp_changed;
-        if (has_new_samples) {
-            reset_requested_ = false;
-            if (dlss_active && max_clamp_changed) {
-                invalidate_dlss_history();
-            }
-        } else if (camera_changed || content_changed) {
-            reset_requested_ = true;
-            if (dlss_active && (camera_changed || max_clamp_changed)) {
-                invalidate_dlss_history();
-            }
+        if (dlss_active && (camera_changed || max_clamp_changed)) {
+            invalidate_dlss_history();
         }
 
         const bool produces_dlss_input = dlss_active && has_new_samples;
@@ -694,8 +682,6 @@ namespace qualquer::renderer {
         }
 
         prev_camera_ = camera_key;
-        prev_env_rotation_ = scene.settings.env_rotation;
-        prev_dlss_enabled_ = scene.settings.dlss_enabled;
         prev_dlss_preset_ = scene.settings.dlss_preset;
         prev_max_clamp_ = scene.settings.max_clamp;
 
@@ -1151,7 +1137,6 @@ namespace qualquer::renderer {
     }
 
     void Renderer::reset_accumulation() {
-        reset_requested_ = true;
         invalidate_dlss_state();
     }
 } // namespace qualquer::renderer

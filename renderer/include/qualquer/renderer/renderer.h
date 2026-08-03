@@ -517,14 +517,6 @@ namespace qualquer::renderer {
         bool dlss_output_valid_ = false;
 
         /**
-         * @brief Deferred reset flag set by reset_accumulation().
-         *
-         * Consumed by submit_cuda on the next producing frame. With no
-         * multi-frame accumulation this only triggers DLSS history reset.
-         */
-        bool reset_requested_ = false;
-
-        /**
          * @brief Deferred DLSS history reset flag set by reset_accumulation().
          *
          * The next complete DLSS input slot receives the token; evaluation
@@ -539,14 +531,8 @@ namespace qualquer::renderer {
          */
         CameraKey prev_camera_{};
 
-        /** @brief Previous-frame env_rotation (DLSS content-change detection). */
-        float prev_env_rotation_ = 0.0f;
-
-        /** @brief Previous-frame max_clamp (DLSS content-change detection). */
+        /** @brief Previous-frame max_clamp (DLSS history invalidation on bias change). */
         float prev_max_clamp_ = 10.0f;
-
-        /** @brief Previous-frame dlss_enabled (feature lifecycle detection). */
-        bool prev_dlss_enabled_ = false;
 
         /** @brief Previous-frame DLSS render preset (feature-recreation detection). */
         optix::DlssRenderPreset prev_dlss_preset_ = optix::DlssRenderPreset::E;

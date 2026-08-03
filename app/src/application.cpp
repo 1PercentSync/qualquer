@@ -489,7 +489,7 @@ namespace qualquer::app {
         }
 
         // Drain both CUDA streams before releasing resources they use.
-        // compute_stream: raygen may still be reading/writing accum buffers.
+        // compute_stream: raygen may still be writing the color buffer.
         // display_stream: tonemap may still be writing display_surface.
         // Neither stream is covered by vkQueueWaitIdle (inside recreate) —
         // compute_stream has no semaphore link to the Vulkan queue, and the
@@ -502,9 +502,9 @@ namespace qualquer::app {
         // resolution-independent and stay.
         cuda_context_.release_display_buffer();
         swapchain_.recreate(context_);
-        // Accumulation buffers are not touched here: they follow the render
-        // resolution, which submit_cuda reallocates on demand when the
-        // aspect-derived render width changes.
+        // Color buffer is not touched here: it follows the render resolution,
+        // which submit_cuda reallocates on demand when the aspect-derived
+        // render width changes.
         display_buffer_.destroy(context_);
         display_buffer_.init(context_,
                              VK_FORMAT_R16G16B16A16_SFLOAT,
