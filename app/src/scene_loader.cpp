@@ -451,20 +451,18 @@ namespace qualquer::app {
             if (!emissive_result.triangles.empty()) {
                 emissive_triangles_.alloc(emissive_result.triangles.size());
                 emissive_triangles_.upload(emissive_result.triangles.data(),
-                                           emissive_result.triangles.size(),
-                                           stream);
+                                           emissive_result.triangles.size());
 
                 emissive_alias_table_.alloc(emissive_result.alias_table.size());
                 emissive_alias_table_.upload(emissive_result.alias_table.data(),
-                                             emissive_result.alias_table.size(),
-                                             stream);
+                                             emissive_result.alias_table.size());
             }
 
             // Ensure all async copies complete before local sources are
             // destroyed (cpu_vertices, cpu_indices, emissive_result
             // triangles/alias_table). Persistent-member sources
             // (gpu_materials_, texture_objects_) need no sync.
-            CUDA_CHECK(cudaStreamSynchronize(stream));
+            CUDA_CHECK(cudaStreamSynchronize(nullptr));
 
             return true;
         } catch (const std::exception &e) {
@@ -1111,7 +1109,7 @@ namespace qualquer::app {
         env_alias_table_.upload(alias_result.entries.data(), alias_result.entries.size());
 
         // Ensure the async copy completes before alias_result is destroyed.
-        CUDA_CHECK(cudaStreamSynchronize(stream));
+        CUDA_CHECK(cudaStreamSynchronize(nullptr));
 
         // Commit all resources
         env_cubemap_texture_ = std::move(cubemap);
