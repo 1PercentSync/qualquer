@@ -43,8 +43,7 @@ namespace qualquer::optix {
          * @brief Steals another array's resources; leaves other empty.
          * @param other Array to steal from; left empty afterwards.
          */
-        CudaMipmapArray(CudaMipmapArray &&other) noexcept
-            : handle(other.handle) {
+        CudaMipmapArray(CudaMipmapArray &&other) noexcept : handle(other.handle) {
             other.handle = nullptr;
         }
 
