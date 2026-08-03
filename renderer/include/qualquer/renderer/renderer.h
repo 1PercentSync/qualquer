@@ -146,9 +146,8 @@ namespace qualquer::renderer {
          *
          * @param cuda_context CUDA context owning the stream and device context the
          *                      pipeline builds against; the stream sequences SBT
-         *                      uploads and color-buffer allocation before the first
-         *                      frame's optixLaunch on the same stream. Its device_id
-         *                      also seeds DlssRR::init.
+         *                      uploads before the first frame's optixLaunch. Its
+         *                      device_id also seeds DlssRR::init.
          * @param width          Initial render resolution width in pixels
          *                       (color buffer size).
          * @param height         Initial render resolution height in pixels.
