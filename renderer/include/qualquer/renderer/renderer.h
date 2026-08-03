@@ -180,8 +180,8 @@ namespace qualquer::renderer {
          * An empty mesh list skips AS construction, leaving the TLAS handle at 0
          * (submit_cuda must then keep the traversable at 0 so raygen skips optixTrace).
          *
-         * @param cuda_context CUDA context (device context + compute stream for AS
-         *                     builds and buffer uploads).
+         * @param cuda_context CUDA context (device context + stream for AS builds
+         *                     and buffer uploads).
          * @param meshes       Loaded meshes (one per glTF primitive).
          * @param instances    Scene mesh instances (one per node-primitive).
          */
@@ -200,7 +200,7 @@ namespace qualquer::renderer {
          * display aspect ratio; on mismatch the stream is drained and the
          * buffer is reallocated (sample_count reset to 0). DLSS-RR feature
          * create/evaluate/release is driven from dlss_rr_.
-         * @param cuda_context CUDA context (surface, streams, external semaphores).
+         * @param cuda_context CUDA context (surface, stream, external semaphores).
          * @param scene        Camera and scene data (materials, texture objects).
          * @param width        Display buffer width in pixels.
          * @param height       Display buffer height in pixels.
@@ -463,7 +463,7 @@ namespace qualquer::renderer {
         optix::DlssRR dlss_rr_;
 
         /**
-         * @brief Intermediate HDR buffer at output resolution (RGBA32F).
+         * @brief Intermediate HDR buffer at output resolution (RGBA16F / half4).
          *
          * DLSS-RR writes its denoised+upscaled result here (via surfaceObject);
          * tonemap reads from here (via textureObject) instead of the color
@@ -523,7 +523,7 @@ namespace qualquer::renderer {
         /** @brief Timing event recorded after raygen. */
         std::array<cudaEvent_t, 2> event_pt_end_{};
 
-        /** @brief Most recent CUDA display-stream elapsed time in milliseconds. */
+        /** @brief Most recent CUDA display pipeline elapsed time in milliseconds. */
         float cuda_display_ms_ = 0.0f;
 
         /** @brief Most recent PT (raygen) elapsed time in milliseconds. */
