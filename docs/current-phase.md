@@ -208,7 +208,7 @@ compute_stream（wait consumption → raygen → record production）→ display
 
 ### UI 适配
 
-移除 `accumulated_samples` 显示（每帧独立无累积计数意义）。DLSS ON/OFF 统一显示 sps。`accumulation_enabled` 保留（false 时
+移除 `accumulated_samples` 显示（每帧独立无累积计数意义）。DLSS ON/OFF 统一显示 sps。`rendering_enabled` 控制暂停（false 时
 不启动 raygen，display 冻结上一帧 mean）。
 
 ### 文档与注释清理

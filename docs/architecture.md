@@ -94,7 +94,7 @@ MUSTREAD:4
 **与 Himalaya 的区别**：Himalaya 把渲染拆成 framework 与 pass 两层。Qualquer 不拆，原因：
 - PT 是单个 OptiX launch，不需要 Render Graph 编排多 Pass
 - CUDA stream 天然顺序执行，不需要复杂的依赖声明
-- "Pass" 就是 PT kernel + DLSS-RR（或 Separate Sum 回退），无需独立抽象
+- "Pass" 就是 PT kernel + DLSS-RR（ON 时）+ tonemap，无需独立抽象
 
 ### app（应用层）
 

@@ -97,7 +97,7 @@ namespace qualquer::renderer {
         /** @brief Camera providing inverse view/projection for primary-ray generation. */
         const Camera &camera;
 
-        /** @brief Runtime render settings (bounces, spp, exposure, accumulation toggle). */
+        /** @brief Runtime render settings (bounces, spp, exposure, render toggle). */
         const RenderSettings &settings;
 
         /** @brief Device material array (indexed via GPUGeometryInfo::material_buffer_offset). */

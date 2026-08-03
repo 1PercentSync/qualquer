@@ -17,8 +17,8 @@ namespace qualquer::optix {
      * @brief Owning handle to a contiguous block of device memory typed as T[].
      *
      * RAII wrapper over cudaMalloc/cudaFree for fixed-layout POD buffers whose
-     * raw bytes are shared between host and device (SBT records, accumulation
-     * buffers, launch params). Move-only: device memory has a single owner, and
+     * raw bytes are shared between host and device (SBT records, geometry info,
+     * launch params). Move-only: device memory has a single owner, and
      * a copy would either double-free or alias one pointer under two lifetimes.
      *
      * T is constrained to trivially-copyable types because the buffer is

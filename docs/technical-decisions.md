@@ -304,12 +304,10 @@ per-sample。
 
 ### Path sequence index
 
-**决策**：Sobol / xxhash 的 path sequence index 为 `frame_index * samples_per_frame + s`（两模式统一）。与 Separate Sum 的
-`sample_count`（per-slot 链长；DLSS ON 每帧为 0）解耦。首 sample 写 aux 的门控改为
-`sample_s == 0`（payload 打包的帧内样本序号），不再与 `sample_count` 比较。
+**决策**：Sobol / xxhash 的 path sequence index 为 `sequence_base + s`（`sequence_base` 每帧推进 `samples_per_frame`，单调递增）。
+首 sample 写 aux 的门控为 `sample_s == 0`（payload 打包的帧内样本序号）。
 
-**理由**：DLSS 清零 `sample_count` 后若仍作 sequence index，每帧 path 维序列重复，跨维相关噪声被时域历史加深。
-`frame_index` 永不 reset，与 host 全局 jitter 同源，保证跨帧序号前进。
+**理由**：单调递增的 `sequence_base` 保证跨帧序号前进，即使 `samples_per_frame` 动态变化也不会重复或跳过。
 
 ### Firefly Clamping
 
@@ -341,8 +339,8 @@ vk_gltf_renderer 静态默认一致。有偏，故允许关闭以做无偏对照
 
 ### DLSS-RR
 
-**决策**：DLSS Ray Reconstruction（CUDA API）替代 OptiX Denoiser。管线：raygen → DLSS-RR → tonemap。Separate Sum 为 DLSS OFF
-的长期 fallback。
+**决策**：DLSS Ray Reconstruction（CUDA API）替代 OptiX Denoiser。管线：raygen → DLSS-RR → tonemap。DLSS OFF 时 raygen
+输出直接 tonemap（per-frame mean，无去噪）。
 
 **理由**：DLSS-RR 同时做时域累积、去噪、放大，直接到达实时 PT 终态；OptiX Denoiser 只做去噪。
 
