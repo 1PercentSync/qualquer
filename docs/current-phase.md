@@ -15,8 +15,9 @@ Step 14.6（审查优先修复）       ← 独立；先于 14.7–14.9 / 15
 Step 14.7（小修复与清理）       ← 独立
 Step 14.8（采样与光照优化）     ← 独立
 Step 14.9（吞吐与收敛）         ← primary 复用与 Step 15 叠加；可先于 15
+Step 14.95（DLSS 独立 Context） ← 独立；先于 15（stream 架构变更影响串行切换）
      ↓
-Step 15（自适应 sample 数）     ← 独立
+Step 15（自适应 sample 数）     ← 依赖 14.95
 
 Step 16（Stochastic Alpha）     ← 独立
 
@@ -178,6 +179,41 @@ object，按 GPU Gems 2 Ch.20 将相邻权重合并为 bilinear fetch（2×2 = 4
 
 `frame_index * φ` 每帧变化，不在固定 CP rotation 定理覆盖内。A/B：有 / 无 temporal offset，比较 DLSS OFF 累积 RMSE–spp
 曲线，再决定去留。
+
+---
+
+## Step 14.95：DLSS 独立 CUDA Context
+
+**验证**：Nsight profile 确认 DLSS evaluate 内部的 cuCtxSynchronize 不再阻塞 compute_stream；PT 与 DLSS 并行恢复。
+
+### DLSS 独立 context + 三 stream 流水线
+
+Nsight profile 显示 DLSS RR evaluate 内部调用 cuCtxSynchronize，同步当前 context 中所有 stream，导致 compute_stream（PT）与
+display_stream（DLSS + tonemap）串行。给 DLSS 一个独立 CUcontext，使其内部 sync 只影响自身。
+
+**Context 层**：在同一 GPU 上用 `cuCtxCreate` 创建 `dlss_context_`，在其中创建 `dlss_stream`（non-blocking）和
+`dlss_done_event`。`display_stream` 改回 non-blocking——原先 blocking 是因为 NGX 可能向 primary context 的 default stream 提交
+work；NGX 移入独立 context 后该理由不再成立。
+
+**DlssRR 层**：`create_feature` 签名改为接收 `CUcontext dlss_context` + `cudaStream_t dlss_stream`（替代原
+`cudaStream_t display_stream`）；删除内部 `cuCtxGetCurrent`，直接使用参数。
+
+**Renderer 层**：DLSS 路径中 `dlss_stream` wait `production_event` → evaluate → record `dlss_done_event`；`display_stream` wait
+`dlss_done_event`（替代 `production_event`）→ tonemap。非 DLSS 路径不变。`consumption_event` 留在 `display_stream` 上——传递性保证
+（display_stream 先 wait `dlss_done` 再 record consumption）覆盖 DLSS 的读取完成。drain 路径补充
+`cudaStreamSynchronize(dlss_stream)`。
+
+**display_stream blocking 移除**：原决策理由为 NGX 可能向 primary context 的 default stream 提交 legacy work，non-blocking
+display_stream 不参与其排序。NGX 移入独立 context 后，primary context 的 default stream 不再被 NGX 污染，display_stream 可安全改
+回 non-blocking。
+
+**Stream 布局**：
+
+| Stream | Context | Flag | 工作 |
+|---|---|---|---|
+| `compute_stream` | primary | non-blocking | params upload + optixLaunch |
+| `dlss_stream` | dlss | non-blocking | DLSS-RR evaluate |
+| `display_stream` | primary | non-blocking | tonemap + signal interop semaphore |
 
 ---
 

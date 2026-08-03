@@ -39,6 +39,11 @@
 - [x] Sobol temporal offset 收敛验证
 - [ ] 请求用户在 CLion 中编译验证（吞吐优化无画质回退；A/B 结论已记录）
 
+## Step 14.95：DLSS 独立 CUDA Context
+
+- [ ] DLSS 独立 context + 三 stream 流水线（Context 新增 dlss context/stream/event + display_stream 改 non-blocking + DlssRR create_feature 签名 + Renderer 三 stream 同步 + drain 路径补充）
+- [ ] 请求用户在 CLion 中编译验证（Nsight profile 确认 PT 与 DLSS 并行恢复）
+
 ## Step 15：自适应 Sample 数
 
 - [ ] 刷新率查询
