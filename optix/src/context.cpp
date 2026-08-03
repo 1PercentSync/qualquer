@@ -156,11 +156,10 @@ namespace qualquer::optix {
         device_id_ = best_device;
         device_uuid = get_device_uuid(prop);
 
-        // Two explicit streams (serial, not parallel): compute for raygen,
-        // display for DLSS+tonemap. Display is blocking (default-stream ordering)
-        // because NGX's CUDA path may enqueue internal work on the default stream.
-        CUDA_CHECK(cudaStreamCreateWithFlags(&compute_stream, cudaStreamNonBlocking));
-        CUDA_CHECK(cudaStreamCreate(&display_stream));
+        // Single blocking stream for the serial render pipeline. Blocking
+        // (default-stream ordering) because NGX may enqueue internal work on
+        // the legacy default stream.
+        CUDA_CHECK(cudaStreamCreate(&stream));
 
         spdlog::info("CUDA device {}: \"{}\" with compute capability {}.{}",
                      best_device, prop.name, best_major, best_minor);
@@ -269,8 +268,7 @@ namespace qualquer::optix {
         // Display-buffer import first (surface wraps the imported image memory), then
         // the independent semaphores, then OptiX device context, then the streams last
         // — cudaStreamDestroy waits for pending work, so destroying them last drains
-        // any in-flight kernel/signal. display_stream before compute_stream mirrors
-        // the pipeline dependency (display waits on compute). device_id_ needs no
+        // any in-flight kernel/signal. device_id_ needs no
         // cleanup — the runtime-managed primary context is left intact for other holders.
         release_display_buffer();
         for (auto &sem: external_semaphores) {
@@ -287,13 +285,9 @@ namespace qualquer::optix {
             OPTIX_CHECK(optixDeviceContextDestroy(device_context));
             device_context = nullptr;
         }
-        if (display_stream != nullptr) {
-            CUDA_CHECK(cudaStreamDestroy(display_stream));
-            display_stream = nullptr;
-        }
-        if (compute_stream != nullptr) {
-            CUDA_CHECK(cudaStreamDestroy(compute_stream));
-            compute_stream = nullptr;
+        if (stream != nullptr) {
+            CUDA_CHECK(cudaStreamDestroy(stream));
+            stream = nullptr;
         }
     }
 } // namespace qualquer::optix

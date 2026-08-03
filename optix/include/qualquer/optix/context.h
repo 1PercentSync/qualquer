@@ -136,22 +136,14 @@ namespace qualquer::optix {
         OptixDeviceContext device_context = nullptr;
 
         /**
-         * @brief CUDA stream for path-tracing compute (optixLaunch).
+         * @brief Single CUDA stream for the entire render pipeline.
          *
-         * Explicit, not the default stream: the default stream implicitly
-         * synchronizes with all explicit streams, serializing any concurrent work.
-         * Null before init and after destroy.
+         * Blocking (participates in default-stream ordering) because NGX's
+         * CUDA path may enqueue internal work on the legacy default stream.
+         * Carries raygen, DLSS evaluate, tonemap, and semaphore signal in
+         * serial order. Null before init and after destroy.
          */
-        cudaStream_t compute_stream = nullptr;
-
-        /**
-         * @brief CUDA stream for display output (DLSS evaluate + tonemap + semaphore signal).
-         *
-         * Executes serially after compute_stream via CUDA event wait.
-         * Blocking stream (participates in default-stream ordering for NGX).
-         * Null before init and after destroy.
-         */
-        cudaStream_t display_stream = nullptr;
+        cudaStream_t stream = nullptr;
 
         /** @brief Selected CUDA device index, for DLSS-RR and other device-level queries. */
         [[nodiscard]] int device_id() const { return device_id_; }

@@ -116,7 +116,7 @@ namespace qualquer::app {
         default_textures_ = optix::create_default_textures();
         if (!config_.scene_path.empty()) {
             if (!scene_loader_.load(config_.scene_path, default_textures_,
-                                    cuda_context_.compute_stream)) {
+                                    cuda_context_.stream)) {
                 error_message_ = "Failed to load scene: " + config_.scene_path;
             }
         }
@@ -129,7 +129,7 @@ namespace qualquer::app {
         // --- Environment map (HDR → cubemap + alias table) ---
         if (!config_.env_map_path.empty()) {
             scene_loader_.load_env_map(config_.env_map_path,
-                                       cuda_context_.compute_stream);
+                                       cuda_context_.stream);
         }
 
         update_scene_stats();
@@ -231,14 +231,13 @@ namespace qualquer::app {
                 switch_scene(actions.new_scene_path);
             }
             if (actions.env_map_load_requested) {
-                // Drain CUDA streams: this frame's raygen/tonemap reference the
-                // current env cubemap texture object via LaunchParams; they must
+                // Drain the CUDA stream: this frame's pipeline references the
+                // current env cubemap texture object via LaunchParams; it must
                 // finish before the old texture is destroyed.
-                CUDA_CHECK(cudaStreamSynchronize(cuda_context_.compute_stream));
-                CUDA_CHECK(cudaStreamSynchronize(cuda_context_.display_stream));
+                CUDA_CHECK(cudaStreamSynchronize(cuda_context_.stream));
 
                 if (scene_loader_.load_env_map(actions.new_env_map_path,
-                                               cuda_context_.compute_stream)) {
+                                               cuda_context_.stream)) {
                     renderer_.reset_dlss();
                     update_scene_stats();
                     config_.env_map_path = actions.new_env_map_path;
@@ -488,15 +487,10 @@ namespace qualquer::app {
             return;
         }
 
-        // Drain both CUDA streams before releasing resources they use.
-        // compute_stream: raygen may still be writing the color buffer.
-        // display_stream: tonemap may still be writing display_surface.
-        // Neither stream is covered by vkQueueWaitIdle (inside recreate) —
-        // compute_stream has no semaphore link to the Vulkan queue, and the
-        // forward semaphore linking display_stream is consumed on the GPU
-        // timeline which hasn't necessarily been reached yet.
-        CUDA_CHECK(cudaStreamSynchronize(cuda_context_.compute_stream));
-        CUDA_CHECK(cudaStreamSynchronize(cuda_context_.display_stream));
+        // Drain the CUDA stream before releasing resources it uses.
+        // The stream may still be writing color or display_surface.
+        // vkQueueWaitIdle (inside recreate) does not cover the CUDA stream.
+        CUDA_CHECK(cudaStreamSynchronize(cuda_context_.stream));
         // The CUDA side must release its imported surface before the Vulkan image is
         // destroyed (the surface wraps that image's memory). External semaphores are
         // resolution-independent and stay.
@@ -532,19 +526,15 @@ namespace qualquer::app {
     }
 
     void Application::switch_scene(const std::string &path) {
-        // Drain both CUDA streams: this frame's submit_cuda already launched raygen
-        // (compute_stream) and tonemap (display_stream) referencing the current
-        // scene's buffers. They must finish before those buffers are freed. Vulkan
-        // queue idle is unnecessary — scene resources are all CUDA-owned with no
-        // Vulkan-queue binding (unlike Himalaya).
-        CUDA_CHECK(cudaStreamSynchronize(cuda_context_.compute_stream));
-        CUDA_CHECK(cudaStreamSynchronize(cuda_context_.display_stream));
+        // Drain the CUDA stream: this frame's pipeline references the current
+        // scene's buffers, which must finish before being freed.
+        CUDA_CHECK(cudaStreamSynchronize(cuda_context_.stream));
 
         scene_loader_.destroy_scene_resources();
 
         if (!path.empty()) {
             if (scene_loader_.load(path, default_textures_,
-                                    cuda_context_.compute_stream)) {
+                                    cuda_context_.stream)) {
                 error_message_.clear();
             } else {
                 error_message_ = "Failed to load scene: " + path;
@@ -678,9 +668,9 @@ namespace qualquer::app {
 
     void Application::destroy() {
         vkQueueWaitIdle(context_.graphics_queue);
-        // vkQueueWaitIdle covers display_stream (linked via the forward semaphore)
-        // but not compute_stream — drain it before freeing the resources it uses.
-        CUDA_CHECK(cudaStreamSynchronize(cuda_context_.compute_stream));
+        // vkQueueWaitIdle covers the Vulkan queue but not the CUDA stream —
+        // drain it before freeing resources.
+        CUDA_CHECK(cudaStreamSynchronize(cuda_context_.stream));
 
         imgui_backend_.destroy();
         // Renderer's OptiX pipeline, CUDA buffers, and DLSS-RR are torn down

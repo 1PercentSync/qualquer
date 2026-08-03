@@ -100,45 +100,35 @@ VMA。Swapchain 为 `B8G8R8A8_SRGB`（blit 时硬件 swizzle + 线性→sRGB 编
 
 | 方向                   | 数量           | CUDA 侧                              | Vulkan 侧                 | 保护的依赖                              |
 |------------------------|----------------|--------------------------------------|---------------------------|-----------------------------------------|
-| CUDA→Vulkan（forward） | per-frame（2） | signal（display_stream，tonemap 后） | wait（submit，blit 前）   | blit 读 display_surface 前 tonemap 写完 |
-| Vulkan→CUDA（reverse） | 单个（1）      | wait（display_stream，tonemap 前）   | signal（submit，blit 后） | tonemap 写 display_surface 前 blit 读完 |
+| CUDA→Vulkan（forward） | per-frame（2） | signal（CUDA stream，tonemap 后） | wait（submit，blit 前）   | blit 读 display_surface 前 tonemap 写完 |
+| Vulkan→CUDA（reverse） | 单个（1）      | wait（CUDA stream，raygen 前）    | signal（submit，blit 后） | tonemap 写 display_surface 前 blit 读完 |
 
 **理由**：
 
 - 显示 buffer 只有一份，CUDA tonemap 写、Vulkan blit 读，存在 write-after-read 依赖，reverse 不可或缺
-- forward 必须 per-frame：signal 端在 CUDA display_stream、wait 端在 Vulkan submit2，分属两个独立 engine；2 frames in flight
+- forward 必须 per-frame：signal 端在 CUDA stream、wait 端在 Vulkan submit2，分属两个独立 engine；2 frames in flight
   下共用单个 forward semaphore 时，GPU 上两次 CUDA signal 之间无法保证夹着一次 Vulkan wait，会违反 binary semaphore
   约束。Per-frame 分开后，同一 slot 的 fence wait 保证上一次 wait 完成才允许下一次 signal
 - reverse 可单个：reverse 的每次 signal 都在 submit2 的「wait forward_sem → blit → signal reverse_sem」序列中，而 forward 是
   per-frame 的，这条链把 reverse 的 signal/wait 强制成严格交替——每个 reverse signal 之前必有一个 reverse wait（上帧消费），不会连续
   signal。因此 reverse 无需 per-frame
-- 单向（仅 forward）时，display_surface 的 write-after-read 靠 T_blit << T_raygen 的隐式间隙——形式上不正确
-- reverse 在 T_blit << T_raygen 时不损失并行度：blit 在 raygen 期间完成，reverse signal 远早于 raygen_done event，tonemap
-  启动时机仍由 raygen_done 决定
 - 首帧由 init 中的 pre-signal 闭合（reverse_sem 预先 signal，使首帧 CUDA wait 立即通过）
 - acquire 失败时 Vulkan submit 被跳过，drain submit 需代为 signal reverse semaphore（否则下一帧 CUDA wait 挂起）
 
 ### CUDA Stream 架构
 
-**决策**：双显式 stream（`compute_stream` + `display_stream`），串行执行，均由 `optix::Context` 持有。
-
-| Stream           | 每帧工作                                                      |
-|------------------|---------------------------------------------------------------|
-| `compute_stream` | params upload + optixLaunch（raygen）                         |
-| `display_stream` | DLSS-RR evaluate（ON 时）+ tonemap + signal interop semaphore |
-
-`compute_stream` 为 non-blocking stream；`display_stream` 为 blocking stream。display_stream 通过 CUDA event 等待
-compute_stream 的 raygen 完成后再启动。
+**决策**：单显式 blocking stream（`stream`），由 `optix::Context` 持有。每帧管线：reverse semaphore wait → raygen →
+DLSS-RR evaluate（ON 时）→ tonemap → forward semaphore signal。Stream ordering 保证各阶段顺序。
 
 **理由**：
 
-- 默认流会与所有显式流隐式同步，等于全局序列化点，两条显式 stream 避免此问题
-- 分 stream 是因为 DLSS-RR feature 绑在 display stream 上，且 display stream 必须 blocking（NGX 的 CUDA 路径可能提交 legacy
-  default-stream work）；raygen 留在 compute_stream 上避免 blocking 属性对 optixLaunch 的影响
-- 串行而非并行：DLSS 内部 ctx sync 使 PT 与 DLSS 已实际串行；绕过后 L2 争用导致并行反而更差
+- 默认流会与所有显式流隐式同步，等于全局序列化点，显式 stream 避免此问题
+- Blocking（参与 default-stream ordering）因为 NGX 的 CUDA 路径可能提交 legacy default-stream work
+- 单 stream：DLSS 内部 ctx sync 使 PT 与 DLSS 已实际串行；单 buffer 无数据依赖需要跨 stream 分离；stream ordering 天然
+  保证顺序，不需要 CUDA event
 
-**相对早期决策**：Phase 2–4 期间两条 stream 并行执行（raygen 写 buf[A] 同时 tonemap 读 buf[B]），以 ping-pong 缓冲消除数据
-依赖。串行化后两条 stream 保持存在但执行顺序固定为 compute → display。
+**相对早期决策**：Phase 2–4 使用双显式 stream（compute non-blocking + display blocking）并行执行，以 ping-pong 缓冲消除
+数据依赖。串行化后合并为单 stream。
 
 ### Vulkan 帧同步与 in-flight
 

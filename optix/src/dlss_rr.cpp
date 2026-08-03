@@ -193,7 +193,7 @@ namespace qualquer::optix {
     void DlssRR::create_feature(uint32_t render_width, uint32_t render_height,
                                 uint32_t display_width, uint32_t display_height,
                                 // ReSharper disable once CppParameterMayBeConst
-                                DlssRenderPreset preset, cudaStream_t display_stream) {
+                                DlssRenderPreset preset, cudaStream_t stream) {
         release_feature();
 
         if (!available_ || !ngx_params_) {
@@ -242,7 +242,7 @@ namespace qualquer::optix {
         NVSDK_NGX_CUDA_DLSSD_Create_Params cuda_params{};
         cuda_params.Feature = dlss_params;
         cuda_params.InCUContext = static_cast<void *>(cu_context);
-        cuda_params.InCUStream = static_cast<void *>(display_stream);
+        cuda_params.InCUStream = static_cast<void *>(stream);
 
         NGX_CHECK(NGX_CUDA_CREATE_DLSSD_EXT(&ngx_handle_, ngx_params_, &cuda_params));
 

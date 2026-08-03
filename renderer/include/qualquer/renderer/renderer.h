@@ -190,16 +190,14 @@ namespace qualquer::renderer {
                         std::span<const MeshInstance> instances);
 
         /**
-         * @brief Submits raygen and display work on two CUDA streams (serial).
+         * @brief Submits the serial render pipeline on a single CUDA stream.
          *
-         * compute_stream: waits for the previous display pass to finish reading
-         * the color buffer, then uploads params and launches raygen.
-         * display_stream: waits for raygen + reverse interop semaphore, then
-         * evaluates DLSS (if ON) / tonemaps, and signals the forward semaphore.
-         * The two streams execute serially (display waits for compute via event).
+         * Pipeline: reverse semaphore wait → raygen → DLSS evaluate (if ON)
+         * → tonemap → forward semaphore signal. Stream ordering guarantees
+         * each stage completes before the next begins.
          *
          * The render resolution derives from scene.settings.render_height and the
-         * display aspect ratio; on mismatch both streams are drained and the
+         * display aspect ratio; on mismatch the stream is drained and the
          * buffer is reallocated (sample_count reset to 0). DLSS-RR feature
          * create/evaluate/release is driven from dlss_rr_.
          * @param cuda_context CUDA context (surface, streams, external semaphores).
@@ -259,10 +257,10 @@ namespace qualquer::renderer {
         };
 
         /**
-         * @brief Six render-resolution guide resources belonging to one color slot.
+         * @brief Six render-resolution DLSS guide resources.
          *
-         * Keeping the resources under one slot owner prevents DLSS from mixing
-         * guide data with a color buffer produced by another frame.
+         * Keeping guides under one owner alongside the color buffer prevents
+         * DLSS from mixing guide data with mismatched color data.
          */
         struct AuxBufferSet {
             /** @brief Allocates every guide resource at the same resolution. */
@@ -324,12 +322,10 @@ namespace qualquer::renderer {
         };
 
         /**
-         * @brief Color buffer and DLSS guide resources with serial sync events.
+         * @brief Color buffer and DLSS guide resources.
          *
-         * Single instance (no ping-pong). production_event and consumption_event
-         * enforce the serial compute → display ordering across frames: raygen
-         * waits for consumption before writing, display waits for production
-         * before reading.
+         * Single instance. Aux guides are allocated on demand when DLSS is
+         * enabled. sample_count tracks buffer validity for tonemap.
          */
         struct FrameSlot {
             /**
@@ -352,15 +348,6 @@ namespace qualquer::renderer {
             /** @brief Releases color and guide resources. */
             void free();
 
-            /**
-             * @brief Creates production/consumption sync events and records them once
-             *        so the first waits pass without reading unrecorded events.
-             */
-            void create_events(cudaStream_t stream);
-
-            /** @brief Destroys production/consumption sync events. */
-            void destroy_events();
-
             /** @brief HDR color buffer (RGBA32F, CUDA array + tex/surf). */
             optix::CudaArrayBuffer<float4> color;
 
@@ -374,20 +361,6 @@ namespace qualquer::renderer {
              * valid per-frame mean. Tonemap outputs black when 0.
              */
             uint32_t sample_count = 0;
-
-            /**
-             * @brief Recorded after raygen produces color and guides.
-             *
-             * display_stream waits on this before reading.
-             */
-            cudaEvent_t production_event = nullptr;
-
-            /**
-             * @brief Recorded after display finishes reading color.
-             *
-             * compute_stream waits on this before the next raygen overwrites.
-             */
-            cudaEvent_t consumption_event = nullptr;
         };
 
         /**
@@ -424,11 +397,10 @@ namespace qualquer::renderer {
         optix::CudaBuffer<GPUGeometryInfo> geometry_info_buffer_;
 
         /**
-         * @brief Single color/aux resource slot with serial sync events.
+         * @brief Color and aux resources for the render pipeline.
          *
-         * Raygen writes per-frame mean; display reads after raygen finishes.
-         * Aux guides allocated on demand when DLSS is enabled.
-         * CUDA arrays are required for DLSS CUDA API resource consumption.
+         * Raygen writes per-frame mean; DLSS/tonemap reads after raygen
+         * (stream ordering). CUDA arrays are required for DLSS CUDA API.
          */
         FrameSlot frame_slot_;
 
@@ -539,16 +511,16 @@ namespace qualquer::renderer {
         DlssFrameMetadata prev_dlss_metadata_{};
 
 #ifndef NDEBUG
-        /** @brief Timing event recorded before display_stream work (DLSS + tonemap). */
+        /** @brief Timing event recorded before DLSS + tonemap. */
         std::array<cudaEvent_t, 2> event_display_start_{};
 
-        /** @brief Timing event recorded after display_stream work. */
+        /** @brief Timing event recorded after DLSS + tonemap. */
         std::array<cudaEvent_t, 2> event_display_end_{};
 
-        /** @brief Timing event recorded before compute_stream work (params upload + raygen). */
+        /** @brief Timing event recorded before params upload + raygen. */
         std::array<cudaEvent_t, 2> event_pt_start_{};
 
-        /** @brief Timing event recorded after compute_stream work (raygen done). */
+        /** @brief Timing event recorded after raygen. */
         std::array<cudaEvent_t, 2> event_pt_end_{};
 
         /** @brief Most recent CUDA display-stream elapsed time in milliseconds. */

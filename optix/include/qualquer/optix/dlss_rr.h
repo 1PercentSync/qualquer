@@ -95,18 +95,18 @@ namespace qualquer::optix {
          *
          * Releases any existing feature first. Quality mode is auto-selected
          * from cached optimal settings based on the render/display ratio.
-         * Passes CUcontext and display_stream to NGX for internal stream ordering.
+         * Passes CUcontext and the CUDA stream to NGX for internal ordering.
          *
          * @param render_width   Input (render) resolution width.
          * @param render_height  Input (render) resolution height.
          * @param display_width  Output (display) resolution width.
          * @param display_height Output (display) resolution height.
          * @param preset         Render preset (neural network model selection).
-         * @param display_stream CUDA stream for DLSS-RR execution.
+         * @param stream         CUDA stream for DLSS-RR execution.
          */
         void create_feature(uint32_t render_width, uint32_t render_height,
                             uint32_t display_width, uint32_t display_height,
-                            DlssRenderPreset preset, cudaStream_t display_stream);
+                            DlssRenderPreset preset, cudaStream_t stream);
 
         /**
          * @brief Queries optimal render resolutions for all quality modes and caches results.
@@ -200,7 +200,7 @@ namespace qualquer::optix {
          * Fills NVSDK_NGX_CUDA_DLSSD_Eval_Params and calls
          * NGX_CUDA_EVALUATE_DLSSD_EXT. The feature must be active
          * (feature_active() == true). The call is enqueued on the stream
-         * passed at create_feature time (display_stream).
+         * passed at create_feature time.
          *
          * @param input Per-frame evaluation inputs.
          */
