@@ -5,6 +5,7 @@
 
 #include <cstdint>
 
+#include <cuda_fp16.h>
 #include <optix_device.h>
 
 #include <qualquer/renderer/launch_params.h>
@@ -64,14 +65,25 @@ __constant__ qualquer::renderer::LaunchParams params;
 
 /// Packs linear [0,1] RGB into a uint32_t for RGBA8 surface write.
 ///
-/// OptiX bug: surf2Dwrite<uchar4> causes misaligned-address device fault
-/// on Ada (SM 8.9). surf2Dwrite<uint32_t> with identical bytes works.
+/// OptiX bug: surf2Dwrite with sub-32-bit vector types (uchar4, ushort4)
+/// causes misaligned-address device fault on Ada (SM 8.9).
+/// surf2Dwrite<uint32_t> / <uint2> with identical bytes works.
 /// See: https://forums.developer.nvidia.com/t/367431
 __forceinline__ __device__ uint32_t pack_albedo_u8(const float3 c) {
     const uint32_t r = __float2uint_rn(fminf(c.x, 1.0f) * 255.0f);
     const uint32_t g = __float2uint_rn(fminf(c.y, 1.0f) * 255.0f);
     const uint32_t b = __float2uint_rn(fminf(c.z, 1.0f) * 255.0f);
     return r | (g << 8) | (b << 16) | 0xFF000000u;
+}
+
+/// Packs a float3 normal + float roughness into ushort4 for RGBA16F surface write.
+__forceinline__ __device__ ushort4 pack_normal_roughness_f16(
+        const float3 n, const float roughness) {
+    return make_ushort4(
+        __half_as_ushort(__float2half_rn(n.x)),
+        __half_as_ushort(__float2half_rn(n.y)),
+        __half_as_ushort(__float2half_rn(n.z)),
+        __half_as_ushort(__float2half_rn(roughness)));
 }
 
 /// Writes "no surface" aux G-buffer defaults (sky / single-sided pass-through).
@@ -89,10 +101,10 @@ __forceinline__ __device__ void write_aux_no_surface(
                 sx * static_cast<int>(sizeof(uint32_t)), sy);
     surf2Dwrite(make_float4(0.0f, 0.0f, 0.0f, 0.0f), params.aux_specular_albedo,
                 sx * static_cast<int>(sizeof(float4)), sy);
-    surf2Dwrite(make_float4(0.0f, 0.0f, 0.0f, 0.0f), params.aux_normals,
-                sx * static_cast<int>(sizeof(float4)), sy);
-    surf2Dwrite(0.0f, params.aux_roughness,
-                sx * static_cast<int>(sizeof(float)), sy);
+    // Normals (xyz) + roughness (w) packed into RGBA16F.
+    surf2Dwrite(pack_normal_roughness_f16(make_float3(0.0f, 0.0f, 0.0f), 0.0f),
+                params.aux_normal_roughness,
+                sx * static_cast<int>(sizeof(ushort4)), sy);
 }
 
 /// Traces one path from a primary ray, returning per-sample radiance.
@@ -710,14 +722,10 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
                     params.aux_specular_albedo,
                     sx * static_cast<int>(sizeof(float4)), sy);
 
-        // World-space shading normal.
-        surf2Dwrite(make_float4(N_shading.x, N_shading.y, N_shading.z, 0.0f),
-                    params.aux_normals,
-                    sx * static_cast<int>(sizeof(float4)), sy);
-
-        // Linear roughness.
-        surf2Dwrite(roughness, params.aux_roughness,
-                    sx * static_cast<int>(sizeof(float)), sy);
+        // World-space shading normal (xyz) + linear roughness (w), packed RGBA16F.
+        surf2Dwrite(pack_normal_roughness_f16(N_shading, roughness),
+                    params.aux_normal_roughness,
+                    sx * static_cast<int>(sizeof(ushort4)), sy);
     }
 
     const uint32_t sample_index = params.sequence_base + payload_get_sample_s();

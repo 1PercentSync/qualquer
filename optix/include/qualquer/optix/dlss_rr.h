@@ -175,8 +175,7 @@ namespace qualquer::optix {
             cudaTextureObject_t motion_vectors_tex;
             cudaTextureObject_t diffuse_albedo_tex;
             cudaTextureObject_t specular_albedo_tex;
-            cudaTextureObject_t normals_tex;
-            cudaTextureObject_t roughness_tex;
+            cudaTextureObject_t normal_roughness_tex;  ///< RGBA16F: normal xyz + roughness w.
 
             // ---- Resolution ----
             uint32_t render_width;

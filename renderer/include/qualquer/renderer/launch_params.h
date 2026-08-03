@@ -328,11 +328,8 @@ struct LaunchParams {
     /** @brief Specular reflectance albedo (RGBA32F surface). */
     cudaSurfaceObject_t aux_specular_albedo;
 
-    /** @brief World-space shading normal (RGBA32F surface, .w unused). */
-    cudaSurfaceObject_t aux_normals;
-
-    /** @brief Linear roughness (R32F surface). */
-    cudaSurfaceObject_t aux_roughness;
+    /** @brief World-space shading normal (xyz) + linear roughness (w), packed RGBA16F surface. */
+    cudaSurfaceObject_t aux_normal_roughness;
 
     // ---- Motion vector matrices ----
 

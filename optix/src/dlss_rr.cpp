@@ -220,7 +220,7 @@ namespace qualquer::optix {
         dlss_params.InPerfQualityValue = static_cast<NVSDK_NGX_PerfQuality_Value>(quality);
         dlss_params.InFeatureCreateFlags = create_flags;
         dlss_params.InUseHWDepth = NVSDK_NGX_DLSS_Depth_Type_Linear;
-        dlss_params.InRoughnessMode = NVSDK_NGX_DLSS_Roughness_Mode_Unpacked;
+        dlss_params.InRoughnessMode = NVSDK_NGX_DLSS_Roughness_Mode_Packed;
 
         // Render preset for all quality modes.
         const auto ngx_preset = static_cast<NVSDK_NGX_RayReconstruction_Hint_Render_Preset>(
@@ -271,8 +271,8 @@ namespace qualquer::optix {
         eval.pInMotionVectors = const_cast<cudaTextureObject_t *>(&input.motion_vectors_tex);
         eval.pInDiffuseAlbedo = const_cast<cudaTextureObject_t *>(&input.diffuse_albedo_tex);
         eval.pInSpecularAlbedo = const_cast<cudaTextureObject_t *>(&input.specular_albedo_tex);
-        eval.pInNormals = const_cast<cudaTextureObject_t *>(&input.normals_tex);
-        eval.pInRoughness = const_cast<cudaTextureObject_t *>(&input.roughness_tex);
+        // Normals RGBA16F with roughness packed in alpha (Roughness_Mode_Packed).
+        eval.pInNormals = const_cast<cudaTextureObject_t *>(&input.normal_roughness_tex);
 
         // Specular hit distance: not provided. nullptr tells the SDK this
         // signal is absent, which is more correct than feeding all-infinity.

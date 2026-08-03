@@ -274,8 +274,7 @@ namespace qualquer::renderer {
         motion_vectors.alloc(width, height, cudaCreateChannelDesc<float2>(), cudaReadModeElementType);
         diffuse_albedo.alloc(width, height, cudaCreateChannelDesc<uchar4>(), cudaReadModeNormalizedFloat);
         specular_albedo.alloc(width, height, cudaCreateChannelDesc<float4>(), cudaReadModeElementType);
-        normals.alloc(width, height, cudaCreateChannelDesc<float4>(), cudaReadModeElementType);
-        roughness.alloc(width, height, cudaCreateChannelDesc<float>(), cudaReadModeElementType);
+        normal_roughness.alloc(width, height, cudaCreateChannelDescHalf4(), cudaReadModeElementType);
     }
 
     void Renderer::AuxBufferSet::resize(const uint32_t width, const uint32_t height) {
@@ -283,8 +282,7 @@ namespace qualquer::renderer {
         motion_vectors.resize(width, height);
         diffuse_albedo.resize(width, height);
         specular_albedo.resize(width, height);
-        normals.resize(width, height);
-        roughness.resize(width, height);
+        normal_roughness.resize(width, height);
     }
 
     void Renderer::AuxBufferSet::free() {
@@ -292,8 +290,7 @@ namespace qualquer::renderer {
         motion_vectors.free();
         diffuse_albedo.free();
         specular_albedo.free();
-        normals.free();
-        roughness.free();
+        normal_roughness.free();
     }
 
     void Renderer::FrameSlot::alloc(const uint32_t width, const uint32_t height) {
@@ -846,8 +843,7 @@ namespace qualquer::renderer {
             .aux_motion_vectors = write.aux.motion_vectors.surf_object(),
             .aux_diffuse_albedo = write.aux.diffuse_albedo.surf_object(),
             .aux_specular_albedo = write.aux.specular_albedo.surf_object(),
-            .aux_normals = write.aux.normals.surf_object(),
-            .aux_roughness = write.aux.roughness.surf_object(),
+            .aux_normal_roughness = write.aux.normal_roughness.surf_object(),
             // Unjittered VP matrices for motion vector computation.
             .view_projection = current_vp,
             .prev_view_projection = previous_vp,
@@ -950,8 +946,7 @@ namespace qualquer::renderer {
                 .motion_vectors_tex = read.aux.motion_vectors.tex_object(),
                 .diffuse_albedo_tex = read.aux.diffuse_albedo.tex_object(),
                 .specular_albedo_tex = read.aux.specular_albedo.tex_object(),
-                .normals_tex = read.aux.normals.tex_object(),
-                .roughness_tex = read.aux.roughness.tex_object(),
+                .normal_roughness_tex = read.aux.normal_roughness.tex_object(),
                 .render_width = render_width,
                 .render_height = render_height,
                 .jitter_x = read.dlss_metadata.jitter_x,

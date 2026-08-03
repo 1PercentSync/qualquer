@@ -307,11 +307,8 @@ namespace qualquer::renderer {
             /** @brief Specular reflectance albedo (RGBA32F). */
             optix::CudaArrayBuffer<float4> specular_albedo;
 
-            /** @brief World-space shading normal (RGBA32F, .w unused). */
-            optix::CudaArrayBuffer<float4> normals;
-
-            /** @brief Linear roughness (R32F). */
-            optix::CudaArrayBuffer<float> roughness;
+            /** @brief World-space shading normal (xyz) + linear roughness (w), RGBA16F. */
+            optix::CudaArrayBuffer<float4> normal_roughness;
         };
 
         /**
