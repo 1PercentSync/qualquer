@@ -647,7 +647,7 @@ namespace qualquer::renderer {
 #ifndef NDEBUG
         const uint32_t timing_slot = frame_counter_ % 2;
 #endif
-        const uint32_t effective_spp = scene.settings.accumulation_enabled
+        const uint32_t effective_spp = scene.settings.rendering_enabled
                                            ? scene.settings.samples_per_frame
                                            : 0;
         const bool has_new_samples = effective_spp > 0;
@@ -1139,7 +1139,7 @@ namespace qualquer::renderer {
         return tlas_instance_count_;
     }
 
-    void Renderer::reset_accumulation() {
+    void Renderer::reset_dlss() {
         invalidate_dlss_state();
     }
 } // namespace qualquer::renderer

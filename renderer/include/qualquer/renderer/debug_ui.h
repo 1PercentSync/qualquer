@@ -152,8 +152,8 @@ namespace qualquer::renderer {
         /** @brief Env map path picked by the user (valid only when env_map_load_requested). */
         std::string new_env_map_path;
 
-        /** @brief True if the user clicked the manual reset button. */
-        bool accum_reset_requested = false;
+        /** @brief True if the user clicked the manual DLSS reset button. */
+        bool dlss_reset_requested = false;
     };
 
     /**
@@ -318,7 +318,7 @@ namespace qualquer::renderer {
          * @brief Renders the Path Tracing section: parameter sliders and sample count.
          *
          * @param ctx    Provides settings (mutable), camera (mutable for FOV).
-         * @param action Receives accum_reset_requested on Reset button click.
+         * @param action Receives dlss_reset_requested on Reset button click.
          * @param stats  Frame-time statistics (avg_fps for samples/s display).
          */
         static void draw_path_tracing(const DebugUIContext &ctx, DebugUIActions &action,

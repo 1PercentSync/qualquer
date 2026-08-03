@@ -439,10 +439,10 @@ namespace qualquer::renderer {
         slider_angle_deferred("FOV", &ctx.camera.fov,
                               30.0f, 120.0f, "%.1f\xC2\xB0");
 
-        ImGui::Checkbox("Accumulate", &ctx.settings.accumulation_enabled);
+        ImGui::Checkbox("Render", &ctx.settings.rendering_enabled);
 
         if (ImGui::Button("Reset")) {
-            action.accum_reset_requested = true;
+            action.dlss_reset_requested = true;
         }
     }
 

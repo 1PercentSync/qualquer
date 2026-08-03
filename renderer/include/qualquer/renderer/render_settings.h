@@ -65,7 +65,7 @@ namespace qualquer::renderer {
          * @brief When false, rendering is paused: effective spp is set to 0
          *        so raygen does not run, display freezes on the last frame.
          */
-        bool accumulation_enabled = true;
+        bool rendering_enabled = true;
 
         /** @brief IBL Y-axis rotation in radians, accumulated from left-drag input. */
         float env_rotation = 0.0f;

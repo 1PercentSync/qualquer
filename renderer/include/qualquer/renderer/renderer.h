@@ -232,13 +232,13 @@ namespace qualquer::renderer {
         [[nodiscard]] const optix::DlssRR &dlss() const { return dlss_rr_; }
 
         /**
-         * @brief Discards DLSS-RR temporal history.
+         * @brief Discards DLSS-RR temporal history and cached output.
          *
          * Sets deferred flags consumed by submit_cuda: the next complete DLSS
          * input carries a history-reset token.
          * Used for scene switch, camera teleport, env map reload, manual Reset.
          */
-        void reset_accumulation();
+        void reset_dlss();
 
     private:
         /**
@@ -510,7 +510,7 @@ namespace qualquer::renderer {
         bool dlss_output_valid_ = false;
 
         /**
-         * @brief Deferred DLSS history reset flag set by reset_accumulation().
+         * @brief Deferred DLSS history reset flag set by reset_dlss().
          *
          * The next complete DLSS input slot receives the token; evaluation
          * consumes it together with that slot's color, guides, and metadata.

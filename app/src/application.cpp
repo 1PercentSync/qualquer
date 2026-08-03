@@ -167,7 +167,7 @@ namespace qualquer::app {
 
             // F-key teleport: reset DLSS history.
             if (camera_controller_.teleported) {
-                renderer_.reset_accumulation();
+                renderer_.reset_dlss();
                 camera_controller_.teleported = false;
             }
 
@@ -219,8 +219,8 @@ namespace qualquer::app {
             if (actions.error_dismissed) {
                 error_message_.clear();
             }
-            if (actions.accum_reset_requested) {
-                renderer_.reset_accumulation();
+            if (actions.dlss_reset_requested) {
+                renderer_.reset_dlss();
             }
             if (actions.scene_load_requested) {
                 // switch_scene drains the CUDA streams, so this frame's already-
@@ -239,13 +239,13 @@ namespace qualquer::app {
 
                 if (scene_loader_.load_env_map(actions.new_env_map_path,
                                                cuda_context_.compute_stream)) {
-                    renderer_.reset_accumulation();
+                    renderer_.reset_dlss();
                     update_scene_stats();
                     config_.env_map_path = actions.new_env_map_path;
                     save_config(config_);
                 } else {
                     error_message_ = "Failed to load env map: " + actions.new_env_map_path;
-                    renderer_.reset_accumulation();
+                    renderer_.reset_dlss();
                     update_scene_stats();
                 }
             }
@@ -563,7 +563,7 @@ namespace qualquer::app {
         camera_controller_.set_focus_target(&scene_loader_.scene_bounds());
         auto_position_camera(scene_loader_.scene_bounds());
 
-        renderer_.reset_accumulation();
+        renderer_.reset_dlss();
         update_scene_stats();
 
         config_.scene_path = path;
