@@ -180,14 +180,20 @@ namespace qualquer::renderer {
          * An empty mesh list skips AS construction, leaving the TLAS handle at 0
          * (submit_cuda must then keep the traversable at 0 so raygen skips optixTrace).
          *
+         * All acceleration structure data, geometry info, and a copy of the
+         * material buffer are placed in scene_pool_ so a single
+         * cudaAccessPolicyWindow can cover them for L2 streaming policy.
+         *
          * @param cuda_context CUDA context (device context + compute stream for AS
          *                     builds and buffer uploads).
          * @param meshes       Loaded meshes (one per glTF primitive).
          * @param instances    Scene mesh instances (one per node-primitive).
+         * @param materials    Material buffer from SceneLoader (copied into pool).
          */
         void load_scene(const optix::Context &cuda_context,
                         std::span<const Mesh> meshes,
-                        std::span<const MeshInstance> instances);
+                        std::span<const MeshInstance> instances,
+                        const optix::CudaBuffer<Material> &materials);
 
         /**
          * @brief Submits raygen and tonemap on two CUDA streams, then signals the semaphore.
@@ -452,8 +458,37 @@ namespace qualquer::renderer {
         /** @brief Scene acceleration structures (BLAS per group_id + single TLAS). */
         optix::AccelStructure accel_;
 
-        /** @brief Device-side per-geometry RT query data (GPUGeometryInfo[]). */
-        optix::CudaBuffer<GPUGeometryInfo> geometry_info_buffer_;
+        /**
+         * @brief Pooled device memory for AS data, geometry info, and materials.
+         *
+         * One contiguous cudaMalloc block covering all BVH nodes, geometry query
+         * data, and material parameters. Enables a single cudaAccessPolicyWindow
+         * to mark all PT read-only scene data as L2-streaming during DLSS overlap,
+         * reducing cache thrashing between concurrent PT and DLSS workloads.
+         */
+        optix::CudaDevicePool scene_pool_;
+
+        /**
+         * @brief Device-side per-geometry RT query data within the scene pool.
+         *
+         * Points into scene_pool_; not a separate allocation.
+         */
+        GPUGeometryInfo *geometry_info_ptr_ = nullptr;
+
+        /** @brief Number of GPUGeometryInfo entries in the pool. */
+        uint32_t geometry_info_count_ = 0;
+
+        /**
+         * @brief Device-side materials copy within the scene pool.
+         *
+         * The canonical material buffer lives in SceneLoader (app layer).
+         * This pool-resident copy is used for LaunchParams::materials so
+         * that the access policy window covers material reads.
+         */
+        Material *materials_ptr_ = nullptr;
+
+        /** @brief Number of Material entries in the pool. */
+        uint32_t materials_count_ = 0;
 
         /**
          * @brief Ping-pong resource slots (color + count + metadata + events;

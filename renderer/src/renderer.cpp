@@ -167,14 +167,19 @@ namespace qualquer::renderer {
         }
 
         /**
-         * @brief Builds one BLAS per non-empty group, filling group_to_blas.
+         * @brief Builds all BLAS uncompacted and fills group_to_blas mapping.
+         *
+         * Returns build infos (compacted sizes) for pool allocation.
+         * The uncompacted buffers are held in AccelStructure until
+         * compact_blas_into_pool is called.
          */
-        void build_blas_groups(optix::AccelStructure &accel,
-                               const optix::Context &cuda_context,
-                               SceneGrouping &grouping) {
+        std::vector<optix::BLASBuildInfo> build_blas_groups_phase1(
+            optix::AccelStructure &accel,
+            const optix::Context &cuda_context,
+            SceneGrouping &grouping) {
+
             grouping.group_to_blas.assign(grouping.group_geometries.size(), UINT32_MAX);
 
-            // Collect non-empty groups for batched build.
             std::vector<uint32_t> active_groups;
             std::vector<std::span<const optix::BLASGeometry>> active_geoms;
             for (uint32_t g = 0; g < grouping.group_geometries.size(); ++g) {
@@ -185,22 +190,22 @@ namespace qualquer::renderer {
             }
 
             const auto base = static_cast<uint32_t>(accel.blas_handles().size());
-            accel.build_all_blas(cuda_context.device_context,
-                                 cuda_context.compute_stream,
-                                 active_geoms);
+            auto infos = accel.build_blas_uncompacted(
+                cuda_context.device_context,
+                cuda_context.compute_stream,
+                active_geoms);
 
-            for (uint32_t i = 0; i < active_groups.size(); ++i) {
+            for (uint32_t i = 0; i < static_cast<uint32_t>(active_groups.size()); ++i) {
                 grouping.group_to_blas[active_groups[i]] = base + i;
             }
+            return infos;
         }
 
         /**
-         * @brief Builds and uploads the geometry-info array from the grouping.
+         * @brief Assembles geometry-info data on host for upload into the pool.
          */
-        void build_geometry_info(optix::CudaBuffer<GPUGeometryInfo> &buffer,
-                                 // ReSharper disable once CppParameterMayBeConst
-                                 cudaStream_t stream,
-                                 const SceneGrouping &grouping) {
+        std::vector<GPUGeometryInfo> build_geometry_info_host(
+            const SceneGrouping &grouping) {
             std::vector<GPUGeometryInfo> geometry_infos(grouping.total_geometries);
             for (uint32_t g = 0; g < grouping.group_geometries.size(); ++g) {
                 const auto &geoms = grouping.group_geometries[g];
@@ -215,8 +220,7 @@ namespace qualquer::renderer {
                     };
                 }
             }
-            buffer.alloc(grouping.total_geometries);
-            buffer.upload(geometry_infos.data(), grouping.total_geometries, stream);
+            return geometry_infos;
         }
 
         /**
@@ -485,8 +489,13 @@ namespace qualquer::renderer {
         sbt_raygen_.free();
         sbt_miss_.free();
         sbt_hit_.free();
+        // Destroy AS handles first, then free the pool that backs them.
         accel_.destroy();
-        geometry_info_buffer_.free();
+        scene_pool_.free();
+        geometry_info_ptr_ = nullptr;
+        geometry_info_count_ = 0;
+        materials_ptr_ = nullptr;
+        materials_count_ = 0;
         for (auto &slot: frame_slots_) {
             slot.free();
             slot.destroy_events();
@@ -515,42 +524,107 @@ namespace qualquer::renderer {
 
     void Renderer::load_scene(const optix::Context &cuda_context,
                               const std::span<const Mesh> meshes,
-                              const std::span<const MeshInstance> instances) {
+                              const std::span<const MeshInstance> instances,
+                              const optix::CudaBuffer<Material> &materials) {
         invalidate_dlss_state();
 
-        // Runtime scene switching: tear down the previous scene's AS and
-        // geometry-info buffer before rebuilding.
+        // Runtime scene switching: tear down previous scene resources.
         accel_.destroy();
-        geometry_info_buffer_.free();
+        scene_pool_.free();
+        geometry_info_ptr_ = nullptr;
+        geometry_info_count_ = 0;
+        materials_ptr_ = nullptr;
+        materials_count_ = 0;
 
         if (meshes.empty()) {
-            // No geometry to trace; submit_cuda must keep the traversable at 0 so
-            // raygen skips optixTrace.
             tlas_instance_count_ = 0;
             spdlog::warn("Renderer::load_scene: empty scene, no acceleration structures built");
             return;
         }
 
-        // Group meshes by group_id, build a multi-geometry BLAS per group, and
-        // upload the per-geometry query data. See the anonymous-namespace helpers
-        // above for the grouping invariants (degenerate primitives, layout offsets).
-        SceneGrouping grouping = group_meshes(meshes);
-        build_blas_groups(accel_, cuda_context, grouping);
-        build_geometry_info(geometry_info_buffer_, cuda_context.compute_stream, grouping);
+        // --- Phase 1: build BLAS uncompacted, collect sizes ---
 
-        std::vector<OptixInstance> tlas_instances = build_tlas_instances(meshes, instances, grouping, accel_);
-        tlas_instance_count_ = static_cast<uint32_t>(tlas_instances.size());
-        if (tlas_instances.empty()) {
-            spdlog::warn("Renderer::load_scene: no TLAS instances (all meshes degenerate?)");
-            return;
+        SceneGrouping grouping = group_meshes(meshes);
+        auto blas_infos = build_blas_groups_phase1(accel_, cuda_context, grouping);
+
+        // --- Phase 2: size the pool ---
+        // Geometry info and materials go into the same pool as the AS data
+        // so a single cudaAccessPolicyWindow covers all PT scene reads.
+
+        const auto geometry_infos = build_geometry_info_host(grouping);
+        const std::size_t geo_info_bytes = geometry_infos.size() * sizeof(GPUGeometryInfo);
+        const std::size_t materials_bytes = materials.count() * sizeof(Material);
+
+        // TLAS size estimate uses only instance count (host-side calculation);
+        // the actual TLAS build (needing compacted BLAS handles) happens after
+        // BLAS compaction below.
+        const auto estimated_tlas_count = static_cast<uint32_t>(instances.size());
+
+        constexpr std::size_t kAsAlign = OPTIX_ACCEL_BUFFER_BYTE_ALIGNMENT;
+        constexpr std::size_t kDataAlign = 16;
+
+        std::size_t pool_size = 0;
+        for (const auto &info : blas_infos) {
+            pool_size = (pool_size + kAsAlign - 1) & ~(kAsAlign - 1);
+            pool_size += info.compacted_size;
         }
 
-        accel_.build_tlas(cuda_context.device_context,
-                          cuda_context.compute_stream,
-                          tlas_instances);
+        // Reserve TLAS (uncompacted upper bound). The host-side size calculation
+        // only depends on instance count, not handles.
+        std::size_t tlas_estimate = 0;
+        if (estimated_tlas_count > 0) {
+            tlas_estimate = accel_.query_tlas_size(
+                cuda_context.device_context, estimated_tlas_count);
+        }
+        pool_size = (pool_size + kAsAlign - 1) & ~(kAsAlign - 1);
+        pool_size += tlas_estimate;
 
-        spdlog::info("Renderer::load_scene: {} meshes, {} instances, {} BLAS, {} TLAS instances",
-                     meshes.size(), instances.size(), accel_.blas_handles().size(), tlas_instances.size());
+        pool_size = (pool_size + kDataAlign - 1) & ~(kDataAlign - 1);
+        pool_size += geo_info_bytes;
+        pool_size = (pool_size + kDataAlign - 1) & ~(kDataAlign - 1);
+        pool_size += materials_bytes;
+
+        // --- Phase 3: allocate pool, compact BLAS, then build TLAS ---
+
+        scene_pool_.alloc(pool_size);
+
+        accel_.compact_blas_into_pool(cuda_context.device_context,
+                                      cuda_context.compute_stream,
+                                      scene_pool_, blas_infos);
+
+        // Now BLAS handles are compacted — build TLAS instances with final handles.
+        std::vector<OptixInstance> tlas_instances =
+            build_tlas_instances(meshes, instances, grouping, accel_);
+        tlas_instance_count_ = static_cast<uint32_t>(tlas_instances.size());
+
+        if (!tlas_instances.empty()) {
+            accel_.build_tlas_into_pool(cuda_context.device_context,
+                                        cuda_context.compute_stream,
+                                        scene_pool_, tlas_instances);
+        }
+
+        // Upload geometry info into pool.
+        geometry_info_ptr_ = static_cast<GPUGeometryInfo *>(
+            scene_pool_.suballocate(geo_info_bytes, kDataAlign));
+        geometry_info_count_ = static_cast<uint32_t>(geometry_infos.size());
+        CUDA_CHECK(cudaMemcpy(geometry_info_ptr_, geometry_infos.data(),
+                              geo_info_bytes, cudaMemcpyHostToDevice));
+
+        // Copy materials into pool.
+        if (materials.count() > 0) {
+            materials_ptr_ = static_cast<Material *>(
+                scene_pool_.suballocate(materials_bytes, kDataAlign));
+            materials_count_ = static_cast<uint32_t>(materials.count());
+            CUDA_CHECK(cudaMemcpy(materials_ptr_, materials.data(),
+                                  materials_bytes, cudaMemcpyDeviceToDevice));
+        }
+
+        spdlog::info("Renderer::load_scene: {} meshes, {} instances, {} BLAS, {} TLAS instances, "
+                     "pool {:.1f} KB ({:.1f} KB used)",
+                     meshes.size(), instances.size(), accel_.blas_handles().size(),
+                     tlas_instances.size(),
+                     static_cast<double>(scene_pool_.total_bytes()) / 1024.0,
+                     static_cast<double>(scene_pool_.used_bytes()) / 1024.0);
     }
 
     void Renderer::submit_cuda(const optix::Context &cuda_context,
@@ -809,8 +883,8 @@ namespace qualquer::renderer {
             .height = render_height,
             .sequence_base = sequence_base_,
             .traversable = accel_.tlas_handle(),
-            .geometry_infos = geometry_info_buffer_.data(),
-            .materials = scene.materials.data(),
+            .geometry_infos = geometry_info_ptr_,
+            .materials = materials_ptr_ ? materials_ptr_ : scene.materials.data(),
             .texture_objects = scene.texture_objects.data(),
             .inv_view = to_float4x4(scene.camera.inv_view),
             .inv_projection = to_float4x4(scene.camera.inv_projection),
@@ -896,6 +970,22 @@ namespace qualquer::renderer {
             };
             dlss_rr_.evaluate(eval_input);
             dlss_output_valid_ = true;
+
+            // Set L2 streaming policy on compute_stream for the scene pool.
+            // During DLSS/PT overlap, PT's BVH and scene data accesses get
+            // low L2 residency priority, leaving cache space for DLSS's
+            // feature maps. The policy applies to the next optixLaunch below.
+            if (scene_pool_.valid()) {
+                cudaStreamAttrValue attr{};
+                attr.accessPolicyWindow.base_ptr = scene_pool_.base_ptr();
+                attr.accessPolicyWindow.num_bytes = scene_pool_.used_bytes();
+                attr.accessPolicyWindow.hitRatio = 1.0f;
+                attr.accessPolicyWindow.hitProp = cudaAccessPropertyStreaming;
+                attr.accessPolicyWindow.missProp = cudaAccessPropertyStreaming;
+                CUDA_CHECK(cudaStreamSetAttribute(
+                    cuda_context.compute_stream,
+                    cudaStreamAttributeAccessPolicyWindow, &attr));
+            }
         }
 
         if (has_new_samples) {
@@ -947,6 +1037,16 @@ namespace qualquer::renderer {
 
             CUDA_CHECK(cudaEventRecord(
                 write.production_event, cuda_context.compute_stream));
+
+            // Clear L2 streaming policy after raygen completes so
+            // subsequent non-overlap frames use default caching.
+            if (evaluate_dlss && scene_pool_.valid()) {
+                cudaStreamAttrValue reset_attr{};
+                reset_attr.accessPolicyWindow = {};
+                CUDA_CHECK(cudaStreamSetAttribute(
+                    cuda_context.compute_stream,
+                    cudaStreamAttributeAccessPolicyWindow, &reset_attr));
+            }
         }
 
         // --- display_stream: tonemap → consumption → signal ---

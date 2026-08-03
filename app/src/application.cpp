@@ -122,7 +122,8 @@ namespace qualquer::app {
         }
         renderer_.load_scene(cuda_context_,
                              scene_loader_.meshes(),
-                             scene_loader_.mesh_instances());
+                             scene_loader_.mesh_instances(),
+                             scene_loader_.material_buffer());
         camera_controller_.set_focus_target(&scene_loader_.scene_bounds());
         auto_position_camera(scene_loader_.scene_bounds());
 
@@ -559,7 +560,8 @@ namespace qualquer::app {
         // instead of tracing a freed traversable.
         renderer_.load_scene(cuda_context_,
                              scene_loader_.meshes(),
-                             scene_loader_.mesh_instances());
+                             scene_loader_.mesh_instances(),
+                             scene_loader_.material_buffer());
 
         camera_controller_.set_focus_target(&scene_loader_.scene_bounds());
         auto_position_camera(scene_loader_.scene_bounds());

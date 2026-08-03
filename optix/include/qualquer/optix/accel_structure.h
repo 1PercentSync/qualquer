@@ -12,6 +12,7 @@
 #include <optix.h>
 
 #include <qualquer/optix/cuda_buffer.h>
+#include <qualquer/optix/cuda_device_pool.h>
 
 namespace qualquer::optix {
     /**
@@ -49,78 +50,115 @@ namespace qualquer::optix {
     /**
      * @brief Owning handle for one bottom-level acceleration structure.
      *
-     * Holds the traversable handle and the device buffer backing the AS data.
-     * Move-only because CudaBuffer is move-only.
+     * The compacted AS data resides in a CudaDevicePool managed by the caller;
+     * this struct only stores the traversable handle. The handle becomes invalid
+     * when the pool is freed.
      */
     struct BLASHandle {
         /** @brief OptiX traversable handle for this BLAS; 0 when empty. */
         OptixTraversableHandle handle = 0;
-
-        /** @brief Device buffer backing the acceleration structure data. */
-        CudaBuffer<uint8_t> buffer;
     };
 
     /**
-     * @brief Owning handle for the top-level acceleration structure.
-     *
-     * Holds the traversable handle and the device buffer backing the AS data.
-     * Move-only because CudaBuffer is move-only.
+     * @brief Compacted-size result for one BLAS group, returned by
+     *        query_blas_compacted_sizes so the caller can size the pool.
      */
-    struct TLASHandle {
-        /** @brief OptiX traversable handle for the TLAS; 0 when empty. */
-        OptixTraversableHandle handle = 0;
+    struct BLASBuildInfo {
+        /** @brief Compacted size in bytes for this BLAS. */
+        std::size_t compacted_size = 0;
 
-        /** @brief Device buffer backing the acceleration structure data. */
-        CudaBuffer<uint8_t> buffer;
+        /** @brief Uncompacted traversable handle (valid until the temp buffer is freed). */
+        OptixTraversableHandle uncompacted_handle = 0;
     };
 
     /**
      * @brief Builds and owns OptiX acceleration structures (BLAS + TLAS).
      *
-     * Provides methods to build individual BLAS (with compaction) and a TLAS.
-     * The caller handles scene-level grouping (by group_id) and instance
-     * deduplication; this class handles the OptiX API calls and owns the
-     * resulting device resources. destroy() releases all of them.
+     * The build pipeline is split into size-query and compaction phases so
+     * that the caller can allocate a CudaDevicePool covering all AS data
+     * (enabling a single cudaAccessPolicyWindow for L2 streaming policy).
+     *
+     * Typical call sequence:
+     *   1. build_blas_uncompacted  → returns BLASBuildInfo with compacted sizes
+     *   2. caller allocates pool   → using sizes from step 1 + TLAS estimate
+     *   3. compact_blas_into_pool  → compacts into pool suballocations
+     *   4. build_tlas_uncompacted  → returns uncompacted TLAS handle + size
+     *   5. compact_tlas_into_pool  → compacts into pool suballocation
      */
     class AccelStructure {
     public:
         /**
-         * @brief Builds all BLAS groups in a two-sync batch.
+         * @brief Builds all BLAS groups uncompacted and queries compacted sizes.
          *
-         * Submits all builds with a shared scratch buffer (reused across
-         * stream-ordered launches), synchronizes once to read compacted
-         * sizes, submits all compactions, then synchronizes a second time.
-         * Total: 2 host–device syncs regardless of group count (vs 2N for
-         * sequential per-BLAS build+compact).
+         * Submits all builds with a shared scratch buffer, synchronizes once
+         * to read compacted sizes. The uncompacted output buffers are stored
+         * internally and must remain alive until compact_blas_into_pool is
+         * called. Total: 1 host-device sync.
          *
          * @param context OptiX device context.
-         * @param stream  CUDA stream for builds and compactions.
+         * @param stream  CUDA stream for builds.
          * @param groups  Per-group geometry spans (one BLAS per non-empty span).
+         * @return Per-BLAS compacted sizes and uncompacted handles.
          */
-        void build_all_blas(OptixDeviceContext context, CUstream stream,
-                            const std::vector<std::span<const BLASGeometry>> &groups);
+        std::vector<BLASBuildInfo> build_blas_uncompacted(
+            OptixDeviceContext context, CUstream stream,
+            const std::vector<std::span<const BLASGeometry>> &groups);
 
         /**
-         * @brief Builds the TLAS from pre-assembled instance descriptions.
+         * @brief Compacts all BLAS into pool suballocations.
          *
-         * Uploads the instance array to the device and builds an IAS with
-         * PREFER_FAST_TRACE. Synchronizes on the stream (init-time operation).
+         * Each BLAS is compacted into a region obtained via pool.suballocate()
+         * using the sizes returned by build_blas_uncompacted. Synchronizes
+         * once, then frees the uncompacted output buffers. Total: 1 sync.
+         *
+         * @param context OptiX device context.
+         * @param stream  CUDA stream for compactions.
+         * @param pool    Device pool to suballocate from.
+         * @param infos   Build info from build_blas_uncompacted.
+         */
+        void compact_blas_into_pool(OptixDeviceContext context, CUstream stream,
+                                    CudaDevicePool &pool,
+                                    const std::vector<BLASBuildInfo> &infos);
+
+        /**
+         * @brief Queries the TLAS uncompacted output size without building.
+         *
+         * Used by the caller to reserve space in the pool before building.
+         * Only needs the instance count; the memory calculation is host-side.
+         *
+         * @param context        OptiX device context.
+         * @param instance_count Number of TLAS instances.
+         * @return Uncompacted TLAS output size in bytes.
+         */
+        std::size_t query_tlas_size(OptixDeviceContext context,
+                                    unsigned int instance_count);
+
+        /**
+         * @brief Builds the TLAS and compacts it into the pool.
+         *
+         * Builds uncompacted into a temporary buffer, reads compacted size,
+         * then compacts into a pool suballocation. The suballocated region
+         * may be smaller than what the caller reserved (query_tlas_size
+         * returns the uncompacted upper bound). Total: 2 syncs.
          *
          * @param context   OptiX device context.
-         * @param stream    CUDA stream for the build.
-         * @param instances OptixInstance array (one per deduplicated scene instance).
+         * @param stream    CUDA stream for build and compaction.
+         * @param pool      Device pool to suballocate from.
+         * @param instances OptixInstance array (one per scene instance).
          */
-        void build_tlas(OptixDeviceContext context, CUstream stream,
-                        std::span<const OptixInstance> instances);
+        void build_tlas_into_pool(OptixDeviceContext context, CUstream stream,
+                                  CudaDevicePool &pool,
+                                  std::span<const OptixInstance> instances);
 
         /**
-         * @brief Destroys all owned BLAS and TLAS handles, releasing device memory.
+         * @brief Resets handles; pool memory is owned externally.
          *
-         * Idempotent: members are reset so a repeat call is a no-op.
+         * Clears traversable handles. Does NOT free pool memory — the caller
+         * owns the CudaDevicePool and frees it separately.
          */
         void destroy();
 
-        /** @brief TLAS traversable handle; 0 before build_tlas. */
+        /** @brief TLAS traversable handle; 0 before build. */
         [[nodiscard]] OptixTraversableHandle tlas_handle() const;
 
         /** @brief All built BLAS handles, in build order. */
@@ -130,7 +168,10 @@ namespace qualquer::optix {
         /** @brief One BLAS per group_id, appended in build order. */
         std::vector<BLASHandle> blas_handles_;
 
-        /** @brief Single TLAS for the scene. */
-        TLASHandle tlas_;
+        /** @brief TLAS traversable handle. */
+        OptixTraversableHandle tlas_handle_ = 0;
+
+        /** @brief Uncompacted BLAS output buffers, held between build and compact. */
+        std::vector<CudaBuffer<uint8_t>> blas_uncompacted_;
     };
 } // namespace qualquer::optix

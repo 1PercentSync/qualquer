@@ -156,11 +156,29 @@ namespace qualquer::optix {
         device_id_ = best_device;
         device_uuid = get_device_uuid(prop);
 
-        // Compute stays independent for PT/display overlap. Display participates
-        // in legacy default-stream ordering because NGX's CUDA path may enqueue
-        // internal work there before tonemap and completion events.
-        CUDA_CHECK(cudaStreamCreateWithFlags(&compute_stream, cudaStreamNonBlocking));
-        CUDA_CHECK(cudaStreamCreate(&display_stream));
+        // Stream priorities: display (DLSS) gets the highest priority so its
+        // warps are scheduled first when both streams have concurrent work;
+        // compute (PT) gets the lowest so it fills SM gaps without evicting
+        // DLSS's L2 working set as aggressively.
+        int priority_low = 0;
+        int priority_high = 0;
+        CUDA_CHECK(cudaDeviceGetStreamPriorityRange(&priority_low, &priority_high));
+
+        // Compute stays independent (non-blocking) for PT/display overlap.
+        CUDA_CHECK(cudaStreamCreateWithPriority(
+            &compute_stream, cudaStreamNonBlocking, priority_low));
+        // Display participates in legacy default-stream ordering because
+        // NGX's CUDA path may enqueue internal work there before tonemap
+        // and completion events.
+        CUDA_CHECK(cudaStreamCreateWithPriority(
+            &display_stream, cudaStreamDefault, priority_high));
+
+        spdlog::info("CUDA stream priorities: compute={} (low), display={} (high)",
+                     priority_low, priority_high);
+
+        spdlog::info("L2 cache: {:.1f} MB, accessPolicyMaxWindowSize: {:.1f} MB",
+                     static_cast<double>(prop.l2CacheSize) / (1024.0 * 1024.0),
+                     static_cast<double>(prop.accessPolicyMaxWindowSize) / (1024.0 * 1024.0));
 
         spdlog::info("CUDA device {}: \"{}\" with compute capability {}.{}",
                      best_device, prop.name, best_major, best_minor);

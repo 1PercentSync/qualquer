@@ -7,6 +7,7 @@ target_sources(qualquer_optix PRIVATE
     src/optix_stubs_impl.cpp
     src/pipeline.cpp
     src/cuda_texture_upload.cpp
+    src/cuda_device_pool.cpp
 )
 
 target_include_directories(qualquer_optix
