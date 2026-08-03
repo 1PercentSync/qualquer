@@ -84,9 +84,6 @@ namespace qualquer::renderer {
         /** @brief Camera state (mutable for FOV slider write-back). */
         Camera &camera;
 
-        /** @brief Whether the color buffer has valid rendered data. */
-        bool has_valid_frame = false;
-
         /** @brief Scene asset statistics (read-only snapshot). */
         const SceneStats &scene_stats;
 
