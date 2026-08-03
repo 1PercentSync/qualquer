@@ -3,18 +3,6 @@
 
 以下不是静态代码即可定性的错误。必须通过 release 编译资源报告、Nsight Systems/Compute、GPU 时间线和图像 A/B 验证。
 
-### QRP-O11：OptiX pipeline 未把 primitive type 限定为 triangles
-
-#### 代码事实
-
-- `optix/src/pipeline.cpp:72-81` 构造 `OptixPipelineCompileOptions` 时没有设置 `usesPrimitiveTypeFlags`，保持零值。
-- 项目所有 BLAS build input 都是 `OPTIX_BUILD_INPUT_TYPE_TRIANGLES`，没有 custom primitives、curves、spheres 或 micromesh primitive program。
-- OptiX 9.1 Programming Guide 明确建议：场景只有 built-in triangles 时，将 `usesPrimitiveTypeFlags` 设为 `OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE` 以获得最佳性能。
-
-#### 优化机会与验证
-
-按实际 primitive 集合收窄 compile options，可让 OptiX 针对确定的 triangle traversal/program 路径优化。收益需通过 pipeline compile log、OptiX/Nsight shader 指标和 frame time A/B 验证；它应是低风险编译配置优化，但必须与 module 和 pipeline 使用的同一组 `OptixPipelineCompileOptions` 保持一致。
-
 ### QRP-O12：场景切换无条件销毁并重新加载独立的 environment map
 
 #### 代码事实
