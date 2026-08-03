@@ -220,13 +220,6 @@ namespace qualquer::renderer {
          */
         static void record_vulkan(const RenderInput &input);
 
-        /**
-         * @brief Whether the color buffer contains valid data (sample_count > 0).
-         *
-         * False only transiently after init or resize, before the first raygen runs.
-         */
-        [[nodiscard]] bool has_valid_frame() const;
-
         /** @brief Actual TLAS instance count after group folding (set by load_scene). */
         [[nodiscard]] uint32_t tlas_instance_count() const;
 

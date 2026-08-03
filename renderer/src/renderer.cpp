@@ -452,7 +452,7 @@ namespace qualquer::renderer {
         spdlog::info("Renderer initialized ({}x{}, {} SBT records)",
                      width,
                      height,
-                     4);
+                     3);
     }
 
     void Renderer::destroy() {
@@ -662,8 +662,11 @@ namespace qualquer::renderer {
         const float exposure_linear = std::pow(2.0f, scene.settings.exposure_ev);
         const bool dlss_active = scene.settings.dlss_enabled && dlss_rr_.feature_active();
 
-        // DLSS history management: camera or max_clamp changes invalidate
-        // temporal history so DLSS starts a fresh sequence.
+        // DLSS history management:
+        // - max_clamp change: always invalidate (estimator bias changed).
+        // - camera change while paused: invalidate so the first resumed frame
+        //   starts a fresh temporal sequence. During active rendering, camera
+        //   motion is normal and DLSS adapts temporally — do NOT invalidate.
         const CameraKey camera_key{
             .inv_view = scene.camera.inv_view,
             .inv_projection = scene.camera.inv_projection,
@@ -671,7 +674,11 @@ namespace qualquer::renderer {
         const bool camera_changed = camera_key != prev_camera_;
         const bool max_clamp_changed =
             scene.settings.max_clamp != prev_max_clamp_;
-        if (dlss_active && (camera_changed || max_clamp_changed)) {
+        if (has_new_samples) {
+            if (dlss_active && max_clamp_changed) {
+                invalidate_dlss_history();
+            }
+        } else if (dlss_active && (camera_changed || max_clamp_changed)) {
             invalidate_dlss_history();
         }
 
@@ -1126,10 +1133,6 @@ namespace qualquer::renderer {
                                 input.timestamp_query_base + 1);
         }
 #endif
-    }
-
-    bool Renderer::has_valid_frame() const {
-        return frame_slot_.sample_count > 0;
     }
 
     uint32_t Renderer::tlas_instance_count() const {
