@@ -150,7 +150,7 @@ namespace qualquer::app {
      * @param data        Source RGBA8 pixels (must be valid).
      * @param role        Texture role selecting the BC format and color space.
      * @param source_hash Content hash used as the cache key.
-     * @return Prepared texture ready for optix::finalize_texture().
+     * @return Prepared texture ready for optix::upload_mipmap_array().
      */
     [[nodiscard]] PreparedTexture compress_texture(
         const ImageData &data, TextureRole role, std::string_view source_hash);
@@ -182,7 +182,7 @@ namespace qualquer::app {
      *                    face-major (all of face 0, then face 1, ...).
      * @param face_size   Edge length of one square face, in pixels.
      * @param source_hash Content hash used as the cache key.
-     * @return Prepared texture ready for optix::finalize_texture().
+     * @return Prepared texture ready for optix::upload_mipmap_array().
      */
     [[nodiscard]] PreparedTexture compress_texture_bc6h(
         std::span<const uint16_t> rgba, uint32_t face_size, std::string_view source_hash);

@@ -6,6 +6,7 @@
  */
 
 #include <qualquer/optix/cuda_buffer.h>
+#include <qualquer/optix/cuda_mipmap_array.h>
 #include <qualquer/optix/cuda_texture.h>
 #include <qualquer/optix/cuda_texture_upload.h>
 #include <qualquer/renderer/launch_params.h>
@@ -51,7 +52,7 @@ namespace qualquer::app {
          * @brief Loads an HDR environment map and prepares GPU resources.
          *
          * Pipeline: stb_image decode → equirect-to-cubemap CUDA kernel →
-         * BC6H compression (with KTX2 disk cache) → finalize_texture upload →
+         * BC6H compression (with KTX2 disk cache) → GPU upload →
          * alias table construction → CudaBuffer upload.
          *
          * Safe to call multiple times (destroys previous env map first).
@@ -149,7 +150,13 @@ namespace qualquer::app {
 
         // ---- Texture resources ----
 
-        /** @brief Loaded scene textures (owned; destroyed in destroy()). */
+        /** @brief Backing arrays per unique image (destroyed after textures_). */
+        std::vector<optix::CudaMipmapArray> mipmap_arrays_;
+
+        /** @brief Format info parallel to mipmap_arrays_ (for texture object creation). */
+        std::vector<optix::ArrayFormatInfo> array_format_infos_;
+
+        /** @brief Texture objects per unique (image, sampler) pair (destroyed before mipmap_arrays_). */
         std::vector<optix::CudaTexture> textures_;
 
         /** @brief All cudaTextureObject_t handles (scene textures + default textures). */
@@ -160,7 +167,10 @@ namespace qualquer::app {
 
         // ---- Environment map resources ----
 
-        /** @brief Env cubemap GPU texture (owned; destroyed in destroy_env_map()). */
+        /** @brief Env cubemap backing array (destroyed after env_cubemap_texture_). */
+        optix::CudaMipmapArray env_cubemap_array_;
+
+        /** @brief Env cubemap texture object (destroyed before env_cubemap_array_). */
         optix::CudaTexture env_cubemap_texture_;
 
         /** @brief Device alias table (downsampled resolution). */

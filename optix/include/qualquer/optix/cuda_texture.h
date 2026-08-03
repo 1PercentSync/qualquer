@@ -2,7 +2,7 @@
 
 /**
  * @file cuda_texture.h
- * @brief CudaTexture — RAII handle to a CUDA mipmapped array + texture object.
+ * @brief CudaTexture — RAII owner of a cudaTextureObject_t.
  */
 
 #include <cuda_runtime.h>
@@ -11,21 +11,17 @@
 
 namespace qualquer::optix {
     /**
-     * @brief Owning handle to a single CUDA texture's GPU resources.
+     * @brief Owning handle to a CUDA texture object (sampler configuration).
      *
-     * Pairs a @c cudaMipmappedArray_t (the backing storage, BC-compressed for
-     * authored textures or fp16 for 1×1 defaults) with the
-     * @c cudaTextureObject_t that devices sample through. Creation is performed
-     * by the renderer layer (BC upload + @c cudaCreateTextureObject); this
-     * struct only owns the lifecycle of whatever was created.
+     * Wraps the @c cudaTextureObject_t that device code samples through.
+     * The backing @c cudaMipmappedArray_t is owned separately by a
+     * @c CudaMipmapArray; this struct only owns the texture object's
+     * lifecycle. The array must outlive all texture objects referencing it.
      *
-     * Move-only: both handles name single GPU resources and a copy would alias
-     * one resource under two lifetimes, leading to double-destroy.
+     * Move-only: the texture object names a single GPU resource; a copy
+     * would double-destroy.
      */
     struct CudaTexture {
-        /** @brief Backing mipmapped array; null when empty. */
-        cudaMipmappedArray_t mipmap_array = nullptr;
-
         /** @brief Sampler-facing texture object; 0 when empty. */
         cudaTextureObject_t texture_object = 0;
 
@@ -37,17 +33,17 @@ namespace qualquer::optix {
             destroy();
         }
 
+        /** @brief Non-copyable: GPU texture object has a single owner. */
         CudaTexture(const CudaTexture &) = delete;
 
+        /** @brief Non-copyable: GPU texture object has a single owner. */
         CudaTexture &operator=(const CudaTexture &) = delete;
 
         /**
          * @brief Steals another texture's resources; leaves other empty.
          * @param other Texture to steal from; left empty afterwards.
          */
-        CudaTexture(CudaTexture &&other) noexcept
-            : mipmap_array(other.mipmap_array), texture_object(other.texture_object) {
-            other.mipmap_array = nullptr;
+        CudaTexture(CudaTexture &&other) noexcept : texture_object(other.texture_object) {
             other.texture_object = 0;
         }
 
@@ -59,33 +55,25 @@ namespace qualquer::optix {
         CudaTexture &operator=(CudaTexture &&other) noexcept {
             if (this != &other) {
                 destroy();
-                mipmap_array = other.mipmap_array;
                 texture_object = other.texture_object;
-                other.mipmap_array = nullptr;
                 other.texture_object = 0;
             }
             return *this;
         }
 
         /**
-         * @brief Releases the mipmapped array and texture object, resets to empty.
+         * @brief Releases the texture object, resets to empty.
          *
-         * Idempotent: members are reset, so a repeat call is a no-op (matches
-         * the optix layer's destroy/release convention). The texture object is
-         * destroyed before the array it references.
+         * Idempotent: repeated calls are no-ops.
          */
         void destroy() {
             if (texture_object != 0) {
                 CUDA_CHECK(cudaDestroyTextureObject(texture_object));
                 texture_object = 0;
             }
-            if (mipmap_array != nullptr) {
-                CUDA_CHECK(cudaFreeMipmappedArray(mipmap_array));
-                mipmap_array = nullptr;
-            }
         }
 
-        /** @return Whether the texture holds any GPU resources. */
+        /** @return Whether the texture holds a GPU resource. */
         [[nodiscard]] bool valid() const {
             return texture_object != 0;
         }

@@ -10,6 +10,7 @@
 
 #include <cuda_runtime.h>
 
+#include <qualquer/optix/cuda_mipmap_array.h>
 #include <qualquer/optix/cuda_texture.h>
 
 namespace qualquer::optix {
@@ -45,7 +46,7 @@ namespace qualquer::optix {
      *
      * Holds compressed mip data in one contiguous buffer plus per-level regions.
      * Produced by the app layer's compress functions (or loaded from cache);
-     * consumed by finalize_texture().
+     * consumed by upload_mipmap_array().
      *
      * Layout: levels are stored largest-first in @ref data. For cubemaps (HDR
      * only), each level's region spans all 6 faces concatenated (face-major:
@@ -76,15 +77,34 @@ namespace qualquer::optix {
     };
 
     /**
+     * @brief Format-derived properties needed when creating a texture object
+     *        against an existing array.
+     *
+     * Extracted from the PreparedTexture at upload time and stored alongside
+     * the array so that later create_texture_object() calls do not need the
+     * (already consumed) PreparedTexture.
+     */
+    struct ArrayFormatInfo {
+        /** @brief Texture format (determines readMode and sRGB flag). */
+        TextureFormat format;
+
+        /** @brief Number of mip levels in the array. */
+        uint32_t level_count;
+
+        /** @brief Whether the array is a cubemap (6 faces). */
+        bool cubemap;
+    };
+
+    /**
      * @brief Sampler settings for a CUDA texture object.
      *
      * Groups the glTF-derived sampler parameters that a
-     * @c cudaTextureObject_t bakes in (CUDA has no separate sampler handle).
-     * Callers construct from glTF sampler data; finalize_texture() forwards
-     * the values into @c cudaTextureDesc.
+     * @c cudaTextureObject_t bakes in. Callers construct from glTF sampler
+     * data; create_texture_object() forwards the values into
+     * @c cudaTextureDesc.
      */
     struct SamplerDesc {
-        /** @brief Texture filter for magnification and minification. */
+        /** @brief Texture filter mode. */
         cudaTextureFilterMode filter_mode;
 
         /** @brief Filter between mip levels (point = no trilinear, linear = trilinear). */
@@ -103,34 +123,50 @@ namespace qualquer::optix {
      * @brief Holds the default 1×1 textures for material fallback.
      *
      * Missing material texture slots are filled with these neutral values
-     * so the shader can always sample without special-casing.
+     * so the shader can always sample without special-casing. Each default
+     * owns both the backing array and the texture object.
      */
     struct DefaultTextures {
         /** @brief 1×1 (1,1,1,1) — neutral base color / metallic-roughness / emissive. */
+        CudaMipmapArray white_array;
+        /** @brief Texture object sampling from white_array. */
         CudaTexture white;
 
         /** @brief 1×1 (0.5,0.5,1.0,1.0) — tangent-space Z-up, no perturbation. */
+        CudaMipmapArray flat_normal_array;
+        /** @brief Texture object sampling from flat_normal_array. */
         CudaTexture flat_normal;
     };
 
     // ---- GPU upload ----
 
     /**
-     * @brief Uploads a PreparedTexture to the GPU and creates a CUDA texture object.
+     * @brief Allocates a mipmapped array and uploads compressed texel data.
      *
      * Allocates a @c cudaMipmappedArray_t with the native BC channel format,
-     * uploads compressed mip data level-by-level, and wraps the result in a
-     * @c cudaTextureObject_t. Supports both 2D (LDR, face_count=1) and
-     * cubemap (HDR BC6H, face_count=6) textures.
+     * uploads compressed mip data level-by-level. Supports both 2D (LDR,
+     * face_count=1) and cubemap (HDR BC6H, face_count=6) textures.
      *
      * @param prepared CPU-side compressed texture from the app layer's
      *                 compress functions or cache.
-     * @param sampler  Filter and address mode settings for the texture object.
-     * @return RAII handle owning the GPU resources; devices sample via
-     *         @c tex2D<float4>() on the contained texture object.
+     * @param[out] info Format properties extracted from prepared, for use
+     *                  with create_texture_object().
+     * @return RAII handle owning the GPU array.
      */
-    [[nodiscard]] CudaTexture finalize_texture(
-        const PreparedTexture &prepared, const SamplerDesc &sampler);
+    [[nodiscard]] CudaMipmapArray upload_mipmap_array(
+        const PreparedTexture &prepared, ArrayFormatInfo &info);
+
+    /**
+     * @brief Creates a texture object against an existing mipmapped array.
+     *
+     * @param array   The backing array (must outlive the returned texture object).
+     * @param sampler Filter and address mode settings.
+     * @param info    Format properties from upload_mipmap_array().
+     * @return RAII handle owning the texture object.
+     */
+    [[nodiscard]] CudaTexture create_texture_object(
+        const CudaMipmapArray &array, const SamplerDesc &sampler,
+        const ArrayFormatInfo &info);
 
     /**
      * @brief Creates default 1×1 fp16×4 textures for material fallback.
@@ -142,7 +178,7 @@ namespace qualquer::optix {
      * Sampler is point-filter + clamp (1×1 has only one texel, so filter/wrap
      * mode has no practical effect).
      *
-     * @return DefaultTextures holding RAII CudaTexture handles.
+     * @return DefaultTextures holding RAII handles for both arrays and texture objects.
      */
     [[nodiscard]] DefaultTextures create_default_textures();
 

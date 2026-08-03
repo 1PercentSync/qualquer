@@ -287,6 +287,10 @@ mip 基础设施已就绪；当前固定 LOD 0 的采样点改为 cone 驱动 LO
 
 当前 `extract_block()` 对尾部 mip（2×2、1×1 等）越界 texel 填透明黑。黑色 texel 消耗 BC encoder 的 endpoint 精度并可能压暗有效 texel。启用 LOD 采样前须改为 edge-replicate padding。
 
+### glTF sampler mag/min filter 分离
+
+glTF sampler 的 magFilter 和 minFilter 可独立指定。LOD 落地后，根据 LOD 符号在设备代码中选择对应的 texture object，正确表达 mag/min 语义。
+
 ---
 
 ## Step 18：Normal Map Specular AA

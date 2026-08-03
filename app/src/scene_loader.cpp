@@ -316,12 +316,7 @@ namespace qualquer::app {
             return cudaAddressModeWrap;
         }
 
-        /**
-         * @brief Converts a glTF sampler to a CUDA SamplerDesc.
-         *
-         * CUDA has a single filterMode (shared by mag/min); the minFilter's
-         * base part is used (more impactful for mipmapped textures).
-         */
+        /** @brief Converts a glTF sampler to a CUDA SamplerDesc. */
         optix::SamplerDesc convert_gltf_sampler(const fastgltf::Sampler &sampler) {
             optix::SamplerDesc desc{
                 .filter_mode = cudaFilterModeLinear,
@@ -908,7 +903,25 @@ namespace qualquer::app {
 
         decoded_images.clear();
 
-        // ---- Serial GPU upload ----
+        // ---- Serial GPU upload: arrays (dedup by image) ----
+        // Upload one CudaMipmapArray per unique (source_hash, role).
+        // Entries with dedup_source[i] >= 0 share the array of the first entry.
+        std::vector<int> entry_to_array(unique_entries.size(), -1);
+
+        for (std::size_t i = 0; i < unique_entries.size(); ++i) {
+            if (dedup_source[i] >= 0) {
+                entry_to_array[i] = entry_to_array[dedup_source[i]];
+            } else {
+                optix::ArrayFormatInfo info{};
+                auto array = optix::upload_mipmap_array(prepared_textures[i], info);
+                entry_to_array[i] = static_cast<int>(mipmap_arrays_.size());
+                mipmap_arrays_.push_back(std::move(array));
+                array_format_infos_.push_back(info);
+            }
+        }
+        prepared_textures.clear();
+
+        // ---- Create texture objects (one per unique entry) ----
         constexpr optix::SamplerDesc default_sampler{
             .filter_mode = cudaFilterModeLinear,
             .mipmap_filter_mode = cudaFilterModeLinear,
@@ -925,13 +938,14 @@ namespace qualquer::app {
                                      ? convert_gltf_sampler(gltf.samplers[*tex.samplerIndex])
                                      : default_sampler;
 
-            auto cuda_texture = optix::finalize_texture(prepared_textures[i], sampler);
+            const auto array_idx = entry_to_array[i];
+            auto cuda_texture = optix::create_texture_object(
+                mipmap_arrays_[array_idx], sampler, array_format_infos_[array_idx]);
             const auto obj_index = static_cast<uint32_t>(texture_objects_.size());
             texture_objects_.push_back(cuda_texture.texture_object);
             textures_.push_back(std::move(cuda_texture));
             tex_index_cache[{entry.texture_index, entry.role}] = obj_index;
         }
-        prepared_textures.clear();
 
         // ---- Fill materials ----
         auto resolve_texture = [&](const std::size_t texture_index, const TextureRole role) -> uint32_t {
@@ -1067,16 +1081,20 @@ namespace qualquer::app {
                           ? std::nullopt
                           : load_cached_texture_bc6h(source_hash);
 
+        constexpr optix::SamplerDesc cubemap_sampler{
+            .filter_mode = cudaFilterModeLinear,
+            .mipmap_filter_mode = cudaFilterModePoint,
+            .address_mode_u = cudaAddressModeClamp,
+            .address_mode_v = cudaAddressModeClamp,
+        };
+
+        optix::CudaMipmapArray cubemap_array;
         optix::CudaTexture cubemap;
         if (cached) {
             spdlog::info("Env cubemap loaded from cache");
-            constexpr optix::SamplerDesc cubemap_sampler{
-                .filter_mode = cudaFilterModeLinear,
-                .mipmap_filter_mode = cudaFilterModePoint,
-                .address_mode_u = cudaAddressModeClamp,
-                .address_mode_v = cudaAddressModeClamp,
-            };
-            cubemap = optix::finalize_texture(*cached, cubemap_sampler);
+            optix::ArrayFormatInfo info{};
+            cubemap_array = optix::upload_mipmap_array(*cached, info);
+            cubemap = optix::create_texture_object(cubemap_array, cubemap_sampler, info);
         } else {
             // Equirect → cubemap (CUDA kernel, fp16 RGBA output)
             uint32_t face_size = 0;
@@ -1092,13 +1110,9 @@ namespace qualquer::app {
             // BC6H compression (CPU ISPC, writes KTX2 cache)
             auto prepared = compress_texture_bc6h(cubemap_pixels, face_size, source_hash);
 
-            constexpr optix::SamplerDesc cubemap_sampler{
-                .filter_mode = cudaFilterModeLinear,
-                .mipmap_filter_mode = cudaFilterModePoint,
-                .address_mode_u = cudaAddressModeClamp,
-                .address_mode_v = cudaAddressModeClamp,
-            };
-            cubemap = optix::finalize_texture(prepared, cubemap_sampler);
+            optix::ArrayFormatInfo info{};
+            cubemap_array = optix::upload_mipmap_array(prepared, info);
+            cubemap = optix::create_texture_object(cubemap_array, cubemap_sampler, info);
         }
 
         // --- Alias table (always from raw HDR pixels, no disk cache) ---
@@ -1107,6 +1121,7 @@ namespace qualquer::app {
         if (alias_result.entries.empty()) {
             spdlog::error("Env alias table construction failed");
             cubemap.destroy();
+            cubemap_array.destroy();
             return false;
         }
 
@@ -1118,6 +1133,7 @@ namespace qualquer::app {
         CUDA_CHECK(cudaStreamSynchronize(nullptr));
 
         // Commit all resources
+        env_cubemap_array_ = std::move(cubemap_array);
         env_cubemap_texture_ = std::move(cubemap);
         env_alias_width_ = alias_result.alias_width;
         env_alias_height_ = alias_result.alias_height;
@@ -1134,6 +1150,7 @@ namespace qualquer::app {
 
     void SceneLoader::destroy_env_map() {
         env_cubemap_texture_.destroy();
+        env_cubemap_array_.destroy();
         env_alias_table_.free();
         env_alias_width_ = 0;
         env_alias_height_ = 0;
@@ -1149,10 +1166,16 @@ namespace qualquer::app {
         emissive_alias_table_.free();
         emissive_total_power_ = 0.0f;
 
-        for (auto &tex: textures_) {
+        for (auto &tex : textures_) {
             tex.destroy();
         }
         textures_.clear();
+
+        for (auto &arr : mipmap_arrays_) {
+            arr.destroy();
+        }
+        mipmap_arrays_.clear();
+        array_format_infos_.clear();
 
         material_buffer_.free();
         texture_objects_buffer_.free();

@@ -68,6 +68,7 @@ MUSTREAD:4
 - [ ] closesthit 传播与更新 cone
 - [ ] BC 尾部 mip padding 修正（edge-replicate 替代透明黑）
 - [ ] 纹理采样改为 cone 驱动 LOD
+- [ ] glTF sampler mag/min filter 分离
 - [ ] 请求用户在 CLion 中编译验证（高频纹理 aliasing 减少，远处纹理正确模糊）
 
 ## Step 18：Normal Map Specular AA
