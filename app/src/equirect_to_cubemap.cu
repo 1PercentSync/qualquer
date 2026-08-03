@@ -165,9 +165,8 @@ namespace qualquer::app {
                                                     equirect_width, equirect_height,
                                                     face_size);
         CUDA_CHECK_KERNEL(cudaGetLastError());
-        CUDA_CHECK_KERNEL(cudaDeviceSynchronize());
 
-        // Download result to host.
+        // Download result to host (cudaMemcpy is synchronous on default stream).
         std::vector<uint16_t> result(dst_uint16s);
         CUDA_CHECK_KERNEL(cudaMemcpy(result.data(), d_dst, dst_uint16s * sizeof(uint16_t), cudaMemcpyDeviceToHost));
 
