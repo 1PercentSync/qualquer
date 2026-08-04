@@ -76,14 +76,18 @@ namespace qualquer::optix {
         // Routes OptiX internal diagnostics to spdlog by severity level.
         // OptiX levels: 1=fatal, 2=error, 3=warning, 4=print (informational).
         void optix_log_callback(const unsigned int level,
-                                [[maybe_unused]] const char *tag,
+                                const char *tag,
                                 const char *message,
                                 [[maybe_unused]] void *cb_data) {
             switch (level) {
-                case 1: spdlog::critical("[OptiX] {}", message); break;
-                case 2: spdlog::error("[OptiX] {}", message); break;
-                case 3: spdlog::warn("[OptiX] {}", message); break;
-                default: spdlog::info("[OptiX] {}", message); break;
+                case 1: spdlog::critical("[OptiX][{}] {}", tag, message);
+                    break;
+                case 2: spdlog::error("[OptiX][{}] {}", tag, message);
+                    break;
+                case 3: spdlog::warn("[OptiX][{}] {}", tag, message);
+                    break;
+                default: spdlog::info("[OptiX][{}] {}", tag, message);
+                    break;
             }
         }
 
@@ -121,8 +125,7 @@ namespace qualquer::optix {
         int best_minor = 0;
         int best_score = 0;
         for (int i = 0; i < device_count; ++i) {
-            if (get_device_attribute(cudaDevAttrComputeMode, i) ==
-                cudaComputeModeProhibited) {
+            if (get_device_attribute(cudaDevAttrComputeMode, i) == cudaComputeModeProhibited) {
                 continue;
             }
 
@@ -176,7 +179,9 @@ namespace qualquer::optix {
         spdlog::info("OptiX device context created");
     }
 
-    void Context::import_display_buffer(void *win32_handle, const uint32_t width, const uint32_t height,
+    void Context::import_display_buffer(void *win32_handle,
+                                        const uint32_t width,
+                                        const uint32_t height,
                                         const uint64_t size) {
         // Dedicated flag is required because the Vulkan side used a dedicated
         // allocation (VkMemoryDedicatedAllocateInfo). size must match vkAllocateMemory's size.
@@ -278,5 +283,7 @@ namespace qualquer::optix {
             OPTIX_CHECK(optixDeviceContextDestroy(device_context));
             device_context = nullptr;
         }
+        device_id_ = -1;
+        device_uuid_ = {};
     }
 } // namespace qualquer::optix
