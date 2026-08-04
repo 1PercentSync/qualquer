@@ -53,6 +53,8 @@ Phase 4.5 Step 14.9 第一小项：Catmull-Rom tonemap 16→4 fetch
 | [Nsight Compute](https://docs.nvidia.com/nsight-compute/index.html) | Kernel 级性能分析（在线） |
 | [Nsight Systems](https://docs.nvidia.com/nsight-systems/index.html) | 系统级时间线分析（在线） |
 | `docs/third_party/ada_tuning_guide.md` | Ada 架构（40系）调优指南 |
+| `docs/third_party/dlss_programming_guide.md` | DLSS 编程指南 |
+| `docs/third_party/dlss_rr_integration_guide.md` | DLSS-RR 集成指南 |
 
 ---
 
