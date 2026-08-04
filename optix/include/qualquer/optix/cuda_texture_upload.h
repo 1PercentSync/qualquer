@@ -130,9 +130,7 @@ namespace qualquer::optix {
      * @param prepared CPU-side compressed texture from the app layer's
      *                 compress functions or cache.
      * @param samplers Sampler configurations; one texture object is created
-     *                 per entry. May be empty (array-only upload for deferred
-     *                 texture object creation is not supported — pass at least
-     *                 one sampler).
+     *                 per entry. Must not be empty.
      * @return CudaTexture owning the GPU array and all texture objects.
      */
     [[nodiscard]] CudaTexture upload_texture(

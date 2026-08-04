@@ -9,6 +9,8 @@
 
 #include <cuda_fp16.h>
 
+#include <cassert>
+
 namespace qualquer::optix {
     namespace {
         /// Maps TextureFormat to the native CUDA BC channel descriptor.
@@ -98,6 +100,7 @@ namespace qualquer::optix {
     CudaTexture upload_texture(
         const PreparedTexture &prepared,
         std::span<const SamplerDesc> samplers) {
+        assert(!samplers.empty() && "upload_texture requires at least one sampler");
         auto channel_desc = channel_desc_for_format(prepared.format);
         const bool is_cubemap = (prepared.face_count == 6);
 

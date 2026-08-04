@@ -458,7 +458,7 @@ namespace qualquer::renderer {
         const auto &s = ctx.scene_stats;
         ImGui::Text("Meshes/BLAS: %u  Instances: %u", s.meshes, s.instances);
         ImGui::Text("TLAS Instances: %u", s.tlas_instances);
-        ImGui::Text("Materials: %u  Textures: %u", s.materials, s.textures);
+        ImGui::Text("Materials: %u  Images: %u", s.materials, s.images);
         ImGui::Text("Triangles: %u  Vertices: %u", s.triangles, s.vertices);
         ImGui::Text("Emissive Triangles: %u", s.emissive_triangles);
         if (s.env_map_width > 0) {

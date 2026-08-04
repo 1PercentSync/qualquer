@@ -27,8 +27,8 @@ namespace qualquer::renderer {
         /** @brief Number of materials. */
         uint32_t materials = 0;
 
-        /** @brief Number of loaded textures (scene textures, excluding defaults). */
-        uint32_t textures = 0;
+        /** @brief Number of unique images uploaded to GPU (excluding defaults). */
+        uint32_t images = 0;
 
         /** @brief Total triangle count across all mesh primitives. */
         uint32_t triangles = 0;

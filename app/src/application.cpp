@@ -574,7 +574,7 @@ namespace qualquer::app {
             .instances = static_cast<uint32_t>(instances.size()),
             .tlas_instances = renderer_.tlas_instance_count(),
             .materials = static_cast<uint32_t>(scene_loader_.material_buffer().count()),
-            .textures = scene_loader_.scene_texture_count(),
+            .images = scene_loader_.scene_image_count(),
             .triangles = total_triangles,
             .vertices = total_vertices,
             .emissive_triangles = scene_loader_.emissive_light().count,

@@ -905,9 +905,10 @@ namespace qualquer::app {
         decoded_images.clear();
 
         // ---- Group entries by unique image, collect samplers ----
-        // Build groups keyed by the canonical entry index (first entry with a
-        // given source_hash+role). Each group collects the SamplerDescs and
-        // the TexKeys for all entries sharing that image.
+        // Group by (source_hash, role) — the GPU-level dedup key. This is
+        // independent of dedup_source (which only governs compression-stage
+        // dedup and skips cache hits). Grouping here must cover all entries
+        // regardless of cache status so that cache hits still share arrays.
         constexpr optix::SamplerDesc default_sampler{
             .filter_mode = cudaFilterModeLinear,
             .mipmap_filter_mode = cudaFilterModeLinear,
@@ -915,33 +916,31 @@ namespace qualquer::app {
             .address_mode_v = cudaAddressModeWrap,
         };
 
+        using ImageKey = std::pair<std::string, TextureRole>;
         struct ImageGroup {
             int prepared_index;                    // index into prepared_textures
             std::vector<optix::SamplerDesc> samplers;
             std::vector<TexKey> keys;              // parallel to samplers
         };
         std::vector<ImageGroup> image_groups;
-        std::vector<int> entry_to_group(unique_entries.size(), -1);
+        std::map<ImageKey, int> image_key_to_group;
 
         for (std::size_t i = 0; i < unique_entries.size(); ++i) {
-            const auto canonical = (dedup_source[i] >= 0)
-                                       ? dedup_source[i]
-                                       : static_cast<int>(i);
-
             const auto &entry = unique_entries[i];
+            const ImageKey image_key{source_hashes[i], entry.role};
+
             const auto &tex = gltf.textures[entry.texture_index];
             const auto sampler = tex.samplerIndex.has_value()
                                      ? convert_gltf_sampler(gltf.samplers[*tex.samplerIndex])
                                      : default_sampler;
 
-            if (entry_to_group[canonical] < 0) {
-                entry_to_group[canonical] = static_cast<int>(image_groups.size());
-                image_groups.push_back({.prepared_index = canonical});
+            auto [it, inserted] = image_key_to_group.try_emplace(
+                image_key, static_cast<int>(image_groups.size()));
+            if (inserted) {
+                image_groups.push_back({.prepared_index = static_cast<int>(i)});
             }
-            const auto group_idx = entry_to_group[canonical];
-            entry_to_group[i] = group_idx;
-            image_groups[group_idx].samplers.push_back(sampler);
-            image_groups[group_idx].keys.push_back({entry.texture_index, entry.role});
+            image_groups[it->second].samplers.push_back(sampler);
+            image_groups[it->second].keys.push_back({entry.texture_index, entry.role});
         }
 
         // ---- Serial GPU upload: one CudaTexture per unique image ----
@@ -1209,7 +1208,7 @@ namespace qualquer::app {
         return texture_objects_buffer_;
     }
 
-    uint32_t SceneLoader::scene_texture_count() const {
+    uint32_t SceneLoader::scene_image_count() const {
         // textures_ holds one CudaTexture per unique image (each may own
         // multiple texture objects for different samplers). Excludes the
         // 2 default textures managed by Application.
