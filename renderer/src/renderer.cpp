@@ -282,12 +282,12 @@ namespace qualquer::renderer {
         normal_roughness.resize(width, height);
     }
 
-    void Renderer::AuxBufferSet::free() {
-        depth.free();
-        motion_vectors.free();
-        diffuse_albedo.free();
-        specular_albedo.free();
-        normal_roughness.free();
+    void Renderer::AuxBufferSet::destroy() {
+        depth.destroy();
+        motion_vectors.destroy();
+        diffuse_albedo.destroy();
+        specular_albedo.destroy();
+        normal_roughness.destroy();
     }
 
     void Renderer::FrameSlot::alloc(const uint32_t width, const uint32_t height) {
@@ -305,9 +305,9 @@ namespace qualquer::renderer {
         sample_count = 0;
     }
 
-    void Renderer::FrameSlot::free() {
-        color.free();
-        aux.free();
+    void Renderer::FrameSlot::destroy() {
+        color.destroy();
+        aux.destroy();
         sample_count = 0;
     }
 
@@ -440,14 +440,14 @@ namespace qualquer::renderer {
         // them. DLSS-RR is last among render resources so feature release and
         // NGX shutdown happen after any stream work that referenced them.
         pipeline_.destroy();
-        sbt_raygen_.free();
-        sbt_miss_.free();
-        sbt_hit_.free();
+        sbt_raygen_.destroy();
+        sbt_miss_.destroy();
+        sbt_hit_.destroy();
         accel_.destroy();
-        geometry_info_buffer_.free();
-        frame_slot_.free();
-        dlss_output_.free();
-        params_buffer_.free();
+        geometry_info_buffer_.destroy();
+        frame_slot_.destroy();
+        dlss_output_.destroy();
+        params_buffer_.destroy();
         for (auto &staging : params_staging_) {
             if (staging != nullptr) {
                 CUDA_CHECK(cudaFreeHost(staging));
@@ -476,7 +476,7 @@ namespace qualquer::renderer {
         // Runtime scene switching: tear down the previous scene's AS and
         // geometry-info buffer before rebuilding.
         accel_.destroy();
-        geometry_info_buffer_.free();
+        geometry_info_buffer_.destroy();
 
         if (meshes.empty()) {
             // No geometry to trace; submit_cuda must keep the traversable at 0 so
@@ -602,8 +602,8 @@ namespace qualquer::renderer {
             if (dlss_rr_.feature_active()) {
                 dlss_rr_.release_feature();
             }
-            frame_slot_.aux.free();
-            dlss_output_.free();
+            frame_slot_.aux.destroy();
+            dlss_output_.destroy();
             dlss_output_width_ = 0;
             dlss_output_height_ = 0;
             invalidate_dlss_state();

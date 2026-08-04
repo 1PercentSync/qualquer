@@ -36,7 +36,7 @@ namespace qualquer::optix {
 
         /** @brief Releases held device memory. */
         ~CudaBuffer() {
-            free();
+            destroy();
         }
 
         /** @brief Non-copyable: device memory has a single owner. */
@@ -58,7 +58,7 @@ namespace qualquer::optix {
          */
         CudaBuffer &operator=(CudaBuffer &&other) noexcept {
             if (this != &other) {
-                free();
+                destroy();
                 data_ = other.data_;
                 count_ = other.count_;
                 other.data_ = nullptr;
@@ -68,13 +68,13 @@ namespace qualquer::optix {
         }
 
         /**
-         * @brief Allocates device memory for count elements, freeing any prior allocation.
+         * @brief Allocates device memory for count elements, destroying any prior allocation.
          *
          * Callers need not track prior state, and a count of 0 leaves the buffer empty.
          * @param count Number of elements to allocate.
          */
         void alloc(const std::size_t count) {
-            free();
+            destroy();
             if (count == 0) {
                 return;
             }
@@ -88,7 +88,7 @@ namespace qualquer::optix {
          * Idempotent: members are reset, so a repeat call is a no-op (matches
          * the optix layer's destroy/release convention).
          */
-        void free() {
+        void destroy() {
             if (data_ != nullptr) {
                 CUDA_CHECK(cudaFree(data_));
                 data_ = nullptr;

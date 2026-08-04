@@ -1161,7 +1161,7 @@ namespace qualquer::app {
 
     void SceneLoader::destroy_env_map() {
         env_cubemap_texture_.destroy();
-        env_alias_table_.free();
+        env_alias_table_.destroy();
         env_alias_width_ = 0;
         env_alias_height_ = 0;
         env_source_width_ = 0;
@@ -1172,8 +1172,8 @@ namespace qualquer::app {
     // ---- Destroy + accessors ----
 
     void SceneLoader::destroy_scene_resources() {
-        emissive_triangles_.free();
-        emissive_alias_table_.free();
+        emissive_triangles_.destroy();
+        emissive_alias_table_.destroy();
         emissive_total_power_ = 0.0f;
 
         for (auto &tex : textures_) {
@@ -1181,8 +1181,8 @@ namespace qualquer::app {
         }
         textures_.clear();
 
-        material_buffer_.free();
-        texture_objects_buffer_.free();
+        material_buffer_.destroy();
+        texture_objects_buffer_.destroy();
 
         // Clear scene data (Mesh contains CudaBuffer which frees on destruction)
         meshes_.clear();

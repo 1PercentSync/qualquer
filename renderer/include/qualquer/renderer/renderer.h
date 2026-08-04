@@ -271,7 +271,7 @@ namespace qualquer::renderer {
             void resize(uint32_t width, uint32_t height);
 
             /** @brief Releases every guide resource. */
-            void free();
+            void destroy();
 
             /** @brief Whether the guide resources are allocated. */
             [[nodiscard]] bool valid() const {
@@ -320,7 +320,7 @@ namespace qualquer::renderer {
             void resize(uint32_t width, uint32_t height);
 
             /** @brief Releases color and guide resources. */
-            void free();
+            void destroy();
 
             /** @brief HDR color buffer (RGBA32F, CUDA array + tex/surf). */
             optix::CudaArrayBuffer<float4> color;

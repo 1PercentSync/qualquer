@@ -38,8 +38,10 @@ namespace qualquer::optix {
      */
     template<typename T>
     class CudaArrayBuffer {
-        static_assert(std::is_same_v<T, float> || std::is_same_v<T, float2>
-                      || std::is_same_v<T, float4> || std::is_same_v<T, uchar4>,
+        static_assert(std::is_same_v<T, float> ||
+                      std::is_same_v<T, float2> ||
+                      std::is_same_v<T, float4> ||
+                      std::is_same_v<T, uchar4>,
                       "CudaArrayBuffer<T> supports float, float2, float4, uchar4");
 
     public:
@@ -48,17 +50,21 @@ namespace qualquer::optix {
 
         /** @brief Releases held GPU resources. */
         ~CudaArrayBuffer() {
-            free();
+            destroy();
         }
 
         CudaArrayBuffer(const CudaArrayBuffer &) = delete;
+
         CudaArrayBuffer &operator=(const CudaArrayBuffer &) = delete;
 
         /** @brief Steals another buffer's resources; leaves other empty. */
-        CudaArrayBuffer(CudaArrayBuffer &&other) noexcept
-            : array_(other.array_), tex_obj_(other.tex_obj_), surf_obj_(other.surf_obj_),
-              width_(other.width_), height_(other.height_),
-              fmt_desc_(other.fmt_desc_), read_mode_(other.read_mode_) {
+        CudaArrayBuffer(CudaArrayBuffer &&other) noexcept : array_(other.array_),
+                                                            tex_obj_(other.tex_obj_),
+                                                            surf_obj_(other.surf_obj_),
+                                                            width_(other.width_),
+                                                            height_(other.height_),
+                                                            fmt_desc_(other.fmt_desc_),
+                                                            read_mode_(other.read_mode_) {
             other.array_ = nullptr;
             other.tex_obj_ = 0;
             other.surf_obj_ = 0;
@@ -73,7 +79,7 @@ namespace qualquer::optix {
          */
         CudaArrayBuffer &operator=(CudaArrayBuffer &&other) noexcept {
             if (this != &other) {
-                free();
+                destroy();
                 array_ = other.array_;
                 tex_obj_ = other.tex_obj_;
                 surf_obj_ = other.surf_obj_;
@@ -104,7 +110,7 @@ namespace qualquer::optix {
         void alloc(uint32_t width, uint32_t height,
                    const cudaChannelFormatDesc &desc,
                    cudaTextureReadMode mode) {
-            free();
+            destroy();
             if (width == 0 || height == 0) {
                 return;
             }
@@ -140,7 +146,7 @@ namespace qualquer::optix {
          * Stored format is preserved so a subsequent resize recreates with
          * the same format.
          */
-        void free() {
+        void destroy() {
             if (surf_obj_ != 0) {
                 CUDA_CHECK(cudaDestroySurfaceObject(surf_obj_));
                 surf_obj_ = 0;

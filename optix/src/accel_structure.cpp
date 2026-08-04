@@ -115,12 +115,12 @@ namespace qualquer::optix {
         // --- Sync 1: all builds complete, compacted sizes available ---
 
         CUDA_CHECK(cudaStreamSynchronize(nullptr));
-        scratch.free();
+        scratch.destroy();
 
         std::vector<uint64_t> compacted_sizes(count);
         CUDA_CHECK(cudaMemcpy(compacted_sizes.data(), compacted_sizes_buf.data(),
                               count * sizeof(uint64_t), cudaMemcpyDeviceToHost));
-        compacted_sizes_buf.free();
+        compacted_sizes_buf.destroy();
 
         // --- Phase 3: submit all compactions ---
 
@@ -233,14 +233,14 @@ namespace qualquer::optix {
 
         CUDA_CHECK(cudaStreamSynchronize(nullptr));
 
-        temp_buffer.free();
+        temp_buffer.destroy();
 
         // --- Read back compacted size ---
 
         uint64_t compacted_size = 0;
         CUDA_CHECK(cudaMemcpy(&compacted_size, compacted_size_buffer.data(),
                               sizeof(uint64_t), cudaMemcpyDeviceToHost));
-        compacted_size_buffer.free();
+        compacted_size_buffer.destroy();
 
         // --- Compact ---
 
@@ -273,12 +273,12 @@ namespace qualquer::optix {
 
     void AccelStructure::destroy() {
         for (auto &blas: blas_handles_) {
-            blas.buffer.free();
+            blas.buffer.destroy();
             blas.handle = 0;
         }
         blas_handles_.clear();
 
-        tlas_.buffer.free();
+        tlas_.buffer.destroy();
         tlas_.handle = 0;
     }
 
