@@ -5,6 +5,7 @@
  * @brief CudaTexture — RAII owner of a mipmapped array and its texture objects.
  */
 
+#include <algorithm>
 #include <vector>
 
 #include <cuda_runtime.h>
@@ -76,7 +77,13 @@ namespace qualquer::optix {
          * destroyed before the backing array they reference.
          */
         void destroy() {
-            for (const auto obj: texture_objects) {
+            // Deduplicate before destroying: (min, mag) pairs may share a
+            // handle when both filters are identical.
+            std::sort(texture_objects.begin(), texture_objects.end());
+            texture_objects.erase(
+                std::unique(texture_objects.begin(), texture_objects.end()),
+                texture_objects.end());
+            for (const auto obj : texture_objects) {
                 if (obj != 0) {
                     CUDA_CHECK(cudaDestroyTextureObject(obj));
                 }

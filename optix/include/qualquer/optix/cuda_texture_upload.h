@@ -74,8 +74,11 @@ namespace qualquer::optix {
      * data; upload_texture() forwards the values into @c cudaTextureDesc.
      */
     struct SamplerDesc {
-        /** @brief Texture filter mode. */
-        cudaTextureFilterMode filter_mode;
+        /** @brief Magnification filter (used when LOD < 0, i.e. texels are enlarged). */
+        cudaTextureFilterMode mag_filter;
+
+        /** @brief Minification filter (used when LOD > 0, i.e. texels are shrunk). */
+        cudaTextureFilterMode min_filter;
 
         /** @brief Filter between mip levels (point = no trilinear, linear = trilinear). */
         cudaTextureFilterMode mipmap_filter_mode;

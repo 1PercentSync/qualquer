@@ -114,13 +114,13 @@ namespace qualquer::optix {
             res_desc.resType = cudaResourceTypeMipmappedArray;
             res_desc.res.mipmap.mipmap = array;
 
-            result.texture_objects.reserve(samplers.size());
-            for (const auto &sampler: samplers) {
+            // Each sampler produces a (min, mag) pair of texture objects.
+            result.texture_objects.reserve(samplers.size() * 2);
+            for (const auto &sampler : samplers) {
                 cudaTextureDesc tex_desc = {};
                 tex_desc.addressMode[0] = sampler.address_mode_u;
                 tex_desc.addressMode[1] = sampler.address_mode_v;
                 tex_desc.addressMode[2] = sampler.address_mode_u; // W axis: reuse U (no glTF W wrap)
-                tex_desc.filterMode = sampler.filter_mode;
                 tex_desc.mipmapFilterMode = sampler.mipmap_filter_mode;
                 // BC UNORM formats (BC5/BC7) decompress to 8-bit integers; linear
                 // filtering requires cudaReadModeNormalizedFloat for integer types.
@@ -131,9 +131,22 @@ namespace qualquer::optix {
                 tex_desc.maxMipmapLevelClamp = static_cast<float>(level_count - 1);
                 tex_desc.seamlessCubemap = is_cubemap ? 1 : 0;
 
-                cudaTextureObject_t texture_object = 0;
-                CUDA_CHECK(cudaCreateTextureObject(&texture_object, &res_desc, &tex_desc, nullptr));
-                result.texture_objects.push_back(texture_object);
+                // Min texture object (LOD >= 0: texels shrunk).
+                tex_desc.filterMode = sampler.min_filter;
+                cudaTextureObject_t min_obj = 0;
+                CUDA_CHECK(cudaCreateTextureObject(&min_obj, &res_desc, &tex_desc, nullptr));
+                result.texture_objects.push_back(min_obj);
+
+                // Mag texture object (LOD < 0: texels enlarged).
+                // Reuse min when filters are identical.
+                if (sampler.mag_filter != sampler.min_filter) {
+                    tex_desc.filterMode = sampler.mag_filter;
+                    cudaTextureObject_t mag_obj = 0;
+                    CUDA_CHECK(cudaCreateTextureObject(&mag_obj, &res_desc, &tex_desc, nullptr));
+                    result.texture_objects.push_back(mag_obj);
+                } else {
+                    result.texture_objects.push_back(min_obj);
+                }
             }
         }
 

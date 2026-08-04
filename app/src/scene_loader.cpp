@@ -33,10 +33,10 @@ namespace qualquer::app {
     namespace {
         // ---- Default texture indices ----
 
-        /** @brief Index of the default white 1×1 texture in texture_objects_. */
+        /** @brief Index of the default white 1×1 texture (min) in texture_objects_. */
         constexpr uint32_t kDefaultWhiteTexIdx = 0;
-        /** @brief Index of the default flat-normal 1×1 texture in texture_objects_. */
-        constexpr uint32_t kDefaultFlatNormalTexIdx = 1;
+        /** @brief Index of the default flat-normal 1×1 texture (min) in texture_objects_. */
+        constexpr uint32_t kDefaultFlatNormalTexIdx = 2;
 
         // ---- Pre-scan types ----
 
@@ -320,18 +320,25 @@ namespace qualquer::app {
         /** @brief Converts a glTF sampler to a CUDA SamplerDesc. */
         optix::SamplerDesc convert_gltf_sampler(const fastgltf::Sampler &sampler) {
             optix::SamplerDesc desc{
-                .filter_mode = cudaFilterModeLinear,
+                .mag_filter = cudaFilterModeLinear,
+                .min_filter = cudaFilterModeLinear,
                 .mipmap_filter_mode = cudaFilterModeLinear,
                 .address_mode_u = convert_wrap(sampler.wrapS),
                 .address_mode_v = convert_wrap(sampler.wrapT),
             };
+
+            if (sampler.magFilter.has_value()) {
+                if (*sampler.magFilter == fastgltf::Filter::Nearest) {
+                    desc.mag_filter = cudaFilterModePoint;
+                }
+            }
 
             if (sampler.minFilter.has_value()) {
                 switch (*sampler.minFilter) {
                     case fastgltf::Filter::Nearest:
                     case fastgltf::Filter::NearestMipMapNearest:
                     case fastgltf::Filter::NearestMipMapLinear:
-                        desc.filter_mode = cudaFilterModePoint;
+                        desc.min_filter = cudaFilterModePoint;
                         break;
                     default:
                         break;
@@ -792,8 +799,11 @@ namespace qualquer::app {
         // Index 0: white (fallback for missing base_color / metallic_roughness / emissive)
         // Index 1: flat normal (fallback for missing normal map)
 
-        texture_objects_.push_back(default_textures.white.texture_objects[0]);
-        texture_objects_.push_back(default_textures.flat_normal.texture_objects[0]);
+        // (min, mag) pairs — 1×1 point-filtered, both use the same object.
+        texture_objects_.push_back(default_textures.white.texture_objects[0]);       // [0] min
+        texture_objects_.push_back(default_textures.white.texture_objects[0]);       // [1] mag
+        texture_objects_.push_back(default_textures.flat_normal.texture_objects[0]); // [2] min
+        texture_objects_.push_back(default_textures.flat_normal.texture_objects[0]); // [3] mag
 
         // ---- Collect unique (texture_index, role) pairs ----
         // Only collect textures from referenced materials.
@@ -910,7 +920,8 @@ namespace qualquer::app {
         // dedup and skips cache hits). Grouping here must cover all entries
         // regardless of cache status so that cache hits still share arrays.
         constexpr optix::SamplerDesc default_sampler{
-            .filter_mode = cudaFilterModeLinear,
+            .mag_filter = cudaFilterModeLinear,
+            .min_filter = cudaFilterModeLinear,
             .mipmap_filter_mode = cudaFilterModeLinear,
             .address_mode_u = cudaAddressModeWrap,
             .address_mode_v = cudaAddressModeWrap,
@@ -953,9 +964,12 @@ namespace qualquer::app {
                 prepared_textures[group.prepared_index], group.samplers);
 
             // Map each (texture_index, role) key to its texture_objects_ index.
+            // Each sampler produces a (min, mag) pair; the material index
+            // points to min (the first of the pair).
             for (std::size_t j = 0; j < group.keys.size(); ++j) {
                 const auto obj_index = static_cast<uint32_t>(texture_objects_.size());
-                texture_objects_.push_back(cuda_texture.texture_objects[j]);
+                texture_objects_.push_back(cuda_texture.texture_objects[j * 2]);     // min
+                texture_objects_.push_back(cuda_texture.texture_objects[j * 2 + 1]); // mag
                 tex_index_cache[group.keys[j]] = obj_index;
             }
 
@@ -1098,7 +1112,8 @@ namespace qualquer::app {
                           : load_cached_texture_bc6h(source_hash);
 
         constexpr optix::SamplerDesc cubemap_sampler{
-            .filter_mode = cudaFilterModeLinear,
+            .mag_filter = cudaFilterModeLinear,
+            .min_filter = cudaFilterModeLinear,
             .mipmap_filter_mode = cudaFilterModeLinear,
             .address_mode_u = cudaAddressModeClamp,
             .address_mode_v = cudaAddressModeClamp,
