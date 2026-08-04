@@ -279,9 +279,9 @@ bounce 0 使用 ray differentials：从屏幕空间像素偏导计算椭圆 foot
 
 bounce 0 已有 ray diff 椭圆 footprint，沿长轴方向多次 `tex2DLod` 采样取平均（8x）。仅 bounce 0 执行，成本低（屏幕空间缓存相干性高）。
 
-### bounce 1+ 退化为 ray cone 传播
+### closesthit 传播与更新 cone
 
-bounce 1+ 不再传播 ray differentials（diffuse bounce 偏导退化），改用 ray cone 圆形 footprint + 三线性 LOD。`cone_width += cone_spread * hit_distance`；bounce 时按 BRDF 散射特性放大 `cone_spread`。
+ray cone 全程传播：`cone_width += cone_spread * hit_distance`；bounce 时按 BRDF 散射特性放大 `cone_spread`。bounce 1+ 仅用 ray cone 做 LOD 选择（ray diff 不跨 bounce 传播，diffuse bounce 偏导退化）。
 
 ### HDR cubemap mip LOD 采样
 

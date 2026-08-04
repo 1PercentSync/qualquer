@@ -66,8 +66,7 @@ MUSTREAD:4
 - [ ] payload 接入 cone_width / cone_spread
 - [ ] raygen 初始化 cone（ray diff 计算屏幕空间椭圆 footprint）
 - [ ] bounce 0 各向异性过滤（沿椭圆长轴多次 tex2DLod 采样）
-- [ ] bounce 1+ 退化为 ray cone 传播（圆形 footprint，三线性 LOD）
-- [ ] closesthit 传播与更新 cone
+- [ ] closesthit 传播与更新 cone（全程 ray cone，bounce 1+ 仅 ray cone LOD）
 - [ ] HDR cubemap mip LOD 采样
 - [ ] BC 尾部 mip padding 修正（edge-replicate 替代透明黑）
 - [ ] 纹理采样改为 cone 驱动 LOD
