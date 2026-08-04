@@ -70,6 +70,8 @@ namespace qualquer::optix {
             other.surf_obj_ = 0;
             other.width_ = 0;
             other.height_ = 0;
+            other.fmt_desc_ = {};
+            other.read_mode_ = cudaReadModeElementType;
         }
 
         /**
@@ -92,6 +94,8 @@ namespace qualquer::optix {
                 other.surf_obj_ = 0;
                 other.width_ = 0;
                 other.height_ = 0;
+                other.fmt_desc_ = {};
+                other.read_mode_ = cudaReadModeElementType;
             }
             return *this;
         }
