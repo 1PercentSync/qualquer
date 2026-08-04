@@ -201,6 +201,8 @@ namespace qualquer::app {
                         std::memcpy(out + dst_off, src + src_off, 4);
                     } else {
                         std::memset(out + dst_off, 0, 4);
+                        // Keep padded texels opaque so opaque BC7 blocks retain opaque-mode eligibility.
+                        out[dst_off + 3] = 255;
                     }
                 }
             }
