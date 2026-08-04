@@ -60,7 +60,7 @@ namespace qualquer::optix {
         /** @brief 1 (LDR 2D) or 6 (HDR cubemap). */
         uint32_t face_count = 0;
 
-        /** @brief Number of mip levels; 1 for HDR (base level only). */
+        /** @brief Number of mip levels. */
         uint32_t level_count = 0;
 
         /** @brief Contiguous compressed mip data, indexed via @ref regions. */

@@ -1099,7 +1099,7 @@ namespace qualquer::app {
 
         constexpr optix::SamplerDesc cubemap_sampler{
             .filter_mode = cudaFilterModeLinear,
-            .mipmap_filter_mode = cudaFilterModePoint,
+            .mipmap_filter_mode = cudaFilterModeLinear,
             .address_mode_u = cudaAddressModeClamp,
             .address_mode_v = cudaAddressModeClamp,
         };
