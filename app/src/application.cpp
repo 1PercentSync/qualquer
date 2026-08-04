@@ -39,7 +39,7 @@ namespace qualquer::app {
         // GPU and excludes compute-only devices (e.g. a TCC GPU) up front.
         const std::vector<std::array<std::uint8_t, 16> > presentable_uuids = context_.pre_init(window_);
         cuda_context_.init(presentable_uuids);
-        context_.init(cuda_context_.device_uuid);
+        context_.init(cuda_context_.device_uuid());
 
         swapchain_.init(context_, VK_PRESENT_MODE_MAILBOX_KHR);
         display_buffer_.init(context_,

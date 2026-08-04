@@ -154,7 +154,7 @@ namespace qualquer::optix {
         cudaDeviceProp prop{};
         CUDA_CHECK(cudaGetDeviceProperties(&prop, best_device));
         device_id_ = best_device;
-        device_uuid = get_device_uuid(prop);
+        device_uuid_ = get_device_uuid(prop);
 
         spdlog::info("CUDA device {}: \"{}\" with compute capability {}.{}",
                      best_device, prop.name, best_major, best_minor);

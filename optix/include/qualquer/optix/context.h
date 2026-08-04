@@ -98,7 +98,9 @@ namespace qualquer::optix {
          * compare it without depending on CUDA headers. No alias is defined —
          * the raw type is used directly at every layer.
          */
-        std::array<std::uint8_t, 16> device_uuid{};
+        [[nodiscard]] const std::array<std::uint8_t, 16> &device_uuid() const {
+            return device_uuid_;
+        }
 
         /**
          * @brief Surface object over the imported display buffer.
@@ -141,6 +143,9 @@ namespace qualquer::optix {
         }
 
     private:
+        /** @brief Selected device UUID, set during init(). */
+        std::array<std::uint8_t, 16> device_uuid_{};
+
         /** @brief Index of the selected CUDA device, for subsequent runtime calls. */
         int device_id_ = -1;
 
