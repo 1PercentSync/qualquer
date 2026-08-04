@@ -14,7 +14,6 @@
 #include <qualquer/optix/cuda_texture.h>
 
 namespace qualquer::optix {
-
     /**
      * @brief Neutral texture format used by the cache and CUDA upload paths.
      *
@@ -23,10 +22,10 @@ namespace qualquer::optix {
      * the optix layer maps it to @c cudaChannelFormatKind at upload time.
      */
     enum class TextureFormat {
-        BC7_UNORM,             ///< BC7, linear (metallic-roughness, occlusion)
-        BC7_SRGB,              ///< BC7, gamma-correct (base color, emissive)
-        BC5_UNORM,             ///< BC5, RG only (tangent-space normals, Z reconstructed)
-        BC6H_UFLOAT,           ///< BC6H, unsigned float (HDR / IBL environment)
+        BC7_UNORM, ///< BC7, linear (metallic-roughness, occlusion)
+        BC7_SRGB, ///< BC7, gamma-correct (base color, emissive)
+        BC5_UNORM, ///< BC5, RG only (tangent-space normals, Z reconstructed)
+        BC6H_UFLOAT, ///< BC6H, unsigned float (HDR / IBL environment)
     };
 
     /** @brief One mip level's region within PreparedTexture::data. */
@@ -124,9 +123,7 @@ namespace qualquer::optix {
      *                 per entry. Must not be empty.
      * @return CudaTexture owning the GPU array and all texture objects.
      */
-    [[nodiscard]] CudaTexture upload_texture(
-        const PreparedTexture &prepared,
-        std::span<const SamplerDesc> samplers);
+    [[nodiscard]] CudaTexture upload_texture(const PreparedTexture &prepared, std::span<const SamplerDesc> samplers);
 
     /**
      * @brief Creates default 1×1 fp16×4 textures for material fallback.
@@ -141,5 +138,4 @@ namespace qualquer::optix {
      * @return DefaultTextures holding RAII handles for both textures.
      */
     [[nodiscard]] DefaultTextures create_default_textures();
-
 } // namespace qualquer::optix
