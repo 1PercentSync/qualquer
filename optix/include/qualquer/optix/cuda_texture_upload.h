@@ -57,12 +57,6 @@ namespace qualquer::optix {
         /** @brief Compressed format (mapped to the CUDA channel kind at upload). */
         TextureFormat format;
 
-        /** @brief Base-level pixel width (single face for cubemaps). */
-        uint32_t base_width = 0;
-
-        /** @brief Base-level pixel height (single face for cubemaps). */
-        uint32_t base_height = 0;
-
         /** @brief 1 (LDR 2D) or 6 (HDR cubemap). */
         uint32_t face_count = 0;
 

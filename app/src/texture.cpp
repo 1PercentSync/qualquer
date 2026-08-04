@@ -341,8 +341,6 @@ namespace qualquer::app {
 
             PreparedTexture result;
             result.format = format;
-            result.base_width = ktx2->base_width;
-            result.base_height = ktx2->base_height;
             result.face_count = ktx2->face_count;
             result.level_count = ktx2->level_count;
             result.data = std::move(ktx2->blob);
@@ -371,8 +369,6 @@ namespace qualquer::app {
 
             PreparedTexture result;
             result.format = format;
-            result.base_width = base_width;
-            result.base_height = base_height;
             result.face_count = face_count;
             result.level_count = level_count;
             result.regions.resize(level_count);

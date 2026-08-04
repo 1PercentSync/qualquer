@@ -106,10 +106,12 @@ namespace qualquer::optix {
 
         // BC5/BC6H/BC7 blocks are all 4x4 texels, 16 bytes each.
 
-        // Allocate mipmapped array (extent in texels).
+        // Allocate mipmapped array (extent in texels, base level).
+        const auto base_width = prepared.regions[0].width;
+        const auto base_height = prepared.regions[0].height;
         const cudaExtent extent = is_cubemap
-                                      ? make_cudaExtent(prepared.base_width, prepared.base_height, 6)
-                                      : make_cudaExtent(prepared.base_width, prepared.base_height, 0);
+                                      ? make_cudaExtent(base_width, base_height, 6)
+                                      : make_cudaExtent(base_width, base_height, 0);
         const unsigned int flags = is_cubemap ? cudaArrayCubemap : 0;
 
         cudaMipmappedArray_t mipmap_array = nullptr;
