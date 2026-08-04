@@ -13,7 +13,7 @@
 - [x] `optix/include/.../optix_check.h` — OptiX 错误处理宏
 - [x] `optix/include/.../cuda_buffer.h` — 基础 CUDA 内存封装
 - [x] `optix/include/.../cuda_texture.h` — 纹理与 mipmapped array 封装
-- [ ] `optix/include/.../cuda_array_buffer.h` — cudaArray 封装
+- [x] `optix/include/.../cuda_array_buffer.h` — cudaArray 封装
 - [ ] `optix/include/.../cuda_texture_upload.h` + `optix/src/cuda_texture_upload.cpp` — 纹理上传
 - [ ] `optix/include/.../context.h` + `optix/src/context.cpp` — CUDA/OptiX context
 - [ ] `optix/include/.../pipeline.h` + `optix/src/pipeline.cpp` — Module/Pipeline/SBT
