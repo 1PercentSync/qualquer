@@ -245,8 +245,11 @@ namespace qualquer::app {
             return out;
         }
 
-        /// Compresses one RGBA8 mip level to BC5 (RG channels only) via rgbcx.
-        std::vector<uint8_t> compress_bc5(const uint8_t *rgba, const uint32_t w, const uint32_t h) {
+        /// Compresses one RGBA8 mip level to BC5 (two channels) via rgbcx.
+        /// @param chan0 Source RGBA byte offset for BC5 red   channel (0=R,1=G,2=B,3=A).
+        /// @param chan1 Source RGBA byte offset for BC5 green channel.
+        std::vector<uint8_t> compress_bc5(const uint8_t *rgba, const uint32_t w, const uint32_t h,
+                                          const uint32_t chan0, const uint32_t chan1) {
             const uint32_t bx_count = block_count(w);
             const uint32_t by_count = block_count(h);
             std::vector<uint8_t> out(static_cast<size_t>(bx_count) * by_count * 16);
@@ -255,11 +258,10 @@ namespace qualquer::app {
             for (uint32_t by = 0; by < by_count; ++by) {
                 for (uint32_t bx = 0; bx < bx_count; ++bx) {
                     extract_block(rgba, w, h, bx, by, block_pixels);
-                    // BC5 = two BC4 blocks; chan0=R(0), chan1=G(1), stride=4.
                     rgbcx::encode_bc5_hq(
                         out.data() + (static_cast<size_t>(by) * bx_count + bx) * 16,
                         block_pixels,
-                        0, 1, 4,
+                        chan0, chan1, 4,
                         rgbcx::BC4_DEFAULT_SEARCH_RAD,
                         rgbcx::BC4_USE_ALL_MODES);
                 }
@@ -297,22 +299,24 @@ namespace qualquer::app {
         TextureFormat bc_format_for_role(const TextureRole role) {
             switch (role) {
                 case TextureRole::Color: return TextureFormat::BC7_SRGB;
-                case TextureRole::Linear: return TextureFormat::BC7_UNORM;
+                case TextureRole::MetallicRoughness: return TextureFormat::BC5_UNORM;
                 case TextureRole::Normal: return TextureFormat::BC5_UNORM;
             }
             // ReSharper disable once CppDFAUnreachableCode
-            return TextureFormat::BC7_UNORM;
+            return TextureFormat::BC5_UNORM;
         }
 
-        const char *format_suffix(const TextureFormat format) {
-            switch (format) {
-                case TextureFormat::BC7_SRGB: return "_bc7s";
-                case TextureFormat::BC7_UNORM: return "_bc7u";
-                case TextureFormat::BC5_UNORM: return "_bc5u";
-                case TextureFormat::BC6H_UFLOAT: return "_bc6h";
+        /// Cache suffix per role — distinguishes channel layouts even when
+        /// two roles share the same TextureFormat (Normal vs MetallicRoughness
+        /// both use BC5_UNORM but different source channel mappings).
+        const char *role_suffix(const TextureRole role) {
+            switch (role) {
+                case TextureRole::Color: return "_bc7s";
+                case TextureRole::MetallicRoughness: return "_bc5mr";
+                case TextureRole::Normal: return "_bc5n";
             }
             // ReSharper disable once CppDFAUnreachableCode
-            return "_bc7u";
+            return "_bc5n";
         }
 
         /// BC6H is the only cubemap format; all LDR formats are 2D.
@@ -322,10 +326,11 @@ namespace qualquer::app {
 
         /// Shared cache lookup for both LDR and HDR paths.
         std::optional<PreparedTexture> load_cached(
-            const std::string_view source_hash, const TextureFormat format) {
+            const std::string_view source_hash, const TextureFormat format,
+            const std::string_view suffix) {
             const auto path = cache_path(
                 "textures",
-                std::string(source_hash) + format_suffix(format),
+                std::string(source_hash) + std::string(suffix),
                 ".ktx2");
             if (!std::filesystem::exists(path)) {
                 return std::nullopt;
@@ -365,7 +370,8 @@ namespace qualquer::app {
             const uint32_t base_width, const uint32_t base_height,
             const uint32_t face_count,
             const std::vector<std::vector<uint8_t> > &levels, // [level] for 2D, or [0]=6 faces for cubemap
-            const std::string_view source_hash) {
+            const std::string_view source_hash,
+            const std::string_view suffix) {
             const auto level_count = static_cast<uint32_t>(levels.size());
 
             PreparedTexture result;
@@ -391,7 +397,7 @@ namespace qualquer::app {
             // Best-effort KTX2 cache write.
             const auto path = cache_path(
                 "textures",
-                std::string(source_hash) + format_suffix(format),
+                std::string(source_hash) + std::string(suffix),
                 ".ktx2");
             std::vector<Ktx2WriteLevel> write_levels(level_count);
             for (uint32_t i = 0; i < level_count; ++i) {
@@ -412,7 +418,7 @@ namespace qualquer::app {
 
     std::optional<PreparedTexture> load_cached_texture(
         const std::string_view source_hash, const TextureRole role) {
-        return load_cached(source_hash, bc_format_for_role(role));
+        return load_cached(source_hash, bc_format_for_role(role), role_suffix(role));
     }
 
     PreparedTexture compress_texture(const ImageData &data, const TextureRole role,
@@ -435,20 +441,30 @@ namespace qualquer::app {
         std::vector<std::vector<uint8_t> > levels(mip_chain.size());
         for (size_t i = 0; i < mip_chain.size(); ++i) {
             const auto &mip = mip_chain[i];
-            if (role == TextureRole::Normal) {
-                levels[i] = compress_bc5(mip.data.data(), mip.width, mip.height);
-            } else {
-                levels[i] = compress_bc7(mip.data.data(), mip.width, mip.height, is_color);
+            switch (role) {
+                case TextureRole::Normal:
+                    // R=X, G=Y (tangent-space normal XY).
+                    levels[i] = compress_bc5(mip.data.data(), mip.width, mip.height, 0, 1);
+                    break;
+                case TextureRole::MetallicRoughness:
+                    // glTF packs roughness in G(1) and metallic in B(2);
+                    // remap to BC5 R=roughness, G=metallic.
+                    levels[i] = compress_bc5(mip.data.data(), mip.width, mip.height, 1, 2);
+                    break;
+                case TextureRole::Color:
+                    levels[i] = compress_bc7(mip.data.data(), mip.width, mip.height, is_color);
+                    break;
             }
         }
 
-        return finalize_compressed(format, base_w, base_h, 1, levels, source_hash);
+        return finalize_compressed(format, base_w, base_h, 1, levels, source_hash,
+                                   role_suffix(role));
     }
 
     // ---- HDR (BC6H) cache + compress, cubemap only ----
 
     std::optional<PreparedTexture> load_cached_texture_bc6h(const std::string_view source_hash) {
-        return load_cached(source_hash, TextureFormat::BC6H_UFLOAT);
+        return load_cached(source_hash, TextureFormat::BC6H_UFLOAT, "_bc6h");
     }
 
     PreparedTexture compress_texture_bc6h(
@@ -514,6 +530,6 @@ namespace qualquer::app {
         }
 
         return finalize_compressed(
-            TextureFormat::BC6H_UFLOAT, face_size, face_size, 6, levels, source_hash);
+            TextureFormat::BC6H_UFLOAT, face_size, face_size, 6, levels, source_hash, "_bc6h");
     }
 } // namespace qualquer::app

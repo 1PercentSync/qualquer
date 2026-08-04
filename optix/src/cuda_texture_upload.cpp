@@ -27,14 +27,12 @@ namespace qualquer::optix {
                     // at texture object creation, not through the channel format.
                     // cudaChannelFormatKindUnsignedBlockCompressed7SRGB is broken
                     // in CUDA 13.x (rejects all readMode combinations).
-                    [[fallthrough]];
-                case TextureFormat::BC7_UNORM:
                     return cudaCreateChannelDesc(8, 8, 8, 8,
                                                  cudaChannelFormatKindUnsignedBlockCompressed7);
             }
             // ReSharper disable once CppDFAUnreachableCode
-            return cudaCreateChannelDesc(8, 8, 8, 8,
-                                         cudaChannelFormatKindUnsignedBlockCompressed7);
+            return cudaCreateChannelDesc(8, 8, 0, 0,
+                                         cudaChannelFormatKindUnsignedBlockCompressed5);
         }
 
         /// Number of 4x4 BC blocks covering a pixel dimension.

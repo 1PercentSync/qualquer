@@ -575,9 +575,10 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
                                           bc_texel.y * mat.base_color_factor.y * vert_color.y,
                                           bc_texel.z * mat.base_color_factor.z * vert_color.z);
 
+    // BC5: R=roughness, G=metallic (remapped from glTF G/B during compression).
     const auto mr_texel = tex2D<float4>(tex[mat.metallic_roughness_tex], uv.x, uv.y);
-    const float metallic = mr_texel.z * mat.metallic_factor;
-    const float roughness = mr_texel.y * mat.roughness_factor;
+    const float roughness = mr_texel.x * mat.roughness_factor;
+    const float metallic = mr_texel.y * mat.metallic_factor;
     const float alpha = fmaxf(roughness * roughness, kMinGgxAlpha);
 
     // ---- Normal mapping + consistency ----

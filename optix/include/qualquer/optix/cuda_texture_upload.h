@@ -22,9 +22,8 @@ namespace qualquer::optix {
      * the optix layer maps it to @c cudaChannelFormatKind at upload time.
      */
     enum class TextureFormat {
-        BC7_UNORM, ///< BC7, linear (metallic-roughness, occlusion)
         BC7_SRGB, ///< BC7, gamma-correct (base color, emissive)
-        BC5_UNORM, ///< BC5, RG only (tangent-space normals, Z reconstructed)
+        BC5_UNORM, ///< BC5, two-channel linear (normals R=X/G=Y; metallic-roughness R=roughness/G=metallic)
         BC6H_UFLOAT, ///< BC6H, unsigned float (HDR / IBL environment)
     };
 

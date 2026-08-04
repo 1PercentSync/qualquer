@@ -837,7 +837,7 @@ namespace qualquer::app {
                 });
             };
             collect(pbr.baseColorTexture, TextureRole::Color);
-            collect(pbr.metallicRoughnessTexture, TextureRole::Linear);
+            collect(pbr.metallicRoughnessTexture, TextureRole::MetallicRoughness);
             collect(mat.normalTexture, TextureRole::Normal);
 
             // Skip emissive texture when sanitized emissive factor is zero:
@@ -1027,7 +1027,7 @@ namespace qualquer::app {
                                       : UINT32_MAX;
             data.metallic_roughness_tex =
                     pbr.metallicRoughnessTexture.has_value()
-                        ? resolve_texture(pbr.metallicRoughnessTexture->textureIndex, TextureRole::Linear)
+                        ? resolve_texture(pbr.metallicRoughnessTexture->textureIndex, TextureRole::MetallicRoughness)
                         : UINT32_MAX;
             data.normal_tex = mat.normalTexture.has_value()
                                   ? resolve_texture(mat.normalTexture->textureIndex, TextureRole::Normal)

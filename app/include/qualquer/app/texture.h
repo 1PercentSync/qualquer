@@ -29,9 +29,9 @@ namespace qualquer::app {
      * TextureFormat plus the correct sRGB handling during mip filtering.
      */
     enum class TextureRole {
-        Color,  ///< BC7 SRGB — gamma-correct color data (base color, emissive).
-        Linear, ///< BC7 UNORM — linear data (metallic-roughness, occlusion).
-        Normal, ///< BC5 UNORM — tangent-space normals (RG only, Z reconstructed in shader).
+        Color,             ///< BC7 SRGB — gamma-correct color data (base color, emissive).
+        MetallicRoughness, ///< BC5 UNORM — glTF G/B remapped to R=roughness, G=metallic.
+        Normal,            ///< BC5 UNORM — tangent-space normals (R=X, G=Y, Z reconstructed).
     };
 
     /**

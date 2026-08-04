@@ -77,7 +77,6 @@ namespace qualquer::app {
 
     uint32_t to_vk_format(const TextureFormat format) {
         switch (format) {
-            case TextureFormat::BC7_UNORM: return VK_FORMAT_BC7_UNORM_BLOCK;
             case TextureFormat::BC7_SRGB: return VK_FORMAT_BC7_SRGB_BLOCK;
             case TextureFormat::BC5_UNORM: return VK_FORMAT_BC5_UNORM_BLOCK;
             case TextureFormat::BC6H_UFLOAT: return VK_FORMAT_BC6H_UFLOAT_BLOCK;
@@ -87,7 +86,6 @@ namespace qualquer::app {
 
     std::optional<TextureFormat> from_vk_format(const uint32_t vk_format) {
         switch (vk_format) {
-            case VK_FORMAT_BC7_UNORM_BLOCK: return TextureFormat::BC7_UNORM;
             case VK_FORMAT_BC7_SRGB_BLOCK: return TextureFormat::BC7_SRGB;
             case VK_FORMAT_BC5_UNORM_BLOCK: return TextureFormat::BC5_UNORM;
             case VK_FORMAT_BC6H_UFLOAT_BLOCK: return TextureFormat::BC6H_UFLOAT;
@@ -98,7 +96,6 @@ namespace qualquer::app {
     /** @brief Bytes per compressed block (all supported formats are 16 bytes/block). */
     static uint32_t block_bytes(const TextureFormat format) {
         switch (format) {
-            case TextureFormat::BC7_UNORM:
             case TextureFormat::BC7_SRGB:
             case TextureFormat::BC5_UNORM:
             case TextureFormat::BC6H_UFLOAT:
@@ -179,10 +176,6 @@ namespace qualquer::app {
     /// Returns the DFD for a supported format. Empty vector = unsupported.
     static std::vector<uint8_t> build_dfd_for_format(const TextureFormat format) {
         switch (format) {
-            case TextureFormat::BC7_UNORM:
-                return build_dfd({kDfModelBc7, kDfTransferLinear, 3, 3, 16},
-                                 {{0, 127, 0, 0, UINT32_MAX}});
-
             case TextureFormat::BC7_SRGB:
                 return build_dfd({kDfModelBc7, kDfTransferSrgb, 3, 3, 16},
                                  {{0, 127, 0, 0, UINT32_MAX}});
