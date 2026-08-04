@@ -33,6 +33,29 @@ Phase 4.5 Step 14.9 第一小项：Catmull-Rom tonemap 16→4 fetch
 
 ---
 
+## 第三方文档
+
+> 供 agent 按需查阅，不要求会话开始时全部阅读。
+
+| 文档 | 说明 |
+|------|------|
+| `docs/third_party/optix_programming_guide.md` | OptiX 9.1 编程指南 |
+| `docs/third_party/optix_api_reference.md` | OptiX 9.1 API 参考 |
+| `docs/third_party/cuda_programming_guide.md` | CUDA 编程指南 |
+| `docs/third_party/cuda_runtime_api.md` | CUDA Runtime API 参考 |
+| `docs/third_party/cuda_best_practices.md` | CUDA 最佳实践指南 |
+| [CUDA Driver API](https://docs.nvidia.com/cuda/cuda-driver-api/index.html) | CUDA Driver API 参考（在线） |
+| [CUDA Math API](https://docs.nvidia.com/cuda/cuda-math-api/index.html) | CUDA Math API 参考（在线） |
+| [PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html) | PTX 指令集参考（在线） |
+| [Inline PTX Assembly](https://docs.nvidia.com/cuda/inline-ptx-assembly/index.html) | CUDA C++ 内联 PTX 汇编（在线） |
+| [PTX Interoperability](https://docs.nvidia.com/cuda/ptx-writers-guide-to-interoperability/index.html) | PTX 与 CUDA 版本兼容性（在线） |
+| [Compute Sanitizer](https://docs.nvidia.com/compute-sanitizer/index.html) | GPU 内存错误与竞争条件检测（在线） |
+| [Nsight Compute](https://docs.nvidia.com/nsight-compute/index.html) | Kernel 级性能分析（在线） |
+| [Nsight Systems](https://docs.nvidia.com/nsight-systems/index.html) | 系统级时间线分析（在线） |
+| `docs/third_party/ada_tuning_guide.md` | Ada 架构（40系）调优指南 |
+
+---
+
 ## 归档文档
 
 | 文档 | 说明 |
