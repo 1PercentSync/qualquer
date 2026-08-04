@@ -271,13 +271,21 @@ mip 基础设施已就绪；当前固定 LOD 0 的采样点改为 cone 驱动 LO
 | p15      | cone_width（float）  |
 | p16      | cone_spread（float） |
 
-### raygen 初始化 cone
+### raygen 初始化 cone（ray diff 计算屏幕空间椭圆 footprint）
 
-`cone_width = 0`，`cone_spread = 2 * tan(0.5 * fov) / render_height`（primary 像素 footprint）。
+bounce 0 使用 ray differentials：从屏幕空间像素偏导计算椭圆 footprint，用于精确 mip 选择。`cone_spread = 2 * tan(0.5 * fov) / render_height` 作为 bounce 1+ 的 ray cone 初始值。
 
-### closesthit 传播与更新 cone
+### bounce 0 各向异性过滤
 
-`cone_width += cone_spread * hit_distance`；bounce 时按 BRDF 散射特性放大 `cone_spread`。
+bounce 0 已有 ray diff 椭圆 footprint，沿长轴方向多次 `tex2DLod` 采样取平均（8x）。仅 bounce 0 执行，成本低（屏幕空间缓存相干性高）。
+
+### bounce 1+ 退化为 ray cone 传播
+
+bounce 1+ 不再传播 ray differentials（diffuse bounce 偏导退化），改用 ray cone 圆形 footprint + 三线性 LOD。`cone_width += cone_spread * hit_distance`；bounce 时按 BRDF 散射特性放大 `cone_spread`。
+
+### HDR cubemap mip LOD 采样
+
+HDR cubemap 已生成完整 mip chain（BC6H，三线性 sampler）。miss shader 中根据 cone footprint 选择 cubemap mip level。
 
 ### 纹理采样改为 cone 驱动 LOD
 
