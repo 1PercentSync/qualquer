@@ -111,9 +111,10 @@ namespace qualquer::optix {
          * @param desc   Channel format descriptor for the backing array.
          * @param mode   Texture read mode (element-type or normalized-float).
          */
-        void alloc(uint32_t width, uint32_t height,
+        void alloc(const uint32_t width,
+                   const uint32_t height,
                    const cudaChannelFormatDesc &desc,
-                   cudaTextureReadMode mode) {
+                   const cudaTextureReadMode mode) {
             destroy();
             if (width == 0 || height == 0) {
                 return;
@@ -175,7 +176,7 @@ namespace qualquer::optix {
          * @param width  Desired width.
          * @param height Desired height.
          */
-        void resize(uint32_t width, uint32_t height) {
+        void resize(const uint32_t width, const uint32_t height) {
             if (width != width_ || height != height_) {
                 alloc(width, height, fmt_desc_, read_mode_);
             }
