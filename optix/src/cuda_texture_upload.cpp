@@ -114,12 +114,14 @@ namespace qualquer::optix {
                                       : make_cudaExtent(base_width, base_height, 0);
         const unsigned int flags = is_cubemap ? cudaArrayCubemap : 0;
 
+        const auto level_count = static_cast<unsigned int>(prepared.regions.size());
+
         cudaMipmappedArray_t mipmap_array = nullptr;
         CUDA_CHECK(
-            cudaMallocMipmappedArray(&mipmap_array, &channel_desc, extent, prepared.level_count, flags));
+            cudaMallocMipmappedArray(&mipmap_array, &channel_desc, extent, level_count, flags));
 
         // Upload compressed data per level.
-        for (uint32_t level = 0; level < prepared.level_count; ++level) {
+        for (uint32_t level = 0; level < level_count; ++level) {
             constexpr size_t kBcBlockBytes = 16;
             cudaArray_t level_array = nullptr;
             CUDA_CHECK(cudaGetMipmappedArrayLevel(&level_array, mipmap_array, level));
@@ -184,7 +186,7 @@ namespace qualquer::optix {
             tex_desc.readMode = read_mode;
             tex_desc.sRGB = srgb;
             tex_desc.normalizedCoords = 1;
-            tex_desc.maxMipmapLevelClamp = static_cast<float>(prepared.level_count - 1);
+            tex_desc.maxMipmapLevelClamp = static_cast<float>(level_count - 1);
             tex_desc.seamlessCubemap = is_cubemap ? 1 : 0;
 
             cudaTextureObject_t texture_object = 0;
