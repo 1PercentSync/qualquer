@@ -19,6 +19,7 @@
 #include <spdlog/spdlog.h>
 
 #include <algorithm>
+#include <array>
 #include <cassert>
 #include <cmath>
 #include <cstddef>
@@ -791,8 +792,8 @@ namespace qualquer::app {
         // Index 0: white (fallback for missing base_color / metallic_roughness / emissive)
         // Index 1: flat normal (fallback for missing normal map)
 
-        texture_objects_.push_back(default_textures.white.texture_object);
-        texture_objects_.push_back(default_textures.flat_normal.texture_object);
+        texture_objects_.push_back(default_textures.white.texture_objects[0]);
+        texture_objects_.push_back(default_textures.flat_normal.texture_objects[0]);
 
         // ---- Collect unique (texture_index, role) pairs ----
         // Only collect textures from referenced materials.
@@ -903,25 +904,10 @@ namespace qualquer::app {
 
         decoded_images.clear();
 
-        // ---- Serial GPU upload: arrays (dedup by image) ----
-        // Upload one CudaMipmapArray per unique (source_hash, role).
-        // Entries with dedup_source[i] >= 0 share the array of the first entry.
-        std::vector<int> entry_to_array(unique_entries.size(), -1);
-
-        for (std::size_t i = 0; i < unique_entries.size(); ++i) {
-            if (dedup_source[i] >= 0) {
-                entry_to_array[i] = entry_to_array[dedup_source[i]];
-            } else {
-                optix::ArrayFormatInfo info{};
-                auto array = optix::upload_mipmap_array(prepared_textures[i], info);
-                entry_to_array[i] = static_cast<int>(mipmap_arrays_.size());
-                mipmap_arrays_.push_back(std::move(array));
-                array_format_infos_.push_back(info);
-            }
-        }
-        prepared_textures.clear();
-
-        // ---- Create texture objects (one per unique entry) ----
+        // ---- Group entries by unique image, collect samplers ----
+        // Build groups keyed by the canonical entry index (first entry with a
+        // given source_hash+role). Each group collects the SamplerDescs and
+        // the TexKeys for all entries sharing that image.
         constexpr optix::SamplerDesc default_sampler{
             .filter_mode = cudaFilterModeLinear,
             .mipmap_filter_mode = cudaFilterModeLinear,
@@ -929,23 +915,54 @@ namespace qualquer::app {
             .address_mode_v = cudaAddressModeWrap,
         };
 
-        std::map<TexKey, uint32_t> tex_index_cache;
+        struct ImageGroup {
+            int prepared_index;                    // index into prepared_textures
+            std::vector<optix::SamplerDesc> samplers;
+            std::vector<TexKey> keys;              // parallel to samplers
+        };
+        std::vector<ImageGroup> image_groups;
+        std::vector<int> entry_to_group(unique_entries.size(), -1);
 
         for (std::size_t i = 0; i < unique_entries.size(); ++i) {
+            const auto canonical = (dedup_source[i] >= 0)
+                                       ? dedup_source[i]
+                                       : static_cast<int>(i);
+
             const auto &entry = unique_entries[i];
             const auto &tex = gltf.textures[entry.texture_index];
             const auto sampler = tex.samplerIndex.has_value()
                                      ? convert_gltf_sampler(gltf.samplers[*tex.samplerIndex])
                                      : default_sampler;
 
-            const auto array_idx = entry_to_array[i];
-            auto cuda_texture = optix::create_texture_object(
-                mipmap_arrays_[array_idx], sampler, array_format_infos_[array_idx]);
-            const auto obj_index = static_cast<uint32_t>(texture_objects_.size());
-            texture_objects_.push_back(cuda_texture.texture_object);
-            textures_.push_back(std::move(cuda_texture));
-            tex_index_cache[{entry.texture_index, entry.role}] = obj_index;
+            if (entry_to_group[canonical] < 0) {
+                entry_to_group[canonical] = static_cast<int>(image_groups.size());
+                image_groups.push_back({.prepared_index = canonical});
+            }
+            const auto group_idx = entry_to_group[canonical];
+            entry_to_group[i] = group_idx;
+            image_groups[group_idx].samplers.push_back(sampler);
+            image_groups[group_idx].keys.push_back({entry.texture_index, entry.role});
         }
+
+        // ---- Serial GPU upload: one CudaTexture per unique image ----
+        // Each upload allocates the array and creates all texture objects in
+        // one step. No format metadata is stored in CudaTexture.
+        std::map<TexKey, uint32_t> tex_index_cache;
+
+        for (const auto &group : image_groups) {
+            auto cuda_texture = optix::upload_texture(
+                prepared_textures[group.prepared_index], group.samplers);
+
+            // Map each (texture_index, role) key to its texture_objects_ index.
+            for (std::size_t j = 0; j < group.keys.size(); ++j) {
+                const auto obj_index = static_cast<uint32_t>(texture_objects_.size());
+                texture_objects_.push_back(cuda_texture.texture_objects[j]);
+                tex_index_cache[group.keys[j]] = obj_index;
+            }
+
+            textures_.push_back(std::move(cuda_texture));
+        }
+        prepared_textures.clear();
 
         // ---- Fill materials ----
         auto resolve_texture = [&](const std::size_t texture_index, const TextureRole role) -> uint32_t {
@@ -1088,13 +1105,12 @@ namespace qualquer::app {
             .address_mode_v = cudaAddressModeClamp,
         };
 
-        optix::CudaMipmapArray cubemap_array;
+        const std::array cubemap_samplers{cubemap_sampler};
+
         optix::CudaTexture cubemap;
         if (cached) {
             spdlog::info("Env cubemap loaded from cache");
-            optix::ArrayFormatInfo info{};
-            cubemap_array = optix::upload_mipmap_array(*cached, info);
-            cubemap = optix::create_texture_object(cubemap_array, cubemap_sampler, info);
+            cubemap = optix::upload_texture(*cached, cubemap_samplers);
         } else {
             // Equirect → cubemap (CUDA kernel, fp16 RGBA output)
             uint32_t face_size = 0;
@@ -1110,9 +1126,7 @@ namespace qualquer::app {
             // BC6H compression (CPU ISPC, writes KTX2 cache)
             auto prepared = compress_texture_bc6h(cubemap_pixels, face_size, source_hash);
 
-            optix::ArrayFormatInfo info{};
-            cubemap_array = optix::upload_mipmap_array(prepared, info);
-            cubemap = optix::create_texture_object(cubemap_array, cubemap_sampler, info);
+            cubemap = optix::upload_texture(prepared, cubemap_samplers);
         }
 
         // --- Alias table (always from raw HDR pixels, no disk cache) ---
@@ -1121,7 +1135,6 @@ namespace qualquer::app {
         if (alias_result.entries.empty()) {
             spdlog::error("Env alias table construction failed");
             cubemap.destroy();
-            cubemap_array.destroy();
             return false;
         }
 
@@ -1133,7 +1146,6 @@ namespace qualquer::app {
         CUDA_CHECK(cudaStreamSynchronize(nullptr));
 
         // Commit all resources
-        env_cubemap_array_ = std::move(cubemap_array);
         env_cubemap_texture_ = std::move(cubemap);
         env_alias_width_ = alias_result.alias_width;
         env_alias_height_ = alias_result.alias_height;
@@ -1142,7 +1154,7 @@ namespace qualquer::app {
         env_total_luminance_ = alias_result.total_luminance;
 
         spdlog::info("Env map ready: cubemap tex={}, alias table {}x{} ({} entries)",
-                     env_cubemap_texture_.texture_object,
+                     env_cubemap_texture_.texture_objects[0],
                      alias_result.alias_width, alias_result.alias_height,
                      alias_result.entries.size());
         return true;
@@ -1150,7 +1162,6 @@ namespace qualquer::app {
 
     void SceneLoader::destroy_env_map() {
         env_cubemap_texture_.destroy();
-        env_cubemap_array_.destroy();
         env_alias_table_.free();
         env_alias_width_ = 0;
         env_alias_height_ = 0;
@@ -1170,12 +1181,6 @@ namespace qualquer::app {
             tex.destroy();
         }
         textures_.clear();
-
-        for (auto &arr : mipmap_arrays_) {
-            arr.destroy();
-        }
-        mipmap_arrays_.clear();
-        array_format_infos_.clear();
 
         material_buffer_.free();
         texture_objects_buffer_.free();
@@ -1205,9 +1210,9 @@ namespace qualquer::app {
     }
 
     uint32_t SceneLoader::scene_texture_count() const {
-        // texture_objects_ contains 2 default textures at the front followed
-        // by scene textures. textures_ holds the CudaTexture objects for
-        // scene textures only.
+        // textures_ holds one CudaTexture per unique image (each may own
+        // multiple texture objects for different samplers). Excludes the
+        // 2 default textures managed by Application.
         return static_cast<uint32_t>(textures_.size());
     }
 
@@ -1217,7 +1222,8 @@ namespace qualquer::app {
 
     renderer::EnvLightData SceneLoader::env_light() const {
         return renderer::EnvLightData{
-            .cubemap = env_cubemap_texture_.texture_object,
+            .cubemap = env_cubemap_texture_.texture_objects.empty()
+                           ? 0 : env_cubemap_texture_.texture_objects[0],
             .alias_table = env_alias_table_.data(),
             .alias_count = static_cast<uint32_t>(env_alias_table_.count()),
             .alias_width = env_alias_width_,

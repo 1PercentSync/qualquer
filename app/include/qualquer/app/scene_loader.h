@@ -6,8 +6,6 @@
  */
 
 #include <qualquer/optix/cuda_buffer.h>
-#include <qualquer/optix/cuda_mipmap_array.h>
-#include <qualquer/optix/cuda_texture.h>
 #include <qualquer/optix/cuda_texture_upload.h>
 #include <qualquer/renderer/launch_params.h>
 #include <qualquer/renderer/material.h>
@@ -150,13 +148,7 @@ namespace qualquer::app {
 
         // ---- Texture resources ----
 
-        /** @brief Backing arrays per unique image (destroyed after textures_). */
-        std::vector<optix::CudaMipmapArray> mipmap_arrays_;
-
-        /** @brief Format info parallel to mipmap_arrays_ (for texture object creation). */
-        std::vector<optix::ArrayFormatInfo> array_format_infos_;
-
-        /** @brief Texture objects per unique (image, sampler) pair (destroyed before mipmap_arrays_). */
+        /** @brief One CudaTexture per unique image (owns array + texture objects). */
         std::vector<optix::CudaTexture> textures_;
 
         /** @brief All cudaTextureObject_t handles (scene textures + default textures). */
@@ -167,10 +159,7 @@ namespace qualquer::app {
 
         // ---- Environment map resources ----
 
-        /** @brief Env cubemap backing array (destroyed after env_cubemap_texture_). */
-        optix::CudaMipmapArray env_cubemap_array_;
-
-        /** @brief Env cubemap texture object (destroyed before env_cubemap_array_). */
+        /** @brief Env cubemap (owns array + texture object). */
         optix::CudaTexture env_cubemap_texture_;
 
         /** @brief Device alias table (downsampled resolution). */

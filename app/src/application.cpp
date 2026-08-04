@@ -678,8 +678,6 @@ namespace qualquer::app {
         scene_loader_.destroy_env_map();
         default_textures_.white.destroy();
         default_textures_.flat_normal.destroy();
-        default_textures_.white_array.destroy();
-        default_textures_.flat_normal_array.destroy();
 #ifndef NDEBUG
         if (timestamp_pool_ != VK_NULL_HANDLE) {
             vkDestroyQueryPool(context_.device, timestamp_pool_, nullptr);

@@ -41,13 +41,11 @@ namespace qualquer::optix {
         }
 
         /**
-         * @brief Creates a 1×1 fp16×4 solid-color array and texture object pair.
-         * @param[out] out_array RAII handle receiving the allocated array.
-         * @param[out] out_tex   RAII handle receiving the created texture object.
+         * @brief Creates a 1×1 fp16×4 solid-color CudaTexture with one texture object.
+         * @return CudaTexture owning the array and a single texture object.
          */
-        void create_solid_texture(
-            const float r, const float g, const float b, const float a,
-            CudaMipmapArray &out_array, CudaTexture &out_tex) {
+        CudaTexture create_solid_texture(
+            const float r, const float g, const float b, const float a) {
             const auto channel_desc = cudaCreateChannelDesc(
                 16, 16, 16, 16, cudaChannelFormatKindFloat);
 
@@ -70,6 +68,9 @@ namespace qualquer::optix {
                 1, // height in rows
                 cudaMemcpyHostToDevice));
 
+            // Create the texture object directly (not via the BC-format path
+            // in upload_texture) because default textures use raw fp16 with
+            // cudaReadModeElementType.
             cudaResourceDesc res_desc = {};
             res_desc.resType = cudaResourceTypeMipmappedArray;
             res_desc.res.mipmap.mipmap = mipmap_array;
@@ -87,13 +88,16 @@ namespace qualquer::optix {
             CUDA_CHECK(cudaCreateTextureObject(
                 &texture_object, &res_desc, &tex_desc, nullptr));
 
-            out_array.handle = mipmap_array;
-            out_tex.texture_object = texture_object;
+            CudaTexture result;
+            result.array = mipmap_array;
+            result.texture_objects.push_back(texture_object);
+            return result;
         }
     } // namespace
 
-    CudaMipmapArray upload_mipmap_array(
-        const PreparedTexture &prepared, ArrayFormatInfo &info) {
+    CudaTexture upload_texture(
+        const PreparedTexture &prepared,
+        std::span<const SamplerDesc> samplers) {
         auto channel_desc = channel_desc_for_format(prepared.format);
         const bool is_cubemap = (prepared.face_count == 6);
 
@@ -146,56 +150,51 @@ namespace qualquer::optix {
             }
         }
 
-        info = {
-            .format = prepared.format,
-            .level_count = prepared.level_count,
-            .cubemap = is_cubemap,
-        };
+        // Derive texture object parameters from the format.
+        const cudaTextureReadMode read_mode =
+            (prepared.format == TextureFormat::BC6H_UFLOAT)
+                ? cudaReadModeElementType
+                : cudaReadModeNormalizedFloat;
+        const int srgb = (prepared.format == TextureFormat::BC7_SRGB) ? 1 : 0;
 
-        CudaMipmapArray result;
-        result.handle = mipmap_array;
-        return result;
-    }
+        // Create texture objects.
+        CudaTexture result;
+        result.array = mipmap_array;
+        result.texture_objects.reserve(samplers.size());
 
-    CudaTexture create_texture_object(
-        const CudaMipmapArray &array, const SamplerDesc &sampler,
-        const ArrayFormatInfo &info) {
         cudaResourceDesc res_desc = {};
         res_desc.resType = cudaResourceTypeMipmappedArray;
-        res_desc.res.mipmap.mipmap = array.handle;
+        res_desc.res.mipmap.mipmap = mipmap_array;
 
-        cudaTextureDesc tex_desc = {};
-        tex_desc.addressMode[0] = sampler.address_mode_u;
-        tex_desc.addressMode[1] = sampler.address_mode_v;
-        tex_desc.addressMode[2] = sampler.address_mode_u; // W axis: reuse U (no glTF W wrap)
-        tex_desc.filterMode = sampler.filter_mode;
-        tex_desc.mipmapFilterMode = sampler.mipmap_filter_mode;
-        // BC UNORM formats (BC5/BC7) decompress to 8-bit integers; linear
-        // filtering requires cudaReadModeNormalizedFloat for integer types.
-        // BC6H decompresses to half-float and must use cudaReadModeElementType.
-        tex_desc.readMode = (info.format == TextureFormat::BC6H_UFLOAT)
-                                ? cudaReadModeElementType
-                                : cudaReadModeNormalizedFloat;
-        tex_desc.sRGB = (info.format == TextureFormat::BC7_SRGB) ? 1 : 0;
-        tex_desc.normalizedCoords = 1;
-        tex_desc.maxMipmapLevelClamp = static_cast<float>(info.level_count - 1);
-        tex_desc.seamlessCubemap = info.cubemap ? 1 : 0;
+        for (const auto &sampler : samplers) {
+            cudaTextureDesc tex_desc = {};
+            tex_desc.addressMode[0] = sampler.address_mode_u;
+            tex_desc.addressMode[1] = sampler.address_mode_v;
+            tex_desc.addressMode[2] = sampler.address_mode_u; // W axis: reuse U (no glTF W wrap)
+            tex_desc.filterMode = sampler.filter_mode;
+            tex_desc.mipmapFilterMode = sampler.mipmap_filter_mode;
+            // BC UNORM formats (BC5/BC7) decompress to 8-bit integers; linear
+            // filtering requires cudaReadModeNormalizedFloat for integer types.
+            // BC6H decompresses to half-float and must use cudaReadModeElementType.
+            tex_desc.readMode = read_mode;
+            tex_desc.sRGB = srgb;
+            tex_desc.normalizedCoords = 1;
+            tex_desc.maxMipmapLevelClamp = static_cast<float>(prepared.level_count - 1);
+            tex_desc.seamlessCubemap = is_cubemap ? 1 : 0;
 
-        cudaTextureObject_t texture_object = 0;
-        CUDA_CHECK(cudaCreateTextureObject(
-            &texture_object, &res_desc, &tex_desc, nullptr));
+            cudaTextureObject_t texture_object = 0;
+            CUDA_CHECK(cudaCreateTextureObject(
+                &texture_object, &res_desc, &tex_desc, nullptr));
+            result.texture_objects.push_back(texture_object);
+        }
 
-        CudaTexture result;
-        result.texture_object = texture_object;
         return result;
     }
 
     DefaultTextures create_default_textures() {
-        DefaultTextures defaults;
-        create_solid_texture(1.0f, 1.0f, 1.0f, 1.0f,
-                             defaults.white_array, defaults.white);
-        create_solid_texture(0.5f, 0.5f, 1.0f, 1.0f,
-                             defaults.flat_normal_array, defaults.flat_normal);
-        return defaults;
+        return DefaultTextures{
+            .white = create_solid_texture(1.0f, 1.0f, 1.0f, 1.0f),
+            .flat_normal = create_solid_texture(0.5f, 0.5f, 1.0f, 1.0f),
+        };
     }
 } // namespace qualquer::optix
