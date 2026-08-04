@@ -15,11 +15,11 @@
 - [x] `optix/include/.../cuda_texture.h` — 纹理与 mipmapped array 封装
 - [x] `optix/include/.../cuda_array_buffer.h` — cudaArray 封装
 - [x] `optix/include/.../cuda_texture_upload.h` + `optix/src/cuda_texture_upload.cpp` — 纹理上传
-- [ ] `optix/include/.../context.h` + `optix/src/context.cpp` — CUDA/OptiX context
-- [ ] `optix/include/.../pipeline.h` + `optix/src/pipeline.cpp` — Module/Pipeline/SBT
+- [x] `optix/include/.../context.h` + `optix/src/context.cpp` — CUDA/OptiX context
+- [x] `optix/include/.../pipeline.h` + `optix/src/pipeline.cpp` — Module/Pipeline/SBT
 - [ ] `optix/include/.../accel_structure.h` + `optix/src/accel_structure.cpp` — BLAS/TLAS
 - [ ] `optix/include/.../dlss_rr.h` + `optix/src/dlss_rr.cpp` — DLSS-RR 封装
-- [ ] `optix/src/optix_stubs_impl.cpp` — OptiX function table 加载
+- [x] `optix/src/optix_stubs_impl.cpp` — OptiX function table 加载
 
 ## 2. vulkan 层（Swapchain 呈现 + Interop）
 

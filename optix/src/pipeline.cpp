@@ -19,10 +19,8 @@ namespace qualquer::optix {
         /**
          * @brief OptiX module debug-info level, selected by build type.
          *
-         * Release builds strip debug info (NONE) for the smallest shader size;
-         * debug builds keep line info (MINIMAL) so OptiX validation and exception
-         * reports can point at the offending source line. MINIMAL is chosen over
-         * higher levels because it carries no runtime cost.
+         * Release: NONE (smallest shader size). Debug: MINIMAL (line info for
+         * exception reports, no runtime cost).
          */
 #ifdef NDEBUG
         constexpr OptixCompileDebugLevel kModuleDebugLevel = OPTIX_COMPILE_DEBUG_LEVEL_NONE;
@@ -33,12 +31,8 @@ namespace qualquer::optix {
         /**
          * @brief Reads a file as raw bytes into a string.
          *
-         * Binary mode is required: a .optixir blob contains embedded null bytes
-         * that a text-mode read would truncate at, and optixModuleCreate consumes
-         * the full byte range (pointer + size). Aborts on open failure since a
-         * missing shader is an unrecoverable configuration error.
-         * @param path File path to read.
-         * @return File contents as a binary-safe string.
+         * Binary mode: .optixir contains null bytes that text mode would truncate.
+         * Aborts on failure (missing shader is unrecoverable).
          */
         std::string read_file(const std::string &path) {
             const std::ifstream file(path, std::ios::binary);
@@ -63,19 +57,15 @@ namespace qualquer::optix {
 
         const OptixModuleCompileOptions module_options{
             .maxRegisterCount = OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
-            .optLevel = OPTIX_COMPILE_OPTIMIZATION_DEFAULT,
+            .optLevel = OPTIX_COMPILE_OPTIMIZATION_LEVEL_3,
             .debugLevel = kModuleDebugLevel,
             .numPayloadTypes = num_payload_types,
             .payloadTypes = payload_types,
         };
 
-        // traversableGraphFlags selects single-level instancing (TLAS->BLAS), the
-        // graph shape used for instanced geometry, over the broader ALLOW_ANY so
-        // the traversal shader compiles for the actual graph depth rather than the
-        // most general one.
-        // numPayloadValues=0: typed payload mode — per-register read/write
-        // semantics are declared via numPayloadTypes instead (mutually exclusive).
-        // numAttributeValues=2: triangle barycentrics (built-in).
+        // Single-level instancing (TLAS->BLAS) for tighter traversal codegen.
+        // numPayloadValues=0: typed payload mode (via numPayloadTypes).
+        // numAttributeValues=2: triangle barycentrics.
         const OptixPipelineCompileOptions pipeline_options{
             .traversableGraphFlags = OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
             .numPayloadValues = 0,
@@ -86,91 +76,83 @@ namespace qualquer::optix {
         };
 
         OPTIX_CHECK(optixModuleCreate(device_context,
-                                      &module_options,
-                                      &pipeline_options,
-                                      optixir.c_str(),
-                                      optixir.size(),
-                                      nullptr,
-                                      nullptr,
-                                      &module_));
+            &module_options,
+            &pipeline_options,
+            optixir.c_str(),
+            optixir.size(),
+            nullptr,
+            nullptr,
+            &module_));
 
-        // Entry function names are the extern "C" symbols defined in the device
-        // program source; OptiX resolves each program group by matching these
-        // symbol names. One miss program: environment (missIndex=0). Shadow rays
-        // use zero-payload optixTraverse + optixHitObjectIsHit() and do not
-        // invoke any miss program. The hit group pairs closest-hit with any-hit;
-        // BLAS per-geometry flags control whether any-hit is invoked.
-        const std::array<OptixProgramGroupDesc, 3> program_descs{{
+        // Entry function names match extern "C" symbols in the device source.
+        // One miss program (environment, missIndex=0); shadow rays use
+        // optixTraverse + optixHitObjectIsHit() without invoking miss/hit programs.
+        const std::array<OptixProgramGroupDesc, 3> program_descs{
             {
-                .kind = OPTIX_PROGRAM_GROUP_KIND_RAYGEN,
-                .raygen = {.module = module_, .entryFunctionName = "__raygen__rg"},
-            },
-            {
-                .kind = OPTIX_PROGRAM_GROUP_KIND_MISS,
-                .miss = {.module = module_, .entryFunctionName = "__miss__env"},
-            },
-            {
-                .kind = OPTIX_PROGRAM_GROUP_KIND_HITGROUP,
-                .hitgroup = {
-                    .moduleCH = module_,
-                    .entryFunctionNameCH = "__closesthit__ch",
-                    .moduleAH = module_,
-                    .entryFunctionNameAH = "__anyhit__ah",
+                {
+                    .kind = OPTIX_PROGRAM_GROUP_KIND_RAYGEN,
+                    .raygen = {.module = module_, .entryFunctionName = "__raygen__rg"},
                 },
-            },
-        }};
+                {
+                    .kind = OPTIX_PROGRAM_GROUP_KIND_MISS,
+                    .miss = {.module = module_, .entryFunctionName = "__miss__env"},
+                },
+                {
+                    .kind = OPTIX_PROGRAM_GROUP_KIND_HITGROUP,
+                    .hitgroup = {
+                        .moduleCH = module_,
+                        .entryFunctionNameCH = "__closesthit__ch",
+                        .moduleAH = module_,
+                        .entryFunctionNameAH = "__anyhit__ah",
+                    },
+                },
+            }
+        };
 
         std::array<OptixProgramGroup, 3> program_groups{};
-        // optixProgramGroupCreate dereferences the options pointer; null crashes.
-        // A zero-initialized options leaves payloadType null, letting OptiX deduce
-        // a unique payload type (single type → unambiguous).
+        // Zero-initialized: OptiX deduces the single payload type automatically.
         constexpr OptixProgramGroupOptions program_options{};
+
         OPTIX_CHECK(optixProgramGroupCreate(device_context,
-                                            program_descs.data(),
-                                            program_descs.size(),
-                                            &program_options,
-                                            nullptr,
-                                            nullptr,
-                                            program_groups.data()));
+            program_descs.data(),
+            program_descs.size(),
+            &program_options,
+            nullptr,
+            nullptr,
+            program_groups.data()));
         raygen_program = program_groups[0];
         miss_env_program = program_groups[1];
         hitgroup_program = program_groups[2];
 
-        // maxTraceDepth=2: raygen traces the primary/bounce ray (depth 1), and
-        // closesthit may trace a shadow ray for NEE (depth 2). The bounce loop
-        // itself lives in raygen (megakernel), so it does not add trace depth.
+        // maxTraceDepth=2: primary/bounce ray (1) + NEE shadow ray (2).
+        // The bounce loop lives in raygen, so it does not add trace depth.
         constexpr OptixPipelineLinkOptions link_options{
             .maxTraceDepth = 2,
         };
 
         OPTIX_CHECK(optixPipelineCreate(device_context,
-                                        &pipeline_options,
-                                        &link_options,
-                                        program_groups.data(),
-                                        program_groups.size(),
-                                        nullptr,
-                                        nullptr,
-                                        &handle));
+            &pipeline_options,
+            &link_options,
+            program_groups.data(),
+            program_groups.size(),
+            nullptr,
+            nullptr,
+            &handle));
 
-        // maxTraceDepth=2 matches link options (primary/bounce + shadow).
-        // maxTraversableGraphDepth=0 lets OptiX derive the default from
-        // traversableGraphFlags (single-level instancing → depth 2, matching
-        // the TLAS→BLAS graph). No callable programs are used.
+        // maxTraversableGraphDepth=2: IAS → GAS (single-level instancing).
         OPTIX_CHECK(optixPipelineSetStackSizeFromCallDepths(
             handle,
             /*maxTraceDepth=*/2,
             /*maxContinuationCallableDepth=*/0,
             /*maxDirectCallableDepthFromState=*/0,
             /*maxDirectCallableDepthFromTraversal=*/0,
-            /*maxTraversableGraphDepth=*/0));
+            /*maxTraversableGraphDepth=*/2));
 
         spdlog::info("OptiX pipeline created ({} program groups)", program_groups.size());
     }
 
     void Pipeline::destroy() {
-        // Reverse creation order: the pipeline links the program groups, which in
-        // turn reference the module, so each object is destroyed before the one it
-        // depends on. Idempotent via the null resets.
+        // Reverse creation order. Idempotent via null resets.
         if (handle != nullptr) {
             OPTIX_CHECK(optixPipelineDestroy(handle));
             handle = nullptr;
