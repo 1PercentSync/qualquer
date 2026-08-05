@@ -16,6 +16,7 @@
 #include <spdlog/spdlog.h>
 
 #include <qualquer/vulkan/context.h>
+#include <qualquer/vulkan/vk_check.h>
 
 namespace qualquer::vulkan {
     void InteropImage::init(const Context &context,

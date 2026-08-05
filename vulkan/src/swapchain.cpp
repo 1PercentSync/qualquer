@@ -4,6 +4,7 @@
  */
 
 #include <qualquer/vulkan/swapchain.h>
+#include <qualquer/vulkan/vk_check.h>
 
 #include <vector>
 

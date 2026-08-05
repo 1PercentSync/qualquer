@@ -4,6 +4,7 @@
  */
 
 #include <qualquer/vulkan/context.h>
+#include <qualquer/vulkan/vk_check.h>
 
 #include <string>
 #include <vector>

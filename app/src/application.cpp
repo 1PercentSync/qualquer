@@ -15,6 +15,7 @@
 
 #include <qualquer/app/config.h>
 #include <qualquer/optix/cuda_texture_upload.h>
+#include <qualquer/vulkan/vk_check.h>
 
 namespace qualquer::app {
     namespace {
