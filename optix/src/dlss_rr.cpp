@@ -416,8 +416,8 @@ namespace qualquer::optix {
         return all_ok;
     }
 
-    DlssResolvedHeight DlssResolutionResolver::resolve(uint32_t requested_height,
-                                                       uint32_t display_height) const {
+    DlssResolvedHeight DlssResolutionResolver::resolve(const uint32_t requested_height,
+                                                       const uint32_t display_height) const {
         // render >= display → DLAA (no upscaling).
         if (requested_height >= display_height) {
             return {
