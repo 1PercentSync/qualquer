@@ -14,7 +14,6 @@ struct NVSDK_NGX_Parameter;
 struct NVSDK_NGX_Handle;
 
 namespace qualquer::optix {
-
     /**
      * @brief DLSS-RR quality mode, maps to NVSDK_NGX_PerfQuality_Value.
      *
@@ -103,8 +102,10 @@ namespace qualquer::optix {
          * @param display_height Output (display) resolution height.
          * @param preset         Render preset (neural network model selection).
          */
-        void create_feature(uint32_t render_width, uint32_t render_height,
-                            uint32_t display_width, uint32_t display_height,
+        void create_feature(uint32_t render_width,
+                            uint32_t render_height,
+                            uint32_t display_width,
+                            uint32_t display_height,
                             DlssRenderPreset preset);
 
         /**
@@ -119,15 +120,6 @@ namespace qualquer::optix {
          * @return true if all modes queried successfully, false otherwise.
          */
         bool cache_optimal_settings(uint32_t display_width, uint32_t display_height);
-
-        /**
-         * @brief Retrieves cached optimal settings for a quality mode.
-         *
-         * Valid after a successful cache_optimal_settings() call.
-         */
-        [[nodiscard]] const DlssOptimalSettings &optimal_settings(DlssQualityMode mode) const {
-            return optimal_settings_[static_cast<uint32_t>(mode)];
-        }
 
         /**
          * @brief Result of resolve_render_height: clamped height + selected mode.
@@ -166,15 +158,15 @@ namespace qualquer::optix {
          */
         struct EvalInput {
             // ---- Color I/O ----
-            cudaTextureObject_t color_tex;        ///< Noisy HDR input (current frame).
-            cudaSurfaceObject_t output_surf;      ///< Denoised+upscaled HDR output.
+            cudaTextureObject_t color_tex; ///< Noisy HDR input (current frame).
+            cudaSurfaceObject_t output_surf; ///< Denoised+upscaled HDR output.
 
             // ---- Aux G-buffer (render resolution) ----
             cudaTextureObject_t depth_tex;
             cudaTextureObject_t motion_vectors_tex;
             cudaTextureObject_t diffuse_albedo_tex;
             cudaTextureObject_t specular_albedo_tex;
-            cudaTextureObject_t normal_roughness_tex;  ///< RGBA16F: normal xyz + roughness w.
+            cudaTextureObject_t normal_roughness_tex; ///< RGBA16F: normal xyz + roughness w.
 
             // ---- Resolution ----
             uint32_t render_width;
@@ -185,12 +177,12 @@ namespace qualquer::optix {
             float jitter_y;
 
             // ---- Matrices (GLM column-major, evaluate() transposes to row-major) ----
-            const float *view_matrix;         ///< glm::value_ptr(view), 16 floats.
-            const float *projection_matrix;   ///< glm::value_ptr(projection), 16 floats.
+            const float *view_matrix; ///< glm::value_ptr(view), 16 floats.
+            const float *projection_matrix; ///< glm::value_ptr(projection), 16 floats.
 
             // ---- Per-frame state ----
-            bool reset;                       ///< Scene change / camera teleport.
-            float frame_time_ms;              ///< Delta time in milliseconds.
+            bool reset; ///< Scene change / camera teleport.
+            float frame_time_ms; ///< Delta time in milliseconds.
         };
 
         /**
@@ -215,16 +207,6 @@ namespace qualquer::optix {
             return ngx_handle_ != nullptr;
         }
 
-        /** @brief NGX handle for evaluate calls. Null if no feature is active. */
-        [[nodiscard]] NVSDK_NGX_Handle *ngx_handle() const {
-            return ngx_handle_;
-        }
-
-        /** @brief NGX parameter interface. Null before init. */
-        [[nodiscard]] NVSDK_NGX_Parameter *ngx_params() const {
-            return ngx_params_;
-        }
-
         /**
          * @brief Returns VRAM allocated by the active DLSS-RR feature.
          *
@@ -245,7 +227,6 @@ namespace qualquer::optix {
         void release_feature();
 
     private:
-
         bool available_ = false;
         bool initialized_ = false;
         NVSDK_NGX_Parameter *ngx_params_ = nullptr;
@@ -253,5 +234,4 @@ namespace qualquer::optix {
         std::array<DlssOptimalSettings, kDlssQualityModeCount> optimal_settings_{};
         uint64_t cached_vram_bytes_ = 0;
     };
-
 } // namespace qualquer::optix
