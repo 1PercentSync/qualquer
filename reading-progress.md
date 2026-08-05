@@ -17,7 +17,7 @@
 - [x] `optix/include/.../cuda_texture_upload.h` + `optix/src/cuda_texture_upload.cpp` — 纹理上传
 - [x] `optix/include/.../context.h` + `optix/src/context.cpp` — CUDA/OptiX context
 - [x] `optix/include/.../pipeline.h` + `optix/src/pipeline.cpp` — Module/Pipeline/SBT
-- [ ] `optix/include/.../accel_structure.h` + `optix/src/accel_structure.cpp` — BLAS/TLAS
+- [x] `optix/include/.../accel_structure.h` + `optix/src/accel_structure.cpp` — BLAS/TLAS
 - [ ] `optix/include/.../dlss_rr.h` + `optix/src/dlss_rr.cpp` — DLSS-RR 封装
 - [x] `optix/src/optix_stubs_impl.cpp` — OptiX function table 加载
 
