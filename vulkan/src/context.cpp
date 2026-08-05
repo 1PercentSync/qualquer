@@ -9,6 +9,9 @@
 #include <string>
 #include <vector>
 
+#include <dxgi1_4.h>
+#include <wrl/client.h>
+
 #include <GLFW/glfw3.h>
 #include <spdlog/spdlog.h>
 
@@ -255,11 +258,11 @@ namespace qualquer::vulkan {
         }
 
         /**
-         * @brief Reads a physical device's 16-byte UUID via the ID properties chain.
+         * @brief Reads a physical device's cross-API identity properties.
          * @param dev Physical device to query.
-         * @return The device UUID, comparable byte-for-byte with a CUDA device UUID.
+         * @return UUID and Windows LUID identity reported by Vulkan.
          */
-        std::array<std::uint8_t, 16> get_device_uuid(VkPhysicalDevice dev) {
+        VkPhysicalDeviceIDProperties get_device_id_properties(VkPhysicalDevice dev) {
             VkPhysicalDeviceIDProperties id_props{
                 .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ID_PROPERTIES,
             };
@@ -268,10 +271,73 @@ namespace qualquer::vulkan {
                 .pNext = &id_props,
             };
             vkGetPhysicalDeviceProperties2(dev, &props2);
+            return id_props;
+        }
 
+        /**
+         * @brief Reads a physical device's 16-byte UUID via the ID properties chain.
+         * @param dev Physical device to query.
+         * @return The device UUID, comparable byte-for-byte with a CUDA device UUID.
+         */
+        std::array<std::uint8_t, 16> get_device_uuid(VkPhysicalDevice dev) {
+            const auto id_props = get_device_id_properties(dev);
             std::array<std::uint8_t, 16> uuid{};
             std::memcpy(uuid.data(), id_props.deviceUUID, VK_UUID_SIZE);
             return uuid;
+        }
+
+        /**
+         * @brief Finds the DXGI adapter representing the selected Vulkan device.
+         *
+         * Vulkan's device LUID and DXGI's adapter LUID identify the same WDDM
+         * physical adapter across APIs. The returned interface carries one owned
+         * COM reference that the caller must release.
+         *
+         * @param dev Selected Vulkan physical device.
+         * @return Owned IDXGIAdapter3 pointer, or nullptr when matching is unavailable.
+         */
+        IDXGIAdapter3 *find_dxgi_adapter(VkPhysicalDevice dev) {
+            const auto id_props = get_device_id_properties(dev);
+            if (id_props.deviceLUIDValid == VK_FALSE) {
+                return nullptr;
+            }
+
+            static_assert(sizeof(LUID) == VK_LUID_SIZE);
+            LUID vulkan_luid{};
+            std::memcpy(&vulkan_luid, id_props.deviceLUID, VK_LUID_SIZE);
+
+            Microsoft::WRL::ComPtr<IDXGIFactory1> factory;
+            if (FAILED(CreateDXGIFactory1(IID_PPV_ARGS(factory.GetAddressOf())))) {
+                return nullptr;
+            }
+
+            for (UINT index = 0;; ++index) {
+                Microsoft::WRL::ComPtr<IDXGIAdapter1> adapter;
+                const HRESULT enum_result = factory->EnumAdapters1(index, adapter.GetAddressOf());
+                if (enum_result == DXGI_ERROR_NOT_FOUND) {
+                    break;
+                }
+                if (FAILED(enum_result)) {
+                    return nullptr;
+                }
+
+                DXGI_ADAPTER_DESC1 desc{};
+                if (FAILED(adapter->GetDesc1(&desc))) {
+                    continue;
+                }
+                if (desc.AdapterLuid.HighPart != vulkan_luid.HighPart
+                    || desc.AdapterLuid.LowPart != vulkan_luid.LowPart) {
+                    continue;
+                }
+
+                Microsoft::WRL::ComPtr<IDXGIAdapter3> adapter3;
+                if (FAILED(adapter.As(&adapter3))) {
+                    return nullptr;
+                }
+                return adapter3.Detach();
+            }
+
+            return nullptr;
         }
     } // namespace
 
@@ -305,6 +371,12 @@ namespace qualquer::vulkan {
         allocator = VK_NULL_HANDLE;
         vkDestroyDevice(device, nullptr);
         device = VK_NULL_HANDLE;
+
+        if (dxgi_adapter_) {
+            dxgi_adapter_->Release();
+            dxgi_adapter_ = nullptr;
+        }
+
         vkDestroySurfaceKHR(instance, surface, nullptr);
         surface = VK_NULL_HANDLE;
 
@@ -338,7 +410,7 @@ namespace qualquer::vulkan {
         }
 
         // Assemble instance: API version, extensions, and validation layer (debug only)
-        const auto validation_layer = "VK_LAYER_KHRONOS_validation";
+        constexpr auto validation_layer = "VK_LAYER_KHRONOS_validation";
 
         const VkInstanceCreateInfo create_info{
             .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
@@ -432,12 +504,14 @@ namespace qualquer::vulkan {
         vkGetPhysicalDeviceProperties(physical_device, &props);
         gpu_name = props.deviceName;
 
-        // Optional: VK_EXT_memory_budget drives VRAM usage reporting. Absence is
-        // non-fatal — query_vram_usage returns nullopt and the UI shows "VRAM: N/A".
-        memory_budget_supported = has_device_extension(physical_device, VK_EXT_MEMORY_BUDGET_EXTENSION_NAME);
+        dxgi_adapter_ = find_dxgi_adapter(physical_device);
 
         spdlog::info("Matched GPU: {}", gpu_name);
-        spdlog::info("VK_EXT_memory_budget: {}", memory_budget_supported ? "supported" : "not supported");
+        if (dxgi_adapter_) {
+            spdlog::info("DXGI process VRAM reporting initialized");
+        } else {
+            spdlog::warn("DXGI adapter match failed; process VRAM reporting unavailable");
+        }
     }
 
     void Context::find_graphics_queue_family() {
@@ -494,15 +568,11 @@ namespace qualquer::vulkan {
         // interop, without which the CUDA-Vulkan pipeline cannot function. An
         // NVIDIA Windows driver supporting OptiX interop exposes them by design,
         // so they are hard requirements rather than probed optionals.
-        // VK_EXT_memory_budget is optional (drives VRAM reporting only).
-        std::vector<const char *> enabled_extensions{
+        const std::vector<const char *> enabled_extensions{
             VK_KHR_SWAPCHAIN_EXTENSION_NAME,
             VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME,
             VK_KHR_EXTERNAL_SEMAPHORE_WIN32_EXTENSION_NAME,
         };
-        if (memory_budget_supported) {
-            enabled_extensions.push_back(VK_EXT_MEMORY_BUDGET_EXTENSION_NAME);
-        }
 
         const VkDeviceCreateInfo device_info{
             .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
@@ -521,13 +591,7 @@ namespace qualquer::vulkan {
     }
 
     void Context::create_allocator() {
-        // The budget flag must be set only when the device actually supports the
-        // extension; otherwise VMA's budget figures are meaningless and the flag
-        // would require an extension the device lacks.
         const VmaAllocatorCreateInfo alloc_info{
-            .flags = memory_budget_supported
-                         ? VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT
-                         : VmaAllocatorCreateFlags{0},
             .physicalDevice = physical_device,
             .device = device,
             .instance = instance,
@@ -577,27 +641,22 @@ namespace qualquer::vulkan {
         spdlog::info("Frame data created ({} frames in flight)", kMaxFramesInFlight);
     }
 
-    // Aggregates usage and budget across all device-local heaps via VMA.
-    // Returns nullopt when VK_EXT_memory_budget was not enabled — without it the
-    // per-heap budget figures VMA returns are not meaningful.
+    // WDDM owns process-wide accounting across the Vulkan and CUDA/OptiX APIs.
+    // Querying the local segment reports dedicated VRAM without shared system memory.
     std::optional<VramInfo> Context::query_vram_usage() const {
-        if (!memory_budget_supported) {
+        if (!dxgi_adapter_) {
             return std::nullopt;
         }
 
-        std::array<VmaBudget, VK_MAX_MEMORY_HEAPS> budgets{};
-        vmaGetHeapBudgets(allocator, budgets.data());
-
-        VkPhysicalDeviceMemoryProperties mem_props;
-        vkGetPhysicalDeviceMemoryProperties(physical_device, &mem_props);
-
-        VramInfo info;
-        for (uint32_t i = 0; i < mem_props.memoryHeapCount; ++i) {
-            if (mem_props.memoryHeaps[i].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT) {
-                info.used += budgets[i].usage;
-                info.budget += budgets[i].budget;
-            }
+        DXGI_QUERY_VIDEO_MEMORY_INFO memory_info{};
+        if (FAILED(dxgi_adapter_->QueryVideoMemoryInfo(
+                0, DXGI_MEMORY_SEGMENT_GROUP_LOCAL, &memory_info))) {
+            return std::nullopt;
         }
-        return info;
+
+        return VramInfo{
+            .used = memory_info.CurrentUsage,
+            .budget = memory_info.Budget,
+        };
     }
 } // namespace qualquer::vulkan

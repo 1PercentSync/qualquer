@@ -37,7 +37,7 @@ namespace qualquer::renderer {
         /** @brief Frame delta time in seconds (typically ImGui::GetIO().DeltaTime). */
         float delta_time = 0.0f;
 
-        /** @brief Vulkan context for GPU name and (optional) VRAM queries. */
+        /** @brief Vulkan context for GPU name and process-wide VRAM queries. */
         const vulkan::Context &context;
 
         /**
@@ -275,8 +275,8 @@ namespace qualquer::renderer {
         /**
          * @brief Renders the GPU name, resolution, and VRAM usage lines.
          *
-         * VRAM line falls back to "VRAM: N/A" when query_vram_usage() returns
-         * nullopt (VK_EXT_memory_budget unsupported).
+         * VRAM line shows WDDM process-local usage and budget, and falls back to
+         * "VRAM: N/A" when the selected adapter is unavailable through DXGI.
          *
          * @param ctx Vulkan context (gpu name, VRAM query) and swapchain (extent).
          */

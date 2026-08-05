@@ -30,4 +30,5 @@ target_link_libraries(qualquer_vulkan
     PUBLIC Vulkan::Vulkan
     PUBLIC GPUOpen::VulkanMemoryAllocator
     PUBLIC imgui::imgui
+    PRIVATE dxgi
 )

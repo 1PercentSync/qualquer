@@ -13,22 +13,23 @@
 #include <vk_mem_alloc.h>
 
 struct GLFWwindow;
+struct IDXGIAdapter3;
 
 namespace qualquer::vulkan {
     /** @brief Number of frames that can be in-flight simultaneously. */
     constexpr uint32_t kMaxFramesInFlight = 2;
 
     /**
-     * @brief Device-local VRAM usage snapshot, aggregated across all device-local heaps.
+     * @brief Process-local VRAM usage snapshot reported by Windows WDDM.
      *
-     * Requires VK_EXT_memory_budget, which is enabled as an optional device extension.
-     * When unsupported, Context::query_vram_usage returns std::nullopt instead.
+     * The local memory segment covers allocations attributed to this process on
+     * the selected adapter across Vulkan, CUDA, OptiX, and other GPU APIs.
      */
     struct VramInfo {
-        /** @brief Bytes currently used by the application on device-local heaps. */
+        /** @brief Current process usage of the adapter's local memory segment, in bytes. */
         uint64_t used = 0;
 
-        /** @brief Bytes available to the application per the driver-reported budget. */
+        /** @brief OS-provided local-memory budget for the process, in bytes. */
         uint64_t budget = 0;
     };
 
@@ -106,15 +107,6 @@ namespace qualquer::vulkan {
         /** @brief Human-readable GPU name, populated during init. */
         std::string gpu_name;
 
-        /**
-         * @brief Whether the selected device supports VK_EXT_memory_budget.
-         *
-         * Populated during pick_physical_device() by enumerating device extensions.
-         * Drives optional extension enablement in create_device() and the VMA budget
-         * flag in create_allocator(). query_vram_usage() returns nullopt when false.
-         */
-        bool memory_budget_supported = false;
-
         /** @brief Queue family index supporting both graphics and present. */
         uint32_t graphics_queue_family = 0;
 
@@ -144,18 +136,20 @@ namespace qualquer::vulkan {
         }
 
         /**
-         * @brief Queries aggregated device-local VRAM usage via VMA.
+         * @brief Queries process-wide local VRAM usage through Windows WDDM.
          *
-         * Sums usage and budget across all device-local heaps. Returns std::nullopt
-         * when VK_EXT_memory_budget is not supported on this device (VMA's budget
-         * figures are only meaningful when the budget flag was set at allocator
-         * creation).
+         * The query includes memory attributed to this process on the selected GPU,
+         * independent of whether Vulkan, CUDA, OptiX, or another API allocated it.
+         * Shared system memory in the non-local segment is intentionally excluded.
          *
-         * @return Snapshot of current VRAM usage and budget, or nullopt if unsupported.
+         * @return Current process usage and budget, or nullopt if DXGI is unavailable.
          */
         [[nodiscard]] std::optional<VramInfo> query_vram_usage() const;
 
     private:
+        /** @brief DXGI view of the selected GPU, owned and released by this context. */
+        IDXGIAdapter3 *dxgi_adapter_ = nullptr;
+
         /** @brief Creates VkInstance with validation layers and debug_utils extension. */
         void create_instance();
 
@@ -176,7 +170,7 @@ namespace qualquer::vulkan {
          * @brief Matches the physical device whose UUID equals the given UUID.
          *
          * Called during init, after CUDA has selected a device. Sets physical_device,
-         * gpu_name, and memory_budget_supported. Aborts if no match is found.
+         * gpu_name, and the matching DXGI adapter. Aborts if no Vulkan match is found.
          * @param device_uuid UUID to match (must come from pre_init's candidate set).
          */
         void match_physical_device(std::array<std::uint8_t, 16> device_uuid);

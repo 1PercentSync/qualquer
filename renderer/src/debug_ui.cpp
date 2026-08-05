@@ -318,9 +318,9 @@ namespace qualquer::renderer {
         ImGui::Text("GPU: %s", ctx.context.gpu_name.c_str());
         ImGui::Text("Resolution: %u x %u", ctx.swapchain.extent.width, ctx.swapchain.extent.height);
 
-        // VRAM: query_vram_usage returns nullopt when VK_EXT_memory_budget is unavailable.
+        // DXGI reports process-wide local-memory usage across Vulkan and CUDA/OptiX.
         if (const auto vram = ctx.context.query_vram_usage(); vram.has_value()) {
-            ImGui::Text("VRAM: %.1f / %.1f MB",
+            ImGui::Text("VRAM: %.1f / %.1f MiB",
                         static_cast<double>(vram->used) / (1024.0 * 1024.0),
                         static_cast<double>(vram->budget) / (1024.0 * 1024.0));
         } else {
@@ -599,7 +599,7 @@ namespace qualquer::renderer {
 
             const uint64_t vram = dlss.vram_allocated_bytes();
             if (vram > 0) {
-                ImGui::Text("VRAM: %.1f MB", static_cast<double>(vram) / (1024.0 * 1024.0));
+                ImGui::Text("VRAM: %.1f MiB", static_cast<double>(vram) / (1024.0 * 1024.0));
             }
         }
     }
