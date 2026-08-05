@@ -95,8 +95,7 @@ namespace qualquer::optix {
          * @param context OptiX device context.
          * @param groups  Per-group geometry spans (one BLAS per non-empty span).
          */
-        void build_all_blas(OptixDeviceContext context,
-                            const std::vector<std::span<const BLASGeometry>> &groups);
+        void build_all_blas(OptixDeviceContext context, const std::vector<std::span<const BLASGeometry> > &groups);
 
         /**
          * @brief Builds the TLAS from pre-assembled instance descriptions.
@@ -107,8 +106,7 @@ namespace qualquer::optix {
          * @param context   OptiX device context.
          * @param instances OptixInstance array (one per deduplicated scene instance).
          */
-        void build_tlas(OptixDeviceContext context,
-                        std::span<const OptixInstance> instances);
+        void build_tlas(OptixDeviceContext context, std::span<const OptixInstance> instances);
 
         /**
          * @brief Destroys all owned BLAS and TLAS handles, releasing device memory.

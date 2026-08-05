@@ -13,25 +13,8 @@
 #include <spdlog/spdlog.h>
 
 namespace qualquer::optix {
-    void AccelStructure::build_all_blas(
-        // ReSharper disable once CppParameterMayBeConst
-        OptixDeviceContext context,
-        const std::vector<std::span<const BLASGeometry>> &groups) {
-
-        if (groups.empty()) {
-            return;
-        }
-
-        constexpr OptixAccelBuildOptions accel_options{
-            .buildFlags = OPTIX_BUILD_FLAG_PREFER_FAST_TRACE
-                          | OPTIX_BUILD_FLAG_ALLOW_COMPACTION,
-            .operation = OPTIX_BUILD_OPERATION_BUILD,
-            .motionOptions = {},
-        };
-
-        const auto count = groups.size();
-
-        // Per-BLAS state that must survive across phases.
+    namespace {
+        /// Per-BLAS state shared across build phases.
         struct BuildInfo {
             std::vector<unsigned int> geometry_flags;
             std::vector<OptixBuildInput> build_inputs;
@@ -39,24 +22,23 @@ namespace qualquer::optix {
             OptixTraversableHandle uncompacted_handle = 0;
             size_t output_size = 0;
         };
-        std::vector<BuildInfo> infos(count);
 
-        // --- Phase 1: prepare build inputs, query memory sizes ---
-
-        size_t max_scratch = 0;
-        for (size_t i = 0; i < count; ++i) {
-            auto &info = infos[i];
-            const auto &geoms = groups[i];
+        /// Fills build inputs for one BLAS group and queries buffer sizes.
+        /// @return Scratch (temp) buffer size needed for this group.
+        // ReSharper disable once CppParameterMayBeConst
+        size_t prepare_group_inputs(OptixDeviceContext context,
+                                    const OptixAccelBuildOptions &accel_options,
+                                    const std::span<const BLASGeometry> geoms,
+                                    BuildInfo &info) {
             const auto geom_count = static_cast<unsigned int>(geoms.size());
-
             info.geometry_flags.resize(geom_count);
             info.build_inputs.resize(geom_count);
 
             for (unsigned int j = 0; j < geom_count; ++j) {
                 const auto &geom = geoms[j];
                 info.geometry_flags[j] = geom.opaque
-                    ? OPTIX_GEOMETRY_FLAG_DISABLE_ANYHIT
-                    : OPTIX_GEOMETRY_FLAG_REQUIRE_SINGLE_ANYHIT_CALL;
+                                             ? OPTIX_GEOMETRY_FLAG_DISABLE_ANYHIT
+                                             : OPTIX_GEOMETRY_FLAG_REQUIRE_SINGLE_ANYHIT_CALL;
 
                 auto &input = info.build_inputs[j];
                 input = {};
@@ -74,12 +56,54 @@ namespace qualquer::optix {
             }
 
             OptixAccelBufferSizes sizes{};
-            OPTIX_CHECK(optixAccelComputeMemoryUsage(
-                context, &accel_options,
-                info.build_inputs.data(), geom_count, &sizes));
+            OPTIX_CHECK(optixAccelComputeMemoryUsage(context,
+                &accel_options,
+                info.build_inputs.data(),
+                geom_count,
+                &sizes));
 
             info.output_size = sizes.outputSizeInBytes;
-            max_scratch = std::max(max_scratch, sizes.tempSizeInBytes);
+            return sizes.tempSizeInBytes;
+        }
+
+        void log_blas_compaction(size_t blas_index, const size_t original_size, const uint64_t compacted_size) {
+            if (compacted_size < original_size) {
+                spdlog::info("BLAS #{}: {:.1f} KB -> {:.1f} KB (compacted {:.0f}%)",
+                             blas_index,
+                             static_cast<double>(original_size) / 1024.0,
+                             static_cast<double>(compacted_size) / 1024.0,
+                             (1.0 - static_cast<double>(compacted_size) / static_cast<double>(original_size)) * 100.0);
+            } else {
+                spdlog::info("BLAS #{}: {:.1f} KB (compaction skipped)",
+                             blas_index,
+                             static_cast<double>(original_size) / 1024.0);
+            }
+        }
+    } // anonymous namespace
+
+    // ReSharper disable once CppParameterMayBeConst
+    void AccelStructure::build_all_blas(OptixDeviceContext context,
+                                        const std::vector<std::span<const BLASGeometry> > &groups) {
+        if (groups.empty()) {
+            return;
+        }
+
+        constexpr OptixAccelBuildOptions accel_options{
+            .buildFlags = OPTIX_BUILD_FLAG_PREFER_FAST_TRACE | OPTIX_BUILD_FLAG_ALLOW_COMPACTION,
+            .operation = OPTIX_BUILD_OPERATION_BUILD,
+            .motionOptions = {},
+        };
+
+        const auto count = groups.size();
+
+        std::vector<BuildInfo> infos(count);
+
+        // --- Phase 1: prepare build inputs, query memory sizes ---
+
+        size_t max_scratch = 0;
+        for (size_t i = 0; i < count; ++i) {
+            max_scratch = std::max(max_scratch,
+                                   prepare_group_inputs(context, accel_options, groups[i], infos[i]));
         }
 
         // --- Phase 2: submit all builds (shared scratch, per-BLAS output) ---
@@ -101,15 +125,18 @@ namespace qualquer::optix {
                 .type = OPTIX_PROPERTY_TYPE_COMPACTED_SIZE,
             };
 
-            OPTIX_CHECK(optixAccelBuild(
-                context, nullptr,
+            OPTIX_CHECK(optixAccelBuild(context,
+                nullptr,
                 &accel_options,
                 info.build_inputs.data(),
                 static_cast<unsigned int>(info.build_inputs.size()),
-                scratch.device_ptr(), scratch.size_bytes(),
-                info.output_buffer.device_ptr(), info.output_buffer.size_bytes(),
+                scratch.device_ptr(),
+                scratch.size_bytes(),
+                info.output_buffer.device_ptr(),
+                info.output_buffer.size_bytes(),
                 &info.uncompacted_handle,
-                &emit_desc, 1));
+                &emit_desc,
+                1));
         }
 
         // --- Sync 1: all builds complete, compacted sizes available ---
@@ -118,8 +145,10 @@ namespace qualquer::optix {
         scratch.destroy();
 
         std::vector<uint64_t> compacted_sizes(count);
-        CUDA_CHECK(cudaMemcpy(compacted_sizes.data(), compacted_sizes_buf.data(),
-                              count * sizeof(uint64_t), cudaMemcpyDeviceToHost));
+        CUDA_CHECK(cudaMemcpy(compacted_sizes.data(),
+            compacted_sizes_buf.data(),
+            count * sizeof(uint64_t),
+            cudaMemcpyDeviceToHost));
         compacted_sizes_buf.destroy();
 
         // --- Phase 3: submit all compactions ---
@@ -134,9 +163,11 @@ namespace qualquer::optix {
             if (compacted_sizes[i] < info.output_buffer.size_bytes()) {
                 result.buffer.alloc(compacted_sizes[i]);
                 OPTIX_CHECK(optixAccelCompact(
-                    context, nullptr,
+                    context,
+                    nullptr,
                     info.uncompacted_handle,
-                    result.buffer.device_ptr(), result.buffer.size_bytes(),
+                    result.buffer.device_ptr(),
+                    result.buffer.size_bytes(),
                     &result.handle));
             } else {
                 result.buffer = std::move(info.output_buffer);
@@ -148,22 +179,8 @@ namespace qualquer::optix {
 
         CUDA_CHECK(cudaStreamSynchronize(nullptr));
 
-        // Log per-BLAS results.
         for (size_t i = 0; i < count; ++i) {
-            const auto &info = infos[i];
-            const auto blas_index = base_index + i;
-            if (compacted_sizes[i] < info.output_size) {
-                spdlog::info("BLAS #{}: {:.1f} KB -> {:.1f} KB (compacted {:.0f}%)",
-                             blas_index,
-                             static_cast<double>(info.output_size) / 1024.0,
-                             static_cast<double>(compacted_sizes[i]) / 1024.0,
-                             (1.0 - static_cast<double>(compacted_sizes[i])
-                                  / static_cast<double>(info.output_size)) * 100.0);
-            } else {
-                spdlog::info("BLAS #{}: {:.1f} KB (compaction skipped)",
-                             blas_index,
-                             static_cast<double>(info.output_size) / 1024.0);
-            }
+            log_blas_compaction(base_index + i, infos[i].output_size, compacted_sizes[i]);
         }
     }
 
@@ -178,7 +195,7 @@ namespace qualquer::optix {
         CudaBuffer<OptixInstance> instance_buffer;
         instance_buffer.alloc(instance_count);
         CUDA_CHECK(cudaMemcpy(instance_buffer.data(), instances.data(),
-                              instance_buffer.size_bytes(), cudaMemcpyHostToDevice));
+            instance_buffer.size_bytes(), cudaMemcpyHostToDevice));
 
         // --- Build input ---
 
@@ -239,7 +256,7 @@ namespace qualquer::optix {
 
         uint64_t compacted_size = 0;
         CUDA_CHECK(cudaMemcpy(&compacted_size, compacted_size_buffer.data(),
-                              sizeof(uint64_t), cudaMemcpyDeviceToHost));
+            sizeof(uint64_t), cudaMemcpyDeviceToHost));
         compacted_size_buffer.destroy();
 
         // --- Compact ---
@@ -261,7 +278,7 @@ namespace qualquer::optix {
                          static_cast<double>(output_buffer.size_bytes()) / 1024.0,
                          static_cast<double>(compacted_size) / 1024.0,
                          (1.0 - static_cast<double>(compacted_size)
-                              / static_cast<double>(output_buffer.size_bytes())) * 100.0);
+                          / static_cast<double>(output_buffer.size_bytes())) * 100.0);
         } else {
             tlas_.buffer = std::move(output_buffer);
 
