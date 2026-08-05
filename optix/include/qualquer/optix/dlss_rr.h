@@ -111,7 +111,7 @@ namespace qualquer::optix {
      *        resolves user-requested heights to valid (clamped, mode-tagged)
      *        values.
      *
-     * Stateless except for the cached optimal_settings array. The NGX
+     * Stateless except for the cached optimal settings. The NGX
      * parameter interface is passed in at cache time, not stored.
      */
     class DlssResolutionResolver {
