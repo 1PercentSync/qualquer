@@ -393,6 +393,15 @@ tonemap；kernel 只做 `color * exposure`。
 **理由**：避免 Context 散装标量膨胀。near/far 不暴露——perspective unproject 后 near/far 缩放在 normalize 中消失，PT 无深度缓冲消费
 depth mapping。
 
+### 进程显存统计
+
+**决策**：主面板通过 `IDXGIAdapter3::QueryVideoMemoryInfo` 查询 WDDM 的进程级 `LOCAL` segment 用量与预算；DXGI adapter 通过
+Vulkan `deviceLUID` 精确匹配。显示单位为 MiB。DLSS 面板的 VRAM 数据仅作为内部占用细分，不与主面板相加。
+
+**理由**：渲染器的资源跨 Vulkan、CUDA、OptiX 与 NGX 分配，Vulkan `VK_EXT_memory_budget` 在目标驱动上未覆盖独立 CUDA/OptiX
+分配。WDDM 进程统计统一覆盖同一适配器上归属于该进程的 GPU API 分配，并由系统处理 interop 资源记账，避免手工汇总的遗漏与重复。
+`LOCAL` 表示独立显存；`NON_LOCAL` 共享系统内存不混入 VRAM 指标。
+
 ---
 
 ## 资产管线
