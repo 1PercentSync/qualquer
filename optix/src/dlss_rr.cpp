@@ -372,7 +372,8 @@ namespace qualquer::optix {
     // -----------------------------------------------------------------------
 
     bool DlssResolutionResolver::cache(NVSDK_NGX_Parameter *ngx_params,
-                                       uint32_t display_width, uint32_t display_height) {
+                                       const uint32_t display_width,
+                                       const uint32_t display_height) {
         if (!ngx_params) {
             return false;
         }
@@ -383,25 +384,33 @@ namespace qualquer::optix {
             float sharpness = 0.0f;
             const NVSDK_NGX_Result result = NGX_DLSSD_GET_OPTIMAL_SETTINGS(
                 ngx_params,
-                display_width, display_height,
+                display_width,
+                display_height,
                 static_cast<NVSDK_NGX_PerfQuality_Value>(i),
-                &s.optimal_width, &s.optimal_height,
-                &s.max_width, &s.max_height,
-                &s.min_width, &s.min_height,
+                &s.optimal_width,
+                &s.optimal_height,
+                &s.max_width,
+                &s.max_height,
+                &s.min_width,
+                &s.min_height,
                 &sharpness
             );
             if (NVSDK_NGX_FAILED(result)) {
                 spdlog::warn("DLSS-RR: {} optimal settings query failed: {}",
-                             kQualityModeNames[i], ngx_result_string(result));
+                             kQualityModeNames[i],
+                             ngx_result_string(result));
                 s = {};
                 all_ok = false;
                 continue;
             }
             spdlog::info("DLSS-RR: {} optimal {}x{}, range [{}x{} .. {}x{}]",
                          kQualityModeNames[i],
-                         s.optimal_width, s.optimal_height,
-                         s.min_width, s.min_height,
-                         s.max_width, s.max_height);
+                         s.optimal_width,
+                         s.optimal_height,
+                         s.min_width,
+                         s.min_height,
+                         s.max_width,
+                         s.max_height);
         }
 
         return all_ok;
@@ -411,7 +420,9 @@ namespace qualquer::optix {
                                                        uint32_t display_height) const {
         // render >= display → DLAA (no upscaling).
         if (requested_height >= display_height) {
-            return {display_height, DlssQualityMode::Dlaa};
+            return {
+                .render_height = display_height, .mode = DlssQualityMode::Dlaa
+            };
         }
 
         // Single-pass selection: for each mode, compute the clamped height
@@ -430,8 +441,7 @@ namespace qualquer::optix {
                 continue;
             }
 
-            const uint32_t clamped = std::clamp(requested_height,
-                                                s.min_height, s.max_height);
+            const uint32_t clamped = std::clamp(requested_height, s.min_height, s.max_height);
             const uint32_t clamp_dist = clamped > requested_height
                                             ? clamped - requested_height
                                             : requested_height - clamped;
@@ -439,9 +449,7 @@ namespace qualquer::optix {
                                               ? requested_height - s.optimal_height
                                               : s.optimal_height - requested_height;
 
-            if (clamp_dist < best_clamp_dist
-                || (clamp_dist == best_clamp_dist
-                    && optimal_dist < best_optimal_dist)) {
+            if (clamp_dist < best_clamp_dist || (clamp_dist == best_clamp_dist && optimal_dist < best_optimal_dist)) {
                 best_mode = static_cast<DlssQualityMode>(i);
                 best_clamped = clamped;
                 best_clamp_dist = clamp_dist;
@@ -449,6 +457,8 @@ namespace qualquer::optix {
             }
         }
 
-        return {best_clamped, best_mode};
+        return {
+            .render_height = best_clamped, .mode = best_mode
+        };
     }
 } // namespace qualquer::optix
