@@ -19,10 +19,31 @@ namespace qualquer::optix {
     /** @brief NGX project identifier (UUID format required by NGX). */
     constexpr char kNgxProjectId[] = "d8b2224f-2576-4814-92ec-53596756923e";
 
-    /** @brief Quality mode names for logging, indexed by DlssQualityMode. */
-    constexpr const char *kQualityModeNames[] = {
-        "MaxPerf", "Balanced", "MaxQuality", "UltraPerf", "UltraQuality", "DLAA",
-    };
+    namespace {
+        /** @brief RR-supported quality modes with display names for logging. */
+        struct QualityModeEntry {
+            DlssQualityMode mode;
+            const char *name;
+        };
+
+        constexpr QualityModeEntry kQualityModes[] = {
+            {
+                .mode = DlssQualityMode::MaxPerf, .name = "MaxPerf"
+            },
+            {
+                .mode = DlssQualityMode::Balanced, .name = "Balanced"
+            },
+            {
+                .mode = DlssQualityMode::MaxQuality, .name = "MaxQuality"
+            },
+            {
+                .mode = DlssQualityMode::UltraPerformance, .name = "UltraPerf"
+            },
+            {
+                .mode = DlssQualityMode::Dlaa, .name = "DLAA"
+            },
+        };
+    } // anonymous namespace
 
     // NGX result string for logging. Covers the common error codes;
     // unknown codes fall back to the raw integer.
@@ -222,7 +243,7 @@ namespace qualquer::optix {
         dlss_params.InHeight = render_height;
         dlss_params.InTargetWidth = display_width;
         dlss_params.InTargetHeight = display_height;
-        dlss_params.InPerfQualityValue = static_cast<NVSDK_NGX_PerfQuality_Value>(quality);
+        dlss_params.InPerfQualityValue = static_cast<NVSDK_NGX_PerfQuality_Value>(static_cast<uint32_t>(quality));
         dlss_params.InFeatureCreateFlags = create_flags;
         dlss_params.InUseHWDepth = NVSDK_NGX_DLSS_Depth_Type_Linear;
         dlss_params.InRoughnessMode = NVSDK_NGX_DLSS_Roughness_Mode_Packed;
@@ -235,7 +256,6 @@ namespace qualquer::optix {
         ngx_params_->Set(NVSDK_NGX_Parameter_RayReconstruction_Hint_Render_Preset_Balanced, ngx_preset);
         ngx_params_->Set(NVSDK_NGX_Parameter_RayReconstruction_Hint_Render_Preset_Performance, ngx_preset);
         ngx_params_->Set(NVSDK_NGX_Parameter_RayReconstruction_Hint_Render_Preset_UltraPerformance, ngx_preset);
-        ngx_params_->Set(NVSDK_NGX_Parameter_RayReconstruction_Hint_Render_Preset_UltraQuality, ngx_preset);
 
         // Release VRAM immediately on feature release (no lazy deallocation).
         ngx_params_->Set(NVSDK_NGX_Parameter_FreeMemOnReleaseFeature, 1);
@@ -251,9 +271,16 @@ namespace qualquer::optix {
 
         NGX_CHECK(NGX_CUDA_CREATE_DLSSD_EXT(&ngx_handle_, ngx_params_, &cuda_params));
 
+        const char *mode_name = "Unknown";
+        for (const auto &[m, n] : kQualityModes) {
+            if (m == quality) {
+                mode_name = n;
+                break;
+            }
+        }
         spdlog::info("DLSS-RR: feature created (render {}x{} -> display {}x{}, mode {})",
                      render_width, render_height, display_width, display_height,
-                     kQualityModeNames[static_cast<uint32_t>(quality)]);
+                     mode_name);
     }
 
     void DlssRR::evaluate(const DlssEvalInput &input) {
@@ -378,15 +405,16 @@ namespace qualquer::optix {
             return false;
         }
 
+        optimal_settings_.clear();
         bool all_ok = true;
-        for (uint32_t i = 0; i < kDlssQualityModeCount; ++i) {
-            auto &s = optimal_settings_[i];
+        for (const auto &[mode, name]: kQualityModes) {
+            DlssOptimalSettings s{};
             float sharpness = 0.0f;
             const NVSDK_NGX_Result result = NGX_DLSSD_GET_OPTIMAL_SETTINGS(
                 ngx_params,
                 display_width,
                 display_height,
-                static_cast<NVSDK_NGX_PerfQuality_Value>(i),
+                static_cast<NVSDK_NGX_PerfQuality_Value>(static_cast<uint32_t>(mode)),
                 &s.optimal_width,
                 &s.optimal_height,
                 &s.max_width,
@@ -397,14 +425,14 @@ namespace qualquer::optix {
             );
             if (NVSDK_NGX_FAILED(result)) {
                 spdlog::warn("DLSS-RR: {} optimal settings query failed: {}",
-                             kQualityModeNames[i],
+                             name,
                              ngx_result_string(result));
-                s = {};
                 all_ok = false;
                 continue;
             }
+            optimal_settings_[mode] = s;
             spdlog::info("DLSS-RR: {} optimal {}x{}, range [{}x{} .. {}x{}]",
-                         kQualityModeNames[i],
+                         name,
                          s.optimal_width,
                          s.optimal_height,
                          s.min_width,
@@ -435,12 +463,7 @@ namespace qualquer::optix {
         uint32_t best_clamp_dist = UINT32_MAX;
         uint32_t best_optimal_dist = UINT32_MAX;
 
-        for (uint32_t i = 0; i < kDlssQualityModeCount; ++i) {
-            const auto &s = optimal_settings_[i];
-            if (s.optimal_height == 0) {
-                continue;
-            }
-
+        for (const auto &[mode, s]: optimal_settings_) {
             const uint32_t clamped = std::clamp(requested_height, s.min_height, s.max_height);
             const uint32_t clamp_dist = clamped > requested_height
                                             ? clamped - requested_height
@@ -450,7 +473,7 @@ namespace qualquer::optix {
                                               : s.optimal_height - requested_height;
 
             if (clamp_dist < best_clamp_dist || (clamp_dist == best_clamp_dist && optimal_dist < best_optimal_dist)) {
-                best_mode = static_cast<DlssQualityMode>(i);
+                best_mode = mode;
                 best_clamped = clamped;
                 best_clamp_dist = clamp_dist;
                 best_optimal_dist = optimal_dist;

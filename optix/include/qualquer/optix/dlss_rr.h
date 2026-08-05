@@ -6,8 +6,8 @@
  *        and resolution resolver.
  */
 
-#include <array>
 #include <cstdint>
+#include <map>
 
 #include <cuda_runtime.h>
 
@@ -16,23 +16,22 @@ struct NVSDK_NGX_Handle;
 
 namespace qualquer::optix {
     /**
-     * @brief DLSS-RR quality mode, maps to NVSDK_NGX_PerfQuality_Value.
+     * @brief DLSS-RR quality mode (RR-supported subset only).
      *
-     * Mirrors the SDK enum order (MaxPerf=0 .. DLAA=5). Render resolution
-     * is controlled by the user via UI slider; the quality mode is
-     * auto-selected based on the actual upscale ratio.
+     * Values match NVSDK_NGX_PerfQuality_Value for direct static_cast.
+     * UltraQuality (4) is absent because DLSS Ray Reconstruction does
+     * not support it; the gap is intentional.
+     *
+     * Render resolution is controlled by the user via UI slider; the
+     * quality mode is auto-selected based on the actual upscale ratio.
      */
     enum class DlssQualityMode : uint32_t {
         MaxPerf = 0,
         Balanced = 1,
         MaxQuality = 2,
         UltraPerformance = 3,
-        UltraQuality = 4,
         Dlaa = 5,
     };
-
-    /** @brief Number of quality modes in DlssQualityMode. */
-    constexpr uint32_t kDlssQualityModeCount = 6;
 
     /**
      * @brief DLSS-RR render preset, selects the underlying neural network model.
@@ -150,7 +149,7 @@ namespace qualquer::optix {
         [[nodiscard]] DlssResolvedHeight resolve(uint32_t requested_height, uint32_t display_height) const;
 
     private:
-        std::array<DlssOptimalSettings, kDlssQualityModeCount> optimal_settings_{};
+        std::map<DlssQualityMode, DlssOptimalSettings> optimal_settings_;
     };
 
     // -----------------------------------------------------------------------
