@@ -79,6 +79,31 @@ namespace qualquer::optix {
                              static_cast<double>(original_size) / 1024.0);
             }
         }
+
+        /// Compacts an AS if the compacted size is smaller; otherwise moves the
+        /// source buffer as-is. Does not synchronize — caller must sync before
+        /// accessing the result.
+        // ReSharper disable once CppParameterMayBeConst
+        void compact_as(OptixDeviceContext context,
+                        const OptixTraversableHandle uncompacted_handle,
+                        CudaBuffer<uint8_t> &source,
+                        const uint64_t compacted_size,
+                        CudaBuffer<uint8_t> &dest_buffer,
+                        OptixTraversableHandle &dest_handle) {
+            if (compacted_size < source.size_bytes()) {
+                dest_buffer.alloc(compacted_size);
+                OPTIX_CHECK(optixAccelCompact(
+                    context,
+                    nullptr,
+                    uncompacted_handle,
+                    dest_buffer.device_ptr(),
+                    dest_buffer.size_bytes(),
+                    &dest_handle));
+            } else {
+                dest_buffer = std::move(source);
+                dest_handle = uncompacted_handle;
+            }
+        }
     } // anonymous namespace
 
     // ReSharper disable once CppParameterMayBeConst
@@ -99,7 +124,6 @@ namespace qualquer::optix {
         std::vector<BuildInfo> infos(count);
 
         // --- Phase 1: prepare build inputs, query memory sizes ---
-
         size_t max_scratch = 0;
         for (size_t i = 0; i < count; ++i) {
             max_scratch = std::max(max_scratch,
@@ -109,7 +133,6 @@ namespace qualquer::optix {
         // --- Phase 2: submit all builds (shared scratch, per-BLAS output) ---
         // Stream ordering guarantees build N completes before N+1 starts,
         // so a single scratch buffer sized to the maximum is safe to reuse.
-
         CudaBuffer<uint8_t> scratch;
         scratch.alloc(max_scratch);
 
@@ -140,7 +163,6 @@ namespace qualquer::optix {
         }
 
         // --- Sync 1: all builds complete, compacted sizes available ---
-
         CUDA_CHECK(cudaStreamSynchronize(nullptr));
         scratch.destroy();
 
@@ -152,31 +174,19 @@ namespace qualquer::optix {
         compacted_sizes_buf.destroy();
 
         // --- Phase 3: submit all compactions ---
-
         const auto base_index = blas_handles_.size();
         blas_handles_.resize(base_index + count);
 
         for (size_t i = 0; i < count; ++i) {
-            auto &info = infos[i];
-            auto &result = blas_handles_[base_index + i];
-
-            if (compacted_sizes[i] < info.output_buffer.size_bytes()) {
-                result.buffer.alloc(compacted_sizes[i]);
-                OPTIX_CHECK(optixAccelCompact(
-                    context,
-                    nullptr,
-                    info.uncompacted_handle,
-                    result.buffer.device_ptr(),
-                    result.buffer.size_bytes(),
-                    &result.handle));
-            } else {
-                result.buffer = std::move(info.output_buffer);
-                result.handle = info.uncompacted_handle;
-            }
+            compact_as(context,
+                       infos[i].uncompacted_handle,
+                       infos[i].output_buffer,
+                       compacted_sizes[i],
+                       blas_handles_[base_index + i].buffer,
+                       blas_handles_[base_index + i].handle);
         }
 
         // --- Sync 2: all compactions complete, uncompacted buffers can be freed ---
-
         CUDA_CHECK(cudaStreamSynchronize(nullptr));
 
         for (size_t i = 0; i < count; ++i) {
@@ -184,45 +194,35 @@ namespace qualquer::optix {
         }
     }
 
-    void AccelStructure::build_tlas(
-        // ReSharper disable once CppParameterMayBeConst
-        OptixDeviceContext context,
-        const std::span<const OptixInstance> instances) {
+    void AccelStructure::build_tlas(OptixDeviceContext context, const std::span<const OptixInstance> instances) {
         const auto instance_count = static_cast<unsigned int>(instances.size());
 
         // --- Upload instance array to device ---
-
         CudaBuffer<OptixInstance> instance_buffer;
         instance_buffer.alloc(instance_count);
-        CUDA_CHECK(cudaMemcpy(instance_buffer.data(), instances.data(),
-            instance_buffer.size_bytes(), cudaMemcpyHostToDevice));
+        CUDA_CHECK(cudaMemcpy(instance_buffer.data(),
+            instances.data(),
+            instance_buffer.size_bytes(),
+            cudaMemcpyHostToDevice));
 
         // --- Build input ---
-
         OptixBuildInput build_input{};
         build_input.type = OPTIX_BUILD_INPUT_TYPE_INSTANCES;
         build_input.instanceArray.instances = instance_buffer.device_ptr();
         build_input.instanceArray.numInstances = instance_count;
 
         // --- Build options ---
-
         constexpr OptixAccelBuildOptions accel_options{
-            .buildFlags = OPTIX_BUILD_FLAG_PREFER_FAST_TRACE
-                          | OPTIX_BUILD_FLAG_ALLOW_COMPACTION,
+            .buildFlags = OPTIX_BUILD_FLAG_PREFER_FAST_TRACE | OPTIX_BUILD_FLAG_ALLOW_COMPACTION,
             .operation = OPTIX_BUILD_OPERATION_BUILD,
             .motionOptions = {},
         };
 
         // --- Query memory sizes ---
-
         OptixAccelBufferSizes buffer_sizes{};
-        OPTIX_CHECK(optixAccelComputeMemoryUsage(
-            context, &accel_options,
-            &build_input, 1,
-            &buffer_sizes));
+        OPTIX_CHECK(optixAccelComputeMemoryUsage(context, &accel_options,&build_input, 1, &buffer_sizes));
 
         // --- Allocate temp and output buffers ---
-
         CudaBuffer<uint8_t> temp_buffer;
         temp_buffer.alloc(buffer_sizes.tempSizeInBytes);
 
@@ -230,7 +230,6 @@ namespace qualquer::optix {
         output_buffer.alloc(buffer_sizes.outputSizeInBytes);
 
         // --- Build, emitting compacted size ---
-
         CudaBuffer<uint64_t> compacted_size_buffer;
         compacted_size_buffer.alloc(1);
 
@@ -239,52 +238,51 @@ namespace qualquer::optix {
             .type = OPTIX_PROPERTY_TYPE_COMPACTED_SIZE,
         };
 
-        OPTIX_CHECK(optixAccelBuild(
-            context, nullptr,
+        OPTIX_CHECK(optixAccelBuild(context,
+            nullptr,
             &accel_options,
-            &build_input, 1,
-            temp_buffer.device_ptr(), temp_buffer.size_bytes(),
-            output_buffer.device_ptr(), output_buffer.size_bytes(),
+            &build_input,
+            1,
+            temp_buffer.device_ptr(),
+            temp_buffer.size_bytes(),
+            output_buffer.device_ptr(),
+            output_buffer.size_bytes(),
             &tlas_.handle,
-            &emit_desc, 1));
+            &emit_desc,
+            1));
 
         CUDA_CHECK(cudaStreamSynchronize(nullptr));
 
         temp_buffer.destroy();
 
         // --- Read back compacted size ---
-
         uint64_t compacted_size = 0;
-        CUDA_CHECK(cudaMemcpy(&compacted_size, compacted_size_buffer.data(),
-            sizeof(uint64_t), cudaMemcpyDeviceToHost));
+        CUDA_CHECK(cudaMemcpy(&compacted_size,
+            compacted_size_buffer.data(),
+            sizeof(uint64_t),
+            cudaMemcpyDeviceToHost));
         compacted_size_buffer.destroy();
 
-        // --- Compact ---
+        const auto output_size = output_buffer.size_bytes();
+        compact_as(context,
+                   tlas_.handle,
+                   output_buffer,
+                   compacted_size,
+                   tlas_.buffer,
+                   tlas_.handle);
 
-        if (compacted_size < output_buffer.size_bytes()) {
-            tlas_.buffer.alloc(compacted_size);
+        CUDA_CHECK(cudaStreamSynchronize(nullptr));
 
-            const auto uncompacted_handle = tlas_.handle;
-            OPTIX_CHECK(optixAccelCompact(
-                context, nullptr,
-                uncompacted_handle,
-                tlas_.buffer.device_ptr(), tlas_.buffer.size_bytes(),
-                &tlas_.handle));
-
-            CUDA_CHECK(cudaStreamSynchronize(nullptr));
-
+        if (compacted_size < output_size) {
             spdlog::info("TLAS: {} instances, {:.1f} KB -> {:.1f} KB (compacted {:.0f}%)",
                          instance_count,
-                         static_cast<double>(output_buffer.size_bytes()) / 1024.0,
+                         static_cast<double>(output_size) / 1024.0,
                          static_cast<double>(compacted_size) / 1024.0,
-                         (1.0 - static_cast<double>(compacted_size)
-                          / static_cast<double>(output_buffer.size_bytes())) * 100.0);
+                         (1.0 - static_cast<double>(compacted_size) / static_cast<double>(output_size)) * 100.0);
         } else {
-            tlas_.buffer = std::move(output_buffer);
-
             spdlog::info("TLAS: {} instances, {:.1f} KB (compaction skipped)",
                          instance_count,
-                         static_cast<double>(tlas_.buffer.size_bytes()) / 1024.0);
+                         static_cast<double>(output_size) / 1024.0);
         }
     }
 
