@@ -23,6 +23,7 @@
 
 ## 2. vulkan 层（Swapchain 呈现 + Interop）
 
+- [x] `vulkan/include/.../vk_check.h` — Vulkan 错误处理宏
 - [ ] `vulkan/include/.../context.h` + `vulkan/src/context.cpp` — Instance/Device/Queue
 - [ ] `vulkan/include/.../swapchain.h` + `vulkan/src/swapchain.cpp` — Swapchain 管理
 - [ ] `vulkan/include/.../interop.h` + `vulkan/src/interop.cpp` — CUDA-Vulkan interop
