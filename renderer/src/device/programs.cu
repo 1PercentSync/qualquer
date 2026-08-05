@@ -698,13 +698,20 @@ __global__ void __closesthit__ch() { // NOLINT(*-reserved-identifier)
                     params.aux_diffuse_albedo,
                     sx * static_cast<int>(sizeof(uint32_t)), sy);
 
-        // Specular albedo: E_glossy per channel (Turquin-compensated specular
-        // directional reflectance, self-consistent with our energy compensation).
+        // Specular albedo is the directional reflectance of the compensated
+        // specular BRDF. E_glossy integrates the uncompensated GGX lobe; the
+        // shading-point Turquin multiplier is constant over outgoing direction,
+        // so their product integrates the lobe actually present in noisy color.
+        // Clamp approximation error at the guide's reflectance boundary.
         // Pure metals skip E_glossy inside init_brdf_params; compute it here.
         const float3 E_glossy_aux = (metallic >= 1.0f)
             ? compute_E_glossy_clamped(bp.F0, bp.r, bp.NdotV)
             : bp.E_glossy_rgb;
-        surf2Dwrite(make_float4(E_glossy_aux.x, E_glossy_aux.y, E_glossy_aux.z, 1.0f),
+        const float3 specular_albedo = make_float3(
+            fminf(fmaxf(E_glossy_aux.x * bp.turquin_comp.x, 0.0f), 1.0f),
+            fminf(fmaxf(E_glossy_aux.y * bp.turquin_comp.y, 0.0f), 1.0f),
+            fminf(fmaxf(E_glossy_aux.z * bp.turquin_comp.z, 0.0f), 1.0f));
+        surf2Dwrite(make_float4(specular_albedo.x, specular_albedo.y, specular_albedo.z, 1.0f),
                     params.aux_specular_albedo,
                     sx * static_cast<int>(sizeof(float4)), sy);
 
