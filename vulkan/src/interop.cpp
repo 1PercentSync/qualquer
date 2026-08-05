@@ -93,15 +93,15 @@ namespace qualquer::vulkan {
             .memoryTypeIndex = memory_type_index,
         };
 
-        VK_CHECK(vkAllocateMemory(context.device, &alloc_info, nullptr, &memory));
-        VK_CHECK(vkBindImageMemory(context.device, image, memory, 0));
+        VK_CHECK(vkAllocateMemory(context.device, &alloc_info, nullptr, &memory_));
+        VK_CHECK(vkBindImageMemory(context.device, image, memory_, 0));
 
         // VkExportMemoryWin32HandleInfoKHR (security attrs / access mask) is omitted:
         // same-process CUDA import needs no custom authorization — the driver's default
         // descriptor is accessible within the process.
         const VkMemoryGetWin32HandleInfoKHR handle_info{
             .sType = VK_STRUCTURE_TYPE_MEMORY_GET_WIN32_HANDLE_INFO_KHR,
-            .memory = memory,
+            .memory = memory_,
             .handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT_KHR,
         };
 
@@ -129,9 +129,9 @@ namespace qualquer::vulkan {
             win32_handle = nullptr;
         }
         vkDestroyImage(context.device, image, nullptr);
-        vkFreeMemory(context.device, memory, nullptr);
+        vkFreeMemory(context.device, memory_, nullptr);
         image = VK_NULL_HANDLE;
-        memory = VK_NULL_HANDLE;
+        memory_ = VK_NULL_HANDLE;
         size = 0;
     }
 

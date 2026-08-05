@@ -48,9 +48,6 @@ namespace qualquer::vulkan {
         /** @brief The image handle. */
         VkImage image = VK_NULL_HANDLE;
 
-        /** @brief Dedicated device memory bound to the image. */
-        VkDeviceMemory memory = VK_NULL_HANDLE;
-
         /**
          * @brief Allocation size reported by vkGetImageMemoryRequirements.
          *
@@ -68,6 +65,10 @@ namespace qualquer::vulkan {
          * on windows.h (CUDA's handle.win32.handle is void*).
          */
         void *win32_handle = nullptr;
+
+    private:
+        /** @brief Dedicated device memory bound to the image. */
+        VkDeviceMemory memory_ = VK_NULL_HANDLE;
     };
 
     /**

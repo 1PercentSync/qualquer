@@ -95,9 +95,6 @@ namespace qualquer::vulkan {
         /** @brief Vulkan instance. */
         VkInstance instance = VK_NULL_HANDLE;
 
-        /** @brief Debug messenger for validation layer callbacks. */
-        VkDebugUtilsMessengerEXT debug_messenger = VK_NULL_HANDLE;
-
         /** @brief Window surface for swapchain presentation. */
         VkSurfaceKHR surface = VK_NULL_HANDLE;
 
@@ -116,18 +113,12 @@ namespace qualquer::vulkan {
         /** @brief Graphics queue (also used for presentation). */
         VkQueue graphics_queue = VK_NULL_HANDLE;
 
-        /** @brief VMA allocator for GPU memory management. */
-        VmaAllocator allocator = VK_NULL_HANDLE;
-
-        /** @brief Per-frame synchronization and command recording resources. */
-        std::array<FrameData, kMaxFramesInFlight> frames{};
-
         /** @brief Index of the current in-flight frame (0 to kMaxFramesInFlight-1). */
         uint32_t frame_index = 0;
 
         /** @brief Returns the FrameData for the current in-flight frame. */
         FrameData &current_frame() {
-            return frames[frame_index];
+            return frames_[frame_index];
         }
 
         /** @brief Advances to the next in-flight frame index. */
@@ -147,6 +138,15 @@ namespace qualquer::vulkan {
         [[nodiscard]] std::optional<VramInfo> query_vram_usage() const;
 
     private:
+        /** @brief Debug messenger for validation layer callbacks. */
+        VkDebugUtilsMessengerEXT debug_messenger_ = VK_NULL_HANDLE;
+
+        /** @brief VMA allocator for GPU memory management. */
+        VmaAllocator allocator_ = VK_NULL_HANDLE;
+
+        /** @brief Per-frame synchronization and command recording resources. */
+        std::array<FrameData, kMaxFramesInFlight> frames_{};
+
         /** @brief DXGI view of the selected GPU, owned and released by this context. */
         IDXGIAdapter3 *dxgi_adapter_ = nullptr;
 

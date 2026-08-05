@@ -358,7 +358,7 @@ namespace qualquer::vulkan {
     }
 
     void Context::destroy() {
-        for (auto &frame: frames) {
+        for (auto &frame: frames_) {
             vkDestroyCommandPool(device, frame.command_pool, nullptr);
             vkDestroyFence(device, frame.render_fence, nullptr);
             vkDestroySemaphore(device, frame.image_available_semaphore, nullptr);
@@ -367,8 +367,8 @@ namespace qualquer::vulkan {
             frame.image_available_semaphore = VK_NULL_HANDLE;
         }
 
-        vmaDestroyAllocator(allocator);
-        allocator = VK_NULL_HANDLE;
+        vmaDestroyAllocator(allocator_);
+        allocator_ = VK_NULL_HANDLE;
         vkDestroyDevice(device, nullptr);
         device = VK_NULL_HANDLE;
 
@@ -383,8 +383,8 @@ namespace qualquer::vulkan {
         if constexpr (kEnableValidationLayers) {
             const auto func = reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(
                 vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT"));
-            func(instance, debug_messenger, nullptr);
-            debug_messenger = VK_NULL_HANDLE;
+            func(instance, debug_messenger_, nullptr);
+            debug_messenger_ = VK_NULL_HANDLE;
         }
 
         vkDestroyInstance(instance, nullptr);
@@ -445,7 +445,7 @@ namespace qualquer::vulkan {
         // Extension function — must be loaded manually via vkGetInstanceProcAddr
         const auto func = reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(
             vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT"));
-        VK_CHECK(func(instance, &create_info, nullptr, &debug_messenger));
+        VK_CHECK(func(instance, &create_info, nullptr, &debug_messenger_));
 
         spdlog::info("Debug messenger created");
     }
@@ -598,7 +598,7 @@ namespace qualquer::vulkan {
             .vulkanApiVersion = VK_API_VERSION_1_4,
         };
 
-        VK_CHECK(vmaCreateAllocator(&alloc_info, &allocator));
+        VK_CHECK(vmaCreateAllocator(&alloc_info, &allocator_));
 
         spdlog::info("VMA allocator created");
     }
@@ -606,7 +606,7 @@ namespace qualquer::vulkan {
     // Creates per-frame command pools, command buffers, fences (signaled), and semaphores.
     // Fences start signaled so the first frame's wait_fence succeeds immediately.
     void Context::create_frame_data() {
-        for (auto &frame: frames) {
+        for (auto &frame: frames_) {
             const VkCommandPoolCreateInfo pool_info{
                 .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
                 .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
