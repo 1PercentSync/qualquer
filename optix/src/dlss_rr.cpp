@@ -193,7 +193,9 @@ namespace qualquer::optix {
     void DlssRR::create_feature(uint32_t render_width, uint32_t render_height,
                                 uint32_t display_width, uint32_t display_height,
                                 // ReSharper disable once CppParameterMayBeConst
-                                DlssRenderPreset preset) {
+                                DlssRenderPreset preset,
+                                // ReSharper disable once CppParameterMayBeConst
+                                DlssQualityMode quality_mode) {
         release_feature();
 
         if (!available_ || !ngx_params_) {
@@ -201,11 +203,7 @@ namespace qualquer::optix {
             return;
         }
 
-        // The caller is responsible for resolving the render height via
-        // resolve_render_height() and passing the clamped dimensions here.
-        // This ensures buffers, raygen launch, and NGX all use the same size.
-        const auto resolved = resolve_render_height(render_height, display_height);
-        const DlssQualityMode quality = resolved.mode;
+        const DlssQualityMode quality = quality_mode;
 
         // Feature creation flags.
         constexpr int create_flags = NVSDK_NGX_DLSS_Feature_Flags_MVLowRes
@@ -251,7 +249,7 @@ namespace qualquer::optix {
                      kQualityModeNames[static_cast<uint32_t>(quality)]);
     }
 
-    void DlssRR::evaluate(const EvalInput &input) {
+    void DlssRR::evaluate(const DlssEvalInput &input) {
         if (!ngx_handle_ || !ngx_params_) {
             spdlog::error("DLSS-RR: evaluate called without active feature");
             return;
@@ -361,8 +359,13 @@ namespace qualquer::optix {
         cached_vram_bytes_ = 0;
     }
 
-    bool DlssRR::cache_optimal_settings(uint32_t display_width, uint32_t display_height) {
-        if (!ngx_params_) {
+    // -----------------------------------------------------------------------
+    // DlssResolutionResolver
+    // -----------------------------------------------------------------------
+
+    bool DlssResolutionResolver::cache(NVSDK_NGX_Parameter *ngx_params,
+                                       uint32_t display_width, uint32_t display_height) {
+        if (!ngx_params) {
             return false;
         }
 
@@ -371,7 +374,7 @@ namespace qualquer::optix {
             auto &s = optimal_settings_[i];
             float sharpness = 0.0f;
             const NVSDK_NGX_Result result = NGX_DLSSD_GET_OPTIMAL_SETTINGS(
-                ngx_params_,
+                ngx_params,
                 display_width, display_height,
                 static_cast<NVSDK_NGX_PerfQuality_Value>(i),
                 &s.optimal_width, &s.optimal_height,
@@ -396,8 +399,8 @@ namespace qualquer::optix {
         return all_ok;
     }
 
-    DlssRR::ResolvedRenderHeight DlssRR::resolve_render_height(uint32_t requested_height,
-                                                                uint32_t display_height) const {
+    DlssResolvedHeight DlssResolutionResolver::resolve(uint32_t requested_height,
+                                                        uint32_t display_height) const {
         // render >= display → DLAA (no upscaling).
         if (requested_height >= display_height) {
             return {display_height, DlssQualityMode::Dlaa};

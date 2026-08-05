@@ -205,6 +205,7 @@ namespace qualquer::app {
                 .camera = camera_,
                 .scene_stats = scene_stats_,
                 .dlss_rr = renderer_.dlss(),
+                .dlss_resolver = renderer_.dlss_resolver(),
 #ifndef NDEBUG
                 .pt_ms = renderer_.pt_ms(),
                 .cuda_display_ms = renderer_.cuda_display_ms(),

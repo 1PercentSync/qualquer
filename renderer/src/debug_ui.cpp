@@ -425,7 +425,7 @@ namespace qualquer::renderer {
         // When DLSS is on, clamp render_height to the resolved value so
         // the slider reflects what buffers and NGX actually use.
         if (ctx.settings.dlss_enabled && ctx.dlss_rr.available()) {
-            ctx.settings.render_height = ctx.dlss_rr.resolve_render_height(
+            ctx.settings.render_height = ctx.dlss_resolver.resolve(
                 ctx.settings.render_height,
                 ctx.swapchain.extent.height).render_height;
         }
@@ -574,7 +574,7 @@ namespace qualquer::renderer {
 
         // Read-only info when feature is active.
         if (dlss.feature_active()) {
-            const auto resolved = dlss.resolve_render_height(
+            const auto resolved = ctx.dlss_resolver.resolve(
                 ctx.settings.render_height,
                 ctx.swapchain.extent.height);
 

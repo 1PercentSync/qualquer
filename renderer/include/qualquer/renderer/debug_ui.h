@@ -16,6 +16,7 @@
 
 namespace qualquer::optix {
     class DlssRR;
+    class DlssResolutionResolver;
 }
 
 namespace qualquer::renderer {
@@ -96,6 +97,9 @@ namespace qualquer::renderer {
          * settings.dlss_preset (same ownership as other UI knobs).
          */
         const optix::DlssRR &dlss_rr;
+
+        /** @brief DLSS resolution resolver (read-only for render height resolve). */
+        const optix::DlssResolutionResolver &dlss_resolver;
 
 #ifndef NDEBUG
         // ---- Pipeline timing (debug only) ----

@@ -231,6 +231,15 @@ namespace qualquer::renderer {
         }
 
         /**
+         * @brief DLSS resolution resolver owned by this renderer (read-only borrow).
+         *
+         * DebugUIContext uses this for render height resolve.
+         */
+        [[nodiscard]] const optix::DlssResolutionResolver &dlss_resolver() const {
+            return dlss_resolver_;
+        }
+
+        /**
          * @brief Discards DLSS-RR temporal history and cached output.
          *
          * Sets deferred flags consumed by submit_cuda: the next complete DLSS
@@ -435,6 +444,7 @@ namespace qualquer::renderer {
          * CUDA device id; destroyed in destroy().
          */
         optix::DlssRR dlss_rr_;
+        optix::DlssResolutionResolver dlss_resolver_;
 
         /**
          * @brief Intermediate HDR buffer at output resolution (RGBA16F / half4).

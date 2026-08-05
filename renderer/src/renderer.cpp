@@ -530,26 +530,27 @@ namespace qualquer::renderer {
         }
 
         // Ensure DLSS optimal settings are cached before resolving render
-        // height — resolve_render_height reads the cached min/max/optimal
+        // height — dlss_resolver_.resolve reads the cached min/max/optimal
         // values.  Cache on first enable and on display resolution change.
         if (scene.settings.dlss_enabled && dlss_rr_.available()) {
             if (!dlss_rr_.feature_active() || display_res_changed) {
                 if (!dlss_rr_.feature_active()) {
                     CUDA_CHECK(cudaStreamSynchronize(nullptr));
                 }
-                dlss_rr_.cache_optimal_settings(width, height);
+                dlss_resolver_.cache(dlss_rr_.ngx_params(), width, height);
             }
         }
 
         // Color buffer follows the render resolution, not the display
         // resolution. When DLSS is on, the render resolution is clamped by
-        // resolve_render_height so that buffer, raygen launch, and NGX all
+        // dlss_resolver_.resolve so that buffer, raygen launch, and NGX all
         // use the same dimensions. On mismatch CUDA is drained — the
         // previous frame's pipeline may still be using the old allocation.
         // sample_count resets to 0: tonemap outputs black until valid data.
         uint32_t render_height = scene.settings.render_height;
         if (scene.settings.dlss_enabled && dlss_rr_.available()) {
-            render_height = dlss_rr_.resolve_render_height(render_height, height).render_height;
+            const auto resolved = dlss_resolver_.resolve(render_height, height);
+            render_height = resolved.render_height;
         }
         const uint32_t render_width = compute_render_width(render_height, width, height);
         bool render_res_changed = false;
@@ -590,8 +591,9 @@ namespace qualquer::renderer {
                 if (!dlss_rr_.feature_active() || preset_changed) {
                     CUDA_CHECK(cudaStreamSynchronize(nullptr));
                 }
+                const auto mode = dlss_resolver_.resolve(render_height, height).mode;
                 dlss_rr_.create_feature(render_width, render_height, width, height,
-                                        scene.settings.dlss_preset);
+                                        scene.settings.dlss_preset, mode);
                 invalidate_dlss_state();
             }
         }
@@ -785,7 +787,7 @@ namespace qualquer::renderer {
         // guarantees raygen is done).
         const bool evaluate_dlss = dlss_active && has_new_samples;
         if (evaluate_dlss) {
-            const optix::DlssRR::EvalInput eval_input{
+            const optix::DlssEvalInput eval_input{
                 .color_tex = frame_slot_.color.tex_object(),
                 .output_surf = dlss_output_.surf_object(),
                 .depth_tex = frame_slot_.aux.depth.tex_object(),
