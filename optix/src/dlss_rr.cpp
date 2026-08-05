@@ -16,63 +16,65 @@
 #include <windows.h>
 
 namespace qualquer::optix {
-
     /** @brief NGX project identifier (UUID format required by NGX). */
     constexpr char kNgxProjectId[] = "d8b2224f-2576-4814-92ec-53596756923e";
 
     /** @brief Quality mode names for logging, indexed by DlssQualityMode. */
     constexpr const char *kQualityModeNames[] = {
-        "MaxPerf", "Balanced", "MaxQuality",
-        "UltraPerf", "UltraQuality", "DLAA",
+        "MaxPerf", "Balanced", "MaxQuality", "UltraPerf", "UltraQuality", "DLAA",
     };
 
     // NGX result string for logging. Covers the common error codes;
     // unknown codes fall back to the raw integer.
-    static std::string ngx_result_string(NVSDK_NGX_Result result) {
+    static std::string ngx_result_string(const NVSDK_NGX_Result result) {
         switch (result) {
-            case NVSDK_NGX_Result_Success:                       return "Success";
-            case NVSDK_NGX_Result_FAIL_FeatureNotSupported:      return "FeatureNotSupported";
-            case NVSDK_NGX_Result_FAIL_PlatformError:            return "PlatformError";
-            case NVSDK_NGX_Result_FAIL_FeatureAlreadyExists:     return "FeatureAlreadyExists";
-            case NVSDK_NGX_Result_FAIL_FeatureNotFound:          return "FeatureNotFound";
-            case NVSDK_NGX_Result_FAIL_InvalidParameter:         return "InvalidParameter";
-            case NVSDK_NGX_Result_FAIL_ScratchBufferTooSmall:    return "ScratchBufferTooSmall";
-            case NVSDK_NGX_Result_FAIL_NotInitialized:           return "NotInitialized";
-            case NVSDK_NGX_Result_FAIL_UnsupportedInputFormat:   return "UnsupportedInputFormat";
-            case NVSDK_NGX_Result_FAIL_RWFlagMissing:            return "RWFlagMissing";
-            case NVSDK_NGX_Result_FAIL_MissingInput:             return "MissingInput";
-            case NVSDK_NGX_Result_FAIL_UnableToInitializeFeature:return "UnableToInitializeFeature";
-            case NVSDK_NGX_Result_FAIL_OutOfDate:                return "OutOfDate";
-            case NVSDK_NGX_Result_FAIL_OutOfGPUMemory:           return "OutOfGPUMemory";
-            case NVSDK_NGX_Result_FAIL_UnsupportedFormat:        return "UnsupportedFormat";
+            case NVSDK_NGX_Result_Success: return "Success";
+            case NVSDK_NGX_Result_FAIL_FeatureNotSupported: return "FeatureNotSupported";
+            case NVSDK_NGX_Result_FAIL_PlatformError: return "PlatformError";
+            case NVSDK_NGX_Result_FAIL_FeatureAlreadyExists: return "FeatureAlreadyExists";
+            case NVSDK_NGX_Result_FAIL_FeatureNotFound: return "FeatureNotFound";
+            case NVSDK_NGX_Result_FAIL_InvalidParameter: return "InvalidParameter";
+            case NVSDK_NGX_Result_FAIL_ScratchBufferTooSmall: return "ScratchBufferTooSmall";
+            case NVSDK_NGX_Result_FAIL_NotInitialized: return "NotInitialized";
+            case NVSDK_NGX_Result_FAIL_UnsupportedInputFormat: return "UnsupportedInputFormat";
+            case NVSDK_NGX_Result_FAIL_RWFlagMissing: return "RWFlagMissing";
+            case NVSDK_NGX_Result_FAIL_MissingInput: return "MissingInput";
+            case NVSDK_NGX_Result_FAIL_UnableToInitializeFeature: return "UnableToInitializeFeature";
+            case NVSDK_NGX_Result_FAIL_OutOfDate: return "OutOfDate";
+            case NVSDK_NGX_Result_FAIL_OutOfGPUMemory: return "OutOfGPUMemory";
+            case NVSDK_NGX_Result_FAIL_UnsupportedFormat: return "UnsupportedFormat";
             case NVSDK_NGX_Result_FAIL_UnableToWriteToAppDataPath: return "UnableToWriteToAppDataPath";
-            case NVSDK_NGX_Result_FAIL_UnsupportedParameter:     return "UnsupportedParameter";
-            case NVSDK_NGX_Result_FAIL_Denied:                   return "Denied";
-            case NVSDK_NGX_Result_FAIL_NotImplemented:           return "NotImplemented";
+            case NVSDK_NGX_Result_FAIL_UnsupportedParameter: return "UnsupportedParameter";
+            case NVSDK_NGX_Result_FAIL_Denied: return "Denied";
+            case NVSDK_NGX_Result_FAIL_NotImplemented: return "NotImplemented";
             default: return "Unknown(" + std::to_string(result) + ")";
         }
     }
 
     // NGX check macro: logs and returns false on failure (non-fatal path).
-    #define NGX_CHECK_WARN(call)                                                    \
+#define NGX_CHECK_WARN(call)                                                        \
         do {                                                                        \
             NVSDK_NGX_Result ngx_result_ = (call);                                  \
             if (NVSDK_NGX_FAILED(ngx_result_)) {                                    \
                 spdlog::warn("NGX call failed: {} returned {} at {}:{}",            \
-                             #call, ngx_result_string(ngx_result_),                 \
-                             __FILE__, __LINE__);                                    \
+                             #call,                                                 \
+                             ngx_result_string(ngx_result_),                        \
+                             __FILE__,                                              \
+                             __LINE__);                                             \
                 return false;                                                       \
             }                                                                       \
         } while (0)
 
     // NGX check macro: logs and aborts on failure (fatal path).
-    #define NGX_CHECK(call)                                                         \
+#define NGX_CHECK(call)                                                             \
         do {                                                                        \
             NVSDK_NGX_Result ngx_result_ = (call);                                  \
             if (NVSDK_NGX_FAILED(ngx_result_)) {                                    \
                 spdlog::critical("NGX call failed: {} returned {} at {}:{}",        \
-                                 #call, ngx_result_string(ngx_result_),             \
-                                 __FILE__, __LINE__);                               \
+                                 #call,                                             \
+                                 ngx_result_string(ngx_result_),                    \
+                                 __FILE__,                                          \
+                                 __LINE__);                                         \
                 spdlog::default_logger()->flush();                                  \
                 std::abort();                                                       \
             }                                                                       \
@@ -84,10 +86,9 @@ namespace qualquer::optix {
      * NGX calls this from any thread; spdlog is thread-safe.
      * ON-level messages map to spdlog::info, VERBOSE to spdlog::debug.
      */
-    static void NVSDK_CONV ngx_log_callback(
-        const char *message,
-        NVSDK_NGX_Logging_Level logging_level,
-        NVSDK_NGX_Feature /*source_component*/) {
+    static void NVSDK_CONV ngx_log_callback(const char *message,
+                                            const NVSDK_NGX_Logging_Level logging_level,
+                                            NVSDK_NGX_Feature /*source_component*/) {
         if (logging_level == NVSDK_NGX_LOGGING_LEVEL_VERBOSE) {
             spdlog::debug("[NGX] {}", message);
         } else {
@@ -105,7 +106,7 @@ namespace qualquer::optix {
         return std::filesystem::path(path).parent_path().wstring();
     }
 
-    void DlssRR::init(int cuda_device) {
+    void DlssRR::init(const int cuda_device) {
         if (initialized_) {
             return;
         }
@@ -114,7 +115,7 @@ namespace qualquer::optix {
 
         // Route NGX internal logs through spdlog and suppress NGX's own
         // file-based logging sinks.
-        const NVSDK_NGX_FeatureCommonInfo feature_info{
+        constexpr NVSDK_NGX_FeatureCommonInfo feature_info{
             .PathListInfo = {},
             .InternalData = nullptr,
             .LoggingInfo = {
@@ -142,21 +143,28 @@ namespace qualquer::optix {
         initialized_ = true;
 
         // Check RayReconstruction hardware/driver support.
-        constexpr NVSDK_NGX_ProjectIdDescription project_desc{kNgxProjectId,
-                                                           NVSDK_NGX_ENGINE_TYPE_CUSTOM, "1.0.0"};
+        constexpr NVSDK_NGX_ProjectIdDescription project_desc{
+            .ProjectId = kNgxProjectId,
+            .EngineType = NVSDK_NGX_ENGINE_TYPE_CUSTOM,
+            .EngineVersion = "1.0.0"
+        };
         constexpr NVSDK_NGX_Application_Identifier app_id{
-            NVSDK_NGX_Application_Identifier_Type_Project_Id, {.ProjectDesc = project_desc}};
+            .IdentifierType = NVSDK_NGX_Application_Identifier_Type_Project_Id,
+            .v = {
+                .ProjectDesc = project_desc
+            }
+        };
         const NVSDK_NGX_FeatureDiscoveryInfo discovery_info{
-            NVSDK_NGX_Version_API,
-            NVSDK_NGX_Feature_RayReconstruction,
-            app_id,
-            app_path.c_str(),
-            nullptr};
+            .SDKVersion = NVSDK_NGX_Version_API,
+            .FeatureID = NVSDK_NGX_Feature_RayReconstruction,
+            .Identifier = app_id,
+            .ApplicationDataPath = app_path.c_str(),
+            .FeatureInfo = nullptr
+        };
         NVSDK_NGX_FeatureRequirement requirement{};
         result = NVSDK_NGX_CUDA_GetFeatureRequirements(cuda_device, &discovery_info, &requirement);
 
-        if (NVSDK_NGX_FAILED(result)
-            || requirement.FeatureSupported != NVSDK_NGX_FeatureSupportResult_Supported) {
+        if (NVSDK_NGX_FAILED(result) || requirement.FeatureSupported != NVSDK_NGX_FeatureSupportResult_Supported) {
             spdlog::warn("DLSS-RR: RayReconstruction not supported on this system");
             available_ = false;
             return;
@@ -190,12 +198,12 @@ namespace qualquer::optix {
         available_ = false;
     }
 
-    void DlssRR::create_feature(uint32_t render_width, uint32_t render_height,
-                                uint32_t display_width, uint32_t display_height,
-                                // ReSharper disable once CppParameterMayBeConst
+    void DlssRR::create_feature(uint32_t render_width,
+                                uint32_t render_height,
+                                uint32_t display_width,
+                                uint32_t display_height,
                                 DlssRenderPreset preset,
-                                // ReSharper disable once CppParameterMayBeConst
-                                DlssQualityMode quality_mode) {
+                                const DlssQualityMode quality_mode) {
         release_feature();
 
         if (!available_ || !ngx_params_) {
@@ -206,8 +214,7 @@ namespace qualquer::optix {
         const DlssQualityMode quality = quality_mode;
 
         // Feature creation flags.
-        constexpr int create_flags = NVSDK_NGX_DLSS_Feature_Flags_MVLowRes
-                                     | NVSDK_NGX_DLSS_Feature_Flags_IsHDR;
+        constexpr int create_flags = NVSDK_NGX_DLSS_Feature_Flags_MVLowRes | NVSDK_NGX_DLSS_Feature_Flags_IsHDR;
 
         NVSDK_NGX_DLSSD_Create_Params dlss_params{};
         dlss_params.InDenoiseMode = NVSDK_NGX_DLSS_Denoise_Mode_DLUnified;
@@ -221,8 +228,8 @@ namespace qualquer::optix {
         dlss_params.InRoughnessMode = NVSDK_NGX_DLSS_Roughness_Mode_Packed;
 
         // Render preset for all quality modes.
-        const auto ngx_preset = static_cast<NVSDK_NGX_RayReconstruction_Hint_Render_Preset>(
-            static_cast<uint32_t>(preset));
+        const auto ngx_preset =
+                static_cast<NVSDK_NGX_RayReconstruction_Hint_Render_Preset>(static_cast<uint32_t>(preset));
         ngx_params_->Set(NVSDK_NGX_Parameter_RayReconstruction_Hint_Render_Preset_DLAA, ngx_preset);
         ngx_params_->Set(NVSDK_NGX_Parameter_RayReconstruction_Hint_Render_Preset_Quality, ngx_preset);
         ngx_params_->Set(NVSDK_NGX_Parameter_RayReconstruction_Hint_Render_Preset_Balanced, ngx_preset);
@@ -302,7 +309,9 @@ namespace qualquer::optix {
         eval.InMVScaleY = -1.0f;
 
         // ---- Render subrect (full frame, no subrect offset) ----
-        eval.InRenderSubrectDimensions = {input.render_width, input.render_height};
+        eval.InRenderSubrectDimensions = {
+            .Width = input.render_width, .Height = input.render_height
+        };
 
         // ---- Matrices ----
         // NGX expects row-major float[16]. GLM stores column-major; transpose
@@ -344,8 +353,7 @@ namespace qualquer::optix {
         // then stop — the value is constant for this feature's lifetime.
         if (cached_vram_bytes_ == 0) {
             unsigned long long vram = 0;
-            if (NGX_DLSSD_GET_STATS(ngx_params_, &vram) == NVSDK_NGX_Result_Success
-                && vram > 0) {
+            if (NGX_DLSSD_GET_STATS(ngx_params_, &vram) == NVSDK_NGX_Result_Success && vram > 0) {
                 cached_vram_bytes_ = vram;
             }
         }
@@ -400,7 +408,7 @@ namespace qualquer::optix {
     }
 
     DlssResolvedHeight DlssResolutionResolver::resolve(uint32_t requested_height,
-                                                        uint32_t display_height) const {
+                                                       uint32_t display_height) const {
         // render >= display → DLAA (no upscaling).
         if (requested_height >= display_height) {
             return {display_height, DlssQualityMode::Dlaa};
@@ -443,5 +451,4 @@ namespace qualquer::optix {
 
         return {best_clamped, best_mode};
     }
-
 } // namespace qualquer::optix

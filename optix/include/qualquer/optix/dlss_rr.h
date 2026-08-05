@@ -209,9 +209,12 @@ namespace qualquer::optix {
          * @param preset         Render preset (neural network model selection).
          * @param quality_mode   Quality mode (from DlssResolutionResolver::resolve).
          */
-        void create_feature(uint32_t render_width, uint32_t render_height,
-                            uint32_t display_width, uint32_t display_height,
-                            DlssRenderPreset preset, DlssQualityMode quality_mode);
+        void create_feature(uint32_t render_width,
+                            uint32_t render_height,
+                            uint32_t display_width,
+                            uint32_t display_height,
+                            DlssRenderPreset preset,
+                            DlssQualityMode quality_mode);
 
         /**
          * @brief Releases the current DLSS-RR feature, freeing its VRAM.
