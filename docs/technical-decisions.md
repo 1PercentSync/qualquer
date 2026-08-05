@@ -339,12 +339,13 @@ vk_gltf_renderer 静态默认一致。有偏，故允许关闭以做无偏对照
 
 **决策**：
 
-- specular albedo = 逐通道 `E_glossy`（与 Turquin 补偿后 specular 能量自洽）
+- specular albedo = 逐通道 `clamp(E_glossy * turquin_comp, 0, 1)`，表示实际补偿后 specular BRDF 的方向反射率
 - specular hit distance 传 **nullptr**（不分配）
 - diffuse albedo 暂传 raw `base_color`（是否预乘 `1-metallic` 存疑；出现相关伪影时优先排查）
 
-**理由**：EnvBRDFApprox2 与项目多散射 specular 不一致时，guide 与 color 自洽优先于匹配训练分布。nullptr 比填 infinity
-更诚实；SDK 在无 hit distance 时回退 2D MV 推导 specular motion。
+**理由**：EnvBRDFApprox2 对应未应用 Turquin 多散射补偿的标准 GGX，直接使用会低估 noisy color 中的 specular 能量。`E_glossy`
+积分未补偿 GGX lobe；同一 shading point 的 `turquin_comp` 不随被积的出射方向变化，因此两者乘积对应实际着色所用补偿 lobe 的方向反射率。
+最终 clamp 限制拟合误差越界。nullptr 比填 infinity 更诚实；SDK 在无 hit distance 时回退 2D MV 推导 specular motion。
 
 ### 渲染 / 显示分辨率
 
